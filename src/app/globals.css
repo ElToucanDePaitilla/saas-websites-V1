@@ -1,0 +1,252 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ==========================================================================
+   THÈME « ÉCLAT MINÉRAL & NACRE » — Design Tokens (Front-Office)
+   --------------------------------------------------------------------------
+   Références :
+   - PROJECT_CONTEXT.md  §2  (Direction Artistique du Front-Office)
+   - SPECIFICATIONS-V8.md §10 (Thème Initial & Direction Artistique)
+   --------------------------------------------------------------------------
+   Ce fichier déclare :
+   1. Les variables « produit » du thème (--bg-color, --surface-color, …).
+   2. Le mapping sémantique shadcn/ui (--background, --primary, …) branché
+      sur ces variables, afin que tous les composants shadcn/ui s'expriment
+      nativement dans la palette nacrée (aucun surcoût CSS-in-JS).
+   3. La signature visuelle premium : ombre nacre (pearl), glassmorphism,
+      easing « soie » et garde-fous d'accessibilité / reduced-motion.
+   ========================================================================== */
+
+:root {
+  /* ---- 1. Palette produit « Éclat Minéral & Nacre » ---- */
+  --bg-color: #ffffff;             /* Blanc pur — clarté & respiration */
+  --surface-color: #faf8f8;        /* Blanc Nacre / Rose voilé (cartes, modales) */
+  --surface-color-soft: #fbf7f6;   /* Variante rose plus soutenue */
+  --text-color: #1a1a1a;           /* Anthracite doux — lisibilité premium */
+  --accent-color: #e8d8d7;         /* Rose Nacré Chaud — CTA / accents */
+  --accent-color-strong: #d8c3c2;  /* Bronze très doux — hover / ring */
+  --border-color: #eae5e5;         /* Perle irisée — découpe chirurgicale 1px */
+  --text-muted: rgba(26, 26, 26, 0.6); /* Gris perle foncé (sous-titres, dates) */
+
+  /* ---- 2. Tokens sémantiques shadcn/ui (bancarisés sur la palette) ---- */
+  --background: var(--bg-color);
+  --foreground: var(--text-color);
+
+  --card: var(--surface-color);
+  --card-foreground: var(--text-color);
+
+  --popover: var(--surface-color);
+  --popover-foreground: var(--text-color);
+
+  --primary: var(--accent-color);
+  --primary-foreground: #1a1a1a;
+
+  --secondary: #f0ebe9;
+  --secondary-foreground: var(--text-color);
+
+  --muted: #f5f2f1;
+  --muted-foreground: var(--text-muted);
+
+  --accent: var(--accent-color);
+  --accent-foreground: #1a1a1a;
+
+  --destructive: #b4534a;          /* Terracotta doux, sobre */
+  --destructive-foreground: #faf8f8;
+
+  --border: var(--border-color);
+  --input: var(--border-color);
+  --ring: var(--accent-color-strong);
+
+  --radius: 0.75rem;
+
+  /* ---- 3. Signature visuelle Premium (effets) ---- */
+  --glass-bg: rgba(255, 255, 255, 0.75);
+  --glass-blur: 12px;
+  --glass-border: rgba(234, 229, 229, 0.6);
+  --shadow-pearl-sm: 0 8px 20px -12px rgba(220, 200, 200, 0.35);
+  --ease-silk: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* ---- 4. Typographies (injectées par next/font dans <html>) ---- */
+  --font-body: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-heading: "Cormorant Garamond", Georgia, "Times New Roman", serif;
+}
+
+/* Mode sombre de secours (cohérent, pour les futurs espaces Back-Office). */
+.dark {
+  --bg-color: #161313;
+  --surface-color: #201c1c;
+  --text-color: #f4f0ef;
+  --accent-color: #d8c3c2;
+  --accent-color-strong: #c7aead;
+  --border-color: rgba(244, 240, 239, 0.12);
+  --text-muted: rgba(244, 240, 239, 0.62);
+
+  --background: var(--bg-color);
+  --foreground: var(--text-color);
+  --card: var(--surface-color);
+  --card-foreground: var(--text-color);
+  --popover: var(--surface-color);
+  --popover-foreground: var(--text-color);
+  --primary: var(--accent-color);
+  --primary-foreground: #1a1a1a;
+  --secondary: #2a2525;
+  --secondary-foreground: var(--text-color);
+  --muted: #241f1f;
+  --muted-foreground: var(--text-muted);
+  --accent: var(--accent-color);
+  --accent-foreground: #1a1a1a;
+  --destructive: #e07a70;
+  --destructive-foreground: #161313;
+  --border: var(--border-color);
+  --input: var(--border-color);
+  --ring: var(--accent-color-strong);
+
+  --glass-bg: rgba(22, 19, 19, 0.6);
+  --glass-border: rgba(244, 240, 239, 0.14);
+}
+
+/* ==========================================================================
+   DASHBOARD BACK-OFFICE — portée `.admin` (épurée & haut contraste)
+   --------------------------------------------------------------------------
+   Références : PROJECT_CONTEXT.md §1.2 — plans/ROADMAP-3.1-pagemetadata.md §1.2.
+   Portée appliquée sur le conteneur racine du Layout `/admin` : les descendants
+   héritent de ces tokens (aucune valeur globale du Front-Office modifiée).
+   Palette neutre (zinc) + primaire sombre pour un contraste de productivité.
+   ========================================================================== */
+.admin {
+  /* Palette produit — neutre épurée */
+  --surface-color: #fafafa;
+  --surface-color-soft: #f4f4f5;
+  --border-color: #e4e4e7;
+
+  /* Tokens sémantiques shadcn/ui — surchargés dans la portée admin */
+  --background: #ffffff;
+  --foreground: #18181b;
+  --card: #ffffff;
+  --card-foreground: #18181b;
+  --popover: #ffffff;
+  --popover-foreground: #18181b;
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
+  --accent: #f4f4f5;
+  --accent-foreground: #18181b;
+  --primary: #18181b; /* bouton principal sombre, plus contrasté */
+  --primary-foreground: #ffffff;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #18181b;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --border: var(--border-color);
+  --input: var(--border-color);
+  --ring: #a1a1aa;
+}
+
+/* ==========================================================================
+   @theme — Exposition des tokens vers les utilitaires Tailwind CSS v4
+   ========================================================================== */
+@theme inline {
+  /* Couleurs sémantiques shadcn/ui */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Rayons d'angle shadcn/ui */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  /* Typographies du thème (variables runtime next/font) */
+  --font-sans: var(--font-body);
+}
+
+/* Valeurs statiques : génèrent les utilitaires Tailwind
+   `shadow-pearl` / `shadow-pearl-sm` et `ease-silk`. */
+@theme {
+  --shadow-pearl: 0 20px 40px -15px rgba(220, 200, 200, 0.25);
+  --shadow-pearl-sm: 0 8px 20px -12px rgba(220, 200, 200, 0.35);
+  --ease-silk: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ==========================================================================
+   Utilitaires custom — Glassmorphism « Réfraction Nacre »
+   ========================================================================== */
+@utility glass {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+}
+
+/* ==========================================================================
+   Base layer — typographie, fond, sélection
+   ========================================================================== */
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-body);
+    letter-spacing: 0.02em;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Titres éditoriaux en serif raffiné (Cormorant Garamond / Playfair) */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-heading);
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    text-wrap: balance;
+  }
+
+  ::selection {
+    background-color: var(--accent-color);
+    color: var(--text-color);
+  }
+}
+
+/* ==========================================================================
+   Garde-fou d'accessibilité — réduction du mouvement
+   (SPECIFICATIONS-V8.md §2.4 — contrôle strict via prefers-reduced-motion)
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

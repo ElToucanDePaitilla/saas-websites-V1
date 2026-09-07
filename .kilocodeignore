@@ -1,0 +1,57 @@
+# ==============================================================================
+# NOTICE D'UTILISATION DU FICHIER .KILOIGNORE
+# ------------------------------------------------------------------------------
+# À quoi sert ce fichier ?
+# 1. Économiser vos jetons (tokens) et votre budget API en empêchant Kilo Code 
+#    de lire des dossiers volumineux, compilés ou inutiles.
+# 2. Sécuriser votre projet en masquant les clés API, variables d'environnement 
+#    et données sensibles.
+# 3. Accélérer la vitesse de recherche et de réponse de l'agent Kilo Code.
+# 
+# Note : Tout fichier ou dossier listé ici sera complètement invisible pour Kilo Code.
+# ==============================================================================
+
+# Dépendances et builds (Exclusion lourde en tokens)
+node_modules/
+.next/
+dist/
+build/
+out/
+.cache/
+coverage/
+
+# Base de données & artefacts Supabase locaux
+.supabase/
+supabase/.temp/
+
+# Fichiers de données sensibles & secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+
+# Documents de travail lourds & médias locaux (Images/Vidéos de test)
+*.mp4
+*.mov
+*.avi
+*.zip
+*.tar.gz
+*.iso
+*.webp
+*.png
+*.jpg
+*.jpeg
+*.raw
+
+# Fichiers système, logs et caches d'éditeurs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

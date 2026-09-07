@@ -1,0 +1,60 @@
+/*
+==============================================================================
+NOTICE D'UTILISATION DU FICHIER TSCONFIG.JSON
+------------------------------------------------------------------------------
+À quoi sert ce fichier ?
+1. Définir le niveau de rigueur du code TypeScript que Cline doit respecter.
+2. Définir les "path aliases" (ex: `@/*`) pour que Cline génère des imports 
+   propres et lisibles au lieu de chemins relatifs profonds (`../../components`).
+==============================================================================
+*/{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true, /* Force Cline à typer strictement sans 'any' */
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "incremental": true,
+    "baseUrl": ".",
+    "paths": { /* Alias d'imports simplifiés pour l'agent */
+      "@/*": [
+        "./src/*"
+      ],
+      "@/components/*": [
+        "./src/components/*"
+      ],
+      "@/lib/*": [
+        "./src/lib/*"
+      ],
+      "@/types/*": [
+        "./src/types/*"
+      ]
+    },
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ]
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

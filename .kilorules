@@ -1,0 +1,68 @@
+# DIRECTIVES, RÈGLES ET CONTEXTE DU PROJET (KILO CODE)
+
+## 0.1 . Consultation des fichiers selon la tâche
+Avant d'écrire ou de modifier du code, consulte uniquement le document concerné :
+- Si la tâche concerne les **règles métier, workflows ou rôles** -> consulte `SPECIFICATIONS_V8.md`
+- Si la tâche concerne **le style, l'UI, les composants Tailwind ou les couleurs** -> consulte `PROJECT_CONTEXT.md`
+- Si la tâche concerne **les tables Supabase, Drizzle, les routes API ou l'architecture** -> consulte `ARCHITECTURE.md`
+
+## 1. Méthode d'Exécution
+- Ne traite qu'une sous-tâche à la fois.
+- Demande ma validation à chaque étape avant d'enregistrer les modifications.
+- À la validation de chaque sous-tâche, enregistre un résumé dans `CHANGELOG.md`.
+
+## 0.2  Instructions de démarrage et fichiers de référence
+- Avant de proposer ou d'écrire du code, consulte systématiquement dans l'ordre :
+  1. `ROADMAP.md` : La feuille de route pas-à-pas du projet (identifie la tâche courante marquée `[IN_PROGRESS]`).
+  2. `SPECIFICATIONS_V8.md` : La référence fonctionnelle, commerciale et technique absolue du projet (Volet 1 SaaS + Volet 2 Portfolio Photographe).
+  3. `PROJECT_CONTEXT.md` : Le Design System du Front-Office ("Éclat Minéral & Nacre") et la direction artistique.
+  4. `ARCHITECTURE.md` : Le schéma BDD Supabase (tables SaaS + Portfolio), les règles RLS multi-tenants (`tenant_id`), les tables PostgreSQL et la structure des dossiers.
+- Avance **strictement étape par étape** : ne traite qu'une seule sous-tâche `[IN_PROGRESS]` à la fois et demande ma validation explicite avant de passer à la suivante.
+
+## 1. Description, Vision Multi-Volets & Stack Technique
+- **Double Volet du Projet** :
+  1. *Volet SaaS Multi-tenants* : Page d'accueil commerciale (offres, tarifs, abonnements) et Dashboard global de gestion SaaS (clients, factures, abonnements, codes promo).
+  2. *Volet Portfolio Photographe* : Application produit (sites publics/privés, galeries, page builder, espace client et dashboard photographe).
+- **Stratégie BDD & Priorité de dev** : Même si le développement débute par le produit cœur (Volet Portfolio Photographe), le schéma Supabase défini dans `ARCHITECTURE.md` doit inclure la structure multi-tenants (`tenant_id` / `photographer_id`) et les tables SaaS dès le démarrage.
+- Framework : Next.js (App Router, React 19) + TypeScript strict (mode strict, zéro `any`).
+- UI & Style : Tailwind CSS + shadcn/ui (injection locale dans `/components/ui`).
+- Thèmes dynamiques : Presets typographiques et palettes gérés via variables CSS globales `:root` (`--bg-color`, `--surface-color`, `--accent-color`, `--text-color`, etc.).
+- Back-Office Page Builder : Drag & Drop via `@hello-pangea/dnd` (ou `@dnd-kit`) avec formulaires CRUD en accordéons compacts et sélecteurs de variantes (Layout Switcher).
+- BDD & Auth : Supabase (PostgreSQL, Row Level Security strict multi-tenants) + Drizzle ORM + Stockage Vectoriel (`pgvector`).
+- Authentification : Modale centralisée à 3 rôles (Admin Pro, Client/Prospect, Visiteur Privé à code d'accès unique).
+- Stockage & Médias : Cloudflare R2 (API S3 compatible) + Sharp (conversion systématique WebP à 80% de qualité).
+- Moteur IA : API Google Gemini (Gemini 1.5 Flash pour le tagging/SEO/curation & Gemini 1.5 Pro pour les briefs et textes) + OpenAI Embeddings.
+- Modules Intégrés : Resend (.ics) pour l'Agenda, LiveKit Cloud (WebRTC) pour les Visioconférences, Stripe Connect pour les paiements/acomptes et n8n pour les workflows.
+
+## 2. Architecture des Fichiers Clés
+- `/app/(front-office)/` : Pages publiques du site et galeries (Rendu ISR/Statique).
+- `/app/(back-office)/` : Dashboard Admin, Management SaaS & Page Builder (Rendu SSR + Client Components).
+- `/components/ui/` : Composants atomiques réutilisables (shadcn/ui).
+- `/components/modules/` : Blocs modulaires autonomes du Page Builder (`/hero`, `/gallery-masonry`, `/booking`, `/visio`, etc.).
+- `/lib/supabase/` : Clients et requêtes Supabase (Server / Client / RLS Context).
+- `/lib/schemas/` : Fichiers Zod / TypeScript pour la validation des formulaires CRUD.
+- `/styles/globals.css` : Contient la définition des variables CSS `:root` et la signature visuelle ("Éclat Minéral & Nacre").
+
+## 3. Directives de Développement (Strictes)
+- N'écris jamais de code volumineux d'une seule pièce : procède étape par étape et attends la validation.
+- Typer explicitement tous les paramètres et retours de fonction TypeScript (interdiction absolue du type `any`).
+- Isolation des modules : chaque module sous `/components/modules/` doit être autonome et consommer uniquement des props, Tailwind et les variables CSS globales (`var(--accent-color)`).
+- Modules lourds / fonctionnalités complexes : toujours privilégier un bloc composant léger (bouton/CTA) sur la page qui ouvre une `Dialog` (shadcn/ui) embarquant la logique lourde (ex: Calendrier RDV, Salle Visio LiveKit).
+- Animations & Micro-interactions : Rendu GPU à 60 FPS via `IntersectionObserver` nativement (propriétés `opacity` et `transform` uniquement) et respect de `@media (prefers-reduced-motion)`.
+- Avant de terminer une tâche, vérifie l'absence d'erreurs de build ou de typage.
+
+## 4. Ce qu'il ne faut PAS faire
+- Ne jamais modifier les fichiers de variables d'environnement (`.env.local`).
+- Ne pas installer de bibliothèques UI externes fermées (rester sur shadcn/ui + Tailwind).
+- Ne pas casser le découplage des modules : pas d'importations relatives croisées entre modules.
+- Ne pas modifier l'architecture, les spécifications ou le schéma de base de données sans validation préalable.
+
+## 5. Suivi des travaux (historique et progression)
+- Une fois une sous-tâche validée par l'utilisateur :
+  1. Coche la case `[x]` dans `ROADMAP.md` et passe la tâche suivante à `[IN_PROGRESS]`.
+  2. Mets automatiquement à jour le fichier `CHANGELOG.md` à la racine.
+- Structure à respecter dans `CHANGELOG.md` :
+  - **Date et Heure**
+  - **Tâche exécutée** (ex: Phase 1.2 - Configuration du schéma BDD Supabase multi-tenants)
+  - **Fichiers créés ou modifiés**
+  - **Prochaine étape prévue**

@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1788804010329,
+      "tag": "0000_calm_rockslide",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788810000000,
+      "tag": "0001_auth_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788811828466,
+      "tag": "0002_dapper_lethal_legion",
+      "breakpoints": true
+    }
+  ]
+}
