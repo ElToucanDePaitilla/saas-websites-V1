@@ -2,7 +2,7 @@
 
 import * as React from "react";
 
-import { MediaPickButton } from "@/components/backoffice/media/MediaPicker";
+import { MediaUploadButton } from "@/components/backoffice/media/MediaUploadButton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -125,14 +125,10 @@ export function MediaFields({
 }: MediaFieldsProps) {
   return (
     <div className={cn("grid gap-3", className)}>
-      {/* Sélecteur de la médiathèque (Étape 6.1) — pré-remplit url (+ alt). */}
-      <MediaPickButton
-        onPick={(asset) =>
-          onChange({
-            ...value,
-            url: asset.url,
-            alt: value.alt || asset.filename,
-          })
+      {/* Upload local direct — pré-remplit url (+ alt par défaut). */}
+      <MediaUploadButton
+        onUploaded={(url, alt) =>
+          onChange({ ...value, url, alt: value.alt || alt })
         }
       />
       <TextField

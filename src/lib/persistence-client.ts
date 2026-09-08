@@ -33,7 +33,12 @@ type PersistModule = {
 async function send(request: Request): Promise<void> {
   const response = await fetch(request);
   if (!response.ok) {
-    throw new Error(`Persistance BDD refusée (HTTP ${response.status}).`);
+    // Remonte le message d'erreur du serveur (diagnostic).
+    const payload = (await response.json().catch(() => null)) as {
+      error?: string;
+    } | null;
+    const detail = payload?.error ?? response.statusText;
+    throw new Error(`Persistance BDD refusée (HTTP ${response.status}): ${detail}`);
   }
 }
 

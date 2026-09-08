@@ -31,6 +31,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
         { status: 400 }
       );
     }
+    console.error("PUT /api/pages/[pageId]/modules failed:", error);
     const message = error instanceof Error ? error.message : "Erreur inconnue";
     return NextResponse.json(
       { ok: false, error: message },

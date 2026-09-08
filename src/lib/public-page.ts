@@ -13,7 +13,7 @@
  */
 
 import { getPagesWithModules } from "@/db/repositories/pages.repository";
-import { DEMO_PROFILE_ID } from "@/db/constants";
+import { resolvePublicPhotographerId } from "@/lib/supabase/session";
 import { buildSeedModules, seedPages, type PageModule } from "./pages";
 import {
   resolveMediaMetaByUrls,
@@ -80,30 +80,40 @@ export function publicOgImage(modules: PageModule[]): string | null {
   return null;
 }
 
-/** Retourne la page publique publiée (BDD puis seed), sinon `null`. */
+/**
+ * Retourne la page publique publiée (site du photographe courant puis seed),
+ * sinon `null`. Le site affiché = celui de la **session authentifiée** quand il
+ * y en a une (contenu Back-Office visible sur `/` et `/[slug]`), sinon le
+ * tenant de démo.
+ */
 export async function getPublicPage(slug: string): Promise<PublicPage | null> {
-  // 1 — BDD (tenant démo) ; en cas d'absence/erreur, repli seed.
+  const photographerId = await resolvePublicPhotographerId();
+
+  // 1 — BDD du site courant ; page absente/brouillon → repli seed (sauf draft).
   try {
-    const data = await getPagesWithModules(DEMO_PROFILE_ID);
+    const data = await getPagesWithModules(photographerId);
     const target = data.pages.find((page) => page.slug === slug);
-    if (target && target.status === "published") {
-      const modules = data.modulesByPage[target.id] ?? [];
-      const exifByUrl = await resolveMediaMetaByUrls(collectImageUrls(modules));
-      return {
-        slug,
-        title: target.title,
-        menuTitle: target.menuTitle,
-        modules,
-        exifByUrl,
-      };
-    }
-    // BDD joignable : slug inconnu ou brouillon → 404 (pas de seed parasite).
-    if (data.pages.length > 0) {
+    if (target) {
+      if (target.status === "published") {
+        const modules = data.modulesByPage[target.id] ?? [];
+        const exifByUrl = await resolveMediaMetaByUrls(
+          collectImageUrls(modules),
+          photographerId
+        );
+        return {
+          slug,
+          title: target.title,
+          menuTitle: target.menuTitle,
+          modules,
+          exifByUrl,
+        };
+      }
+      // Page existante mais brouillon → non visible publiquement (404).
       return null;
     }
-    // BDD joignable mais vide (non seedée) : on laisse le fallback démo.
+    // Page absente → repli seed (démo) pour ne jamais afficher un site vide.
   } catch {
-    // BDD indisponible → fallback seed.
+    // BDD indisponible → repli seed.
   }
 
   // 2 — Fallback seed (mode démo).

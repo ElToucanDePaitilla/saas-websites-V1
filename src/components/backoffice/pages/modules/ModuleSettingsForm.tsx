@@ -10,9 +10,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  galleryHoverAnimationLabels,
+  galleryHoverAnimationOrder,
   moduleAnimationLabels,
   moduleAnimationOrder,
+  resolveGalleryLayout,
+  type GalleryHoverAnimation,
   type ModuleAnimation,
+  type ModuleContent,
   type PageModule,
 } from "@/lib/pages";
 import { cn } from "@/lib/utils";
@@ -54,6 +59,28 @@ export function ModuleSettingsForm({
 }: ModuleSettingsFormProps) {
   const anchorInvalid =
     module.anchorId.length > 0 && !ANCHOR_PATTERN.test(module.anchorId);
+
+  /** Contenu gallery (réglages spécifiques au module Galerie). */
+  const galleryContent =
+    module.content.type === "gallery"
+      ? (module.content as Extract<ModuleContent, { type: "gallery" }>)
+      : null;
+  const galleryLayout = galleryContent
+    ? resolveGalleryLayout(galleryContent.layout)
+    : null;
+
+  /** Met à jour l'animation au survol des vignettes (module Galerie). */
+  function handleGalleryHover(value: GalleryHoverAnimation) {
+    if (!galleryContent || !galleryLayout) {
+      return;
+    }
+    onChange({
+      content: {
+        ...galleryContent,
+        layout: { ...galleryLayout, hoverAnimation: value },
+      },
+    });
+  }
 
   return (
     <div className="grid gap-4">
@@ -137,6 +164,38 @@ export function ModuleSettingsForm({
             Surcharge l’animation d’entrée du thème pour ce bloc.
           </p>
         </div>
+
+        {/* Animation au survol (spécifique au module Galerie) */}
+        {galleryLayout ? (
+          <div className="grid gap-1.5">
+            <label
+              className="text-xs font-medium text-foreground"
+              htmlFor="gallery-hover-animation"
+            >
+              Animation au survol de la photo
+            </label>
+            <Select
+              value={galleryLayout.hoverAnimation}
+              onValueChange={(value) =>
+                handleGalleryHover(value as GalleryHoverAnimation)
+              }
+            >
+              <SelectTrigger id="gallery-hover-animation" className="w-full">
+                <SelectValue placeholder="Choisir une animation" />
+              </SelectTrigger>
+              <SelectContent>
+                {galleryHoverAnimationOrder.map((animation) => (
+                  <SelectItem key={animation} value={animation}>
+                    {galleryHoverAnimationLabels[animation]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Surcharge l’animation au survol des vignettes de cette galerie.
+            </p>
+          </div>
+        ) : null}
       </div>
 
       {/* Petit rappel visuel de l'état (non bloquant) */}

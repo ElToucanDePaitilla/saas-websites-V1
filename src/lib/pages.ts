@@ -144,7 +144,9 @@ export const seedPages: SitePage[] = [
     title: "Contact",
     menuTitle: "Contact",
     slug: "contact",
-    status: "draft",
+    // Publiée : les presets de navigation incluent « Contact » (visible au menu) ;
+    // un brouillon serait masqué du site public (entrée auto `hidden`).
+    status: "published",
     inMenu: true,
     updatedAt: "2026-09-05T12:00:00.000Z",
   },
@@ -220,6 +222,95 @@ export interface GalleryImage {
   id: string; // stable (mock : crypto.randomUUID())
   url: string;
   alt: string;
+  /** Nom du fichier source (informations d'édition, ex. « mariage-1.jpg »). */
+  filename?: string;
+  /** Titre court affiché sur l'overlay au survol (vide par défaut). */
+  title?: string;
+  /** Description libre affichée dans le diaporama (vide par défaut). */
+  description?: string;
+  /** Dimensions naturelles (px) — renseignées à l'upload (mode masonry). */
+  width?: number;
+  height?: number;
+  /** Vrai si la photo est masquée du site public (toggle œil, 4.3). */
+  hidden?: boolean;
+}
+
+/**
+ * Type d'affichage d'une galerie :
+ * - `"uniform"` : grille régulière (toutes les vignettes au même format) ;
+ * - `"masonry"` : colonnes à hauteurs libres (effet éditorial, type Pinterest).
+ */
+export type GalleryVariant = "uniform" | "masonry";
+
+/**
+ * Animation au survol des vignettes d'une galerie :
+ * - `"active"` : zoom subtil + élévation/ombre + overlay titre au survol ;
+ * - `"none"`   : aucune animation au survol (affichage statique des vignettes).
+ */
+export type GalleryHoverAnimation = "active" | "none";
+
+/** Libellés français (Select, cf. design « Animation d’entrée »). */
+export const galleryHoverAnimationLabels: Record<GalleryHoverAnimation, string> = {
+  active: "Animation active",
+  none: "Aucune animation",
+};
+
+/** Ordre d'affichage dans le sélecteur. */
+export const galleryHoverAnimationOrder: GalleryHoverAnimation[] = [
+  "none",
+  "active",
+];
+
+/**
+ * Mise en page d'une galerie (module `gallery`) — réglée dans l'éditeur.
+ * Valeurs en pixels pour les espacements et le rayon des coins.
+ */
+export interface GalleryLayoutOptions {
+  /** Type d'affichage : uniforme ou masonry. */
+  variant: GalleryVariant;
+  /** Nombre de colonnes affichées (grille). */
+  columns: number;
+  /** Espace horizontal entre deux photos, en px. */
+  gapHorizontal: number;
+  /** Espace vertical entre deux lignes de photos, en px. */
+  gapVertical: number;
+  /** Arrondi des coins des vignettes, en px. */
+  radius: number;
+  /**
+   * true : chaque photo est cliquable et ouvre le diaporama plein écran ;
+   * false : simple exposition visuelle statique (aucune ouverture).
+   */
+  clickable: boolean;
+  /** Animation au survol des vignettes (zoom/élévation/overlay). */
+  hoverAnimation: GalleryHoverAnimation;
+}
+
+/** Valeurs par défaut appliquées quand la galerie n'a pas de mise en page. */
+export const DEFAULT_GALLERY_LAYOUT: GalleryLayoutOptions = {
+  variant: "uniform",
+  columns: 3,
+  gapHorizontal: 16,
+  gapVertical: 16,
+  radius: 12,
+  clickable: true,
+  hoverAnimation: "active",
+};
+
+/** Fusionne la mise en page partielle stockée avec les valeurs par défaut. */
+export function resolveGalleryLayout(
+  layout: Partial<GalleryLayoutOptions> | undefined
+): GalleryLayoutOptions {
+  return {
+    variant: layout?.variant ?? DEFAULT_GALLERY_LAYOUT.variant,
+    columns: layout?.columns ?? DEFAULT_GALLERY_LAYOUT.columns,
+    gapHorizontal:
+      layout?.gapHorizontal ?? DEFAULT_GALLERY_LAYOUT.gapHorizontal,
+    gapVertical: layout?.gapVertical ?? DEFAULT_GALLERY_LAYOUT.gapVertical,
+    radius: layout?.radius ?? DEFAULT_GALLERY_LAYOUT.radius,
+    clickable: layout?.clickable ?? DEFAULT_GALLERY_LAYOUT.clickable,
+    hoverAnimation:
+      layout?.hoverAnimation ?? DEFAULT_GALLERY_LAYOUT.hoverAnimation,
+  };
 }
 
 /**
@@ -260,6 +351,8 @@ export type ModuleContent =
       type: "gallery";
       heading: string;
       images: GalleryImage[];
+      /** Mise en page (colonnes, espacements, arrondi) — voir GalleryLayoutOptions. */
+      layout?: Partial<GalleryLayoutOptions>;
     }
   | {
       type: "faq";

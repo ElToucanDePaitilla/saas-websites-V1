@@ -29,6 +29,7 @@ import {
   type NavPresetId,
   type SiteNavigation,
 } from "../../lib/navigation";
+import { pageHref } from "../../lib/pages";
 import { getDatabase } from "../index";
 import {
   navigationEntries,
@@ -153,17 +154,63 @@ function flattenNavigation(
   return rows;
 }
 
+/** true si la chaîne est un UUID PostgreSQL valide. */
+function isUuid(value: string): boolean {
+  return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(
+    value
+  );
+}
+
+/**
+ * Réconcilie les `page_id` avant persistance : le store peut encore porter des
+ * ids **mock** non-UUID (`seed-home`, …) quand le tenant n'a pas (encore) de
+ * navigation en BDD. Règles :
+ *   - `page_id` UUID valide **appartenant au tenant** → conservé ;
+ *   - sinon entrée `page` → résolu par `href` vers la vraie page (si existante) ;
+ *   - sinon → `null` (lien conservé, sans FK cassée).
+ */
+function reconcileNavigation(
+  navigation: SiteNavigation,
+  pageIds: Set<string>,
+  pageByHref: Map<string, string>
+): SiteNavigation {
+  function reconcileEntry(entry: NavMenuEntry): NavMenuEntry {
+    const children =
+      entry.children?.map((child) => reconcileEntry(child)) ?? [];
+    let pageId: string | null = entry.pageId ?? null;
+    if (pageId !== null && isUuid(pageId) && pageIds.has(pageId)) {
+      // OK : id réel du tenant.
+    } else if (entry.kind === "page") {
+      pageId = pageByHref.get(entry.href) ?? null;
+    } else {
+      pageId = null;
+    }
+    return { ...entry, pageId, children };
+  }
+  return {
+    header: navigation.header.map(reconcileEntry),
+    footer: navigation.footer.map(reconcileEntry),
+  };
+}
+
 /** Remplace la navigation Header/Footer complète en une transaction. */
 export async function saveNavigation(
   photographerId: string,
   navigation: SiteNavigation
 ): Promise<void> {
   const database = getDatabase();
+  const { pages } = await getPagesWithModules(photographerId);
+  const pageIds = new Set(pages.map((page) => page.id));
+  const pageByHref = new Map(
+    pages.map((page) => [pageHref(page.slug), page.id])
+  );
+  const normalized = reconcileNavigation(navigation, pageIds, pageByHref);
+
   await database.transaction(async (tx) => {
     await tx
       .delete(navigationEntries)
       .where(eq(navigationEntries.photographerId, photographerId));
-    const rows = flattenNavigation(photographerId, navigation);
+    const rows = flattenNavigation(photographerId, normalized);
     if (rows.length > 0) {
       await tx.insert(navigationEntries).values(rows);
     }

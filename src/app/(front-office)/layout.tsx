@@ -4,6 +4,7 @@ import { NavigationStoreProvider } from "@/components/backoffice/navigation/Navi
 import Footer from "@/components/layout/Footer";
 import Header from "@/components/layout/Header";
 import { loadInitialData } from "@/db/load-initial-data";
+import { resolvePublicPhotographerId } from "@/lib/supabase/session";
 
 /**
  * ============================================================================
@@ -42,7 +43,9 @@ export default async function FrontOfficeLayout({
 }: {
   children: ReactNode;
 }) {
-  const initial = await loadInitialData();
+  // Site public affiché = photographe connecté (session), sinon tenant démo.
+  const photographerId = await resolvePublicPhotographerId();
+  const initial = await loadInitialData(photographerId);
 
   return (
     <NavigationStoreProvider

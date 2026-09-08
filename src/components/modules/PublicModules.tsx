@@ -27,7 +27,7 @@ export function HeroModule({ module }: { module: PageModule }) {
   const hasImage = content.media.url !== "";
 
   return (
-    <section className="relative flex min-h-[70vh] items-center justify-center overflow-hidden bg-background px-6 py-24">
+    <section className="relative flex min-h-[calc(100svh-4rem)] w-full -mt-4 items-center justify-center overflow-hidden bg-background px-6">
       {hasImage ? (
         <div className="absolute inset-0" aria-hidden="true">
           <MediaImage
@@ -45,11 +45,11 @@ export function HeroModule({ module }: { module: PageModule }) {
         <h2
           id={module.anchorId}
           style={{ fontFamily: "var(--font-heading)" }}
-          className="text-4xl font-light tracking-wide text-foreground sm:text-5xl lg:text-6xl"
+          className="text-4xl font-light tracking-wide text-white sm:text-5xl lg:text-6xl"
         >
           {content.heading}
         </h2>
-        <p className="mt-5 max-w-xl text-base leading-relaxed text-[var(--text-muted)] sm:text-lg">
+        <p className="mt-5 max-w-xl text-base leading-relaxed text-white sm:text-lg">
           {content.subheading}
         </p>
         {content.ctaLabel && content.ctaHref ? (
@@ -120,7 +120,11 @@ export function GalleryModule({
           {content.heading}
         </h2>
       ) : null}
-      <GalleryGrid images={content.images} exifByUrl={exifByUrl} />
+      <GalleryGrid
+        images={content.images}
+        exifByUrl={exifByUrl}
+        layout={content.layout}
+      />
     </section>
   );
 }

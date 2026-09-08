@@ -430,8 +430,8 @@ export interface NavPreset {
  *   - spec « Tarifs » distinct de « Prestations » → fusionné dans la page seed
  *     « Prestations & Tarifs » (aucun placeholder `/tarifs`) ;
  *   - spec « RDV / Contact (Bouton CTA) » → représenté par l'item Contact ;
- *   - « Connexion » = item final (future action compte/bouton d'en-tête) —
- *     placeholder tant qu'aucune page de connexion n'existe ;
+ *   - « Connexion » **absent des presets** : le Header public possède déjà son
+ *     bouton dédié (chrome fixe) — aucune entrée de menu dédiée requise ;
  *   - « Séries » / « Galeries » : cibles `page` absentes → placeholders
  *     `custom` (auto-liés si le photographe crée un jour la page du même slug).
  */
@@ -445,7 +445,6 @@ export const NAV_PRESETS: readonly NavPreset[] = [
       { label: "Séries", target: { kind: "page", slug: "series" } },
       { label: "À propos", target: { kind: "page", slug: "a-propos" } },
       { label: "Contact", target: { kind: "page", slug: "contact" } },
-      { label: "Connexion", target: { kind: "page", slug: "connexion" } },
     ],
   },
   {
@@ -474,7 +473,6 @@ export const NAV_PRESETS: readonly NavPreset[] = [
       },
       { label: "À propos", target: { kind: "page", slug: "a-propos" } },
       { label: "Contact", target: { kind: "page", slug: "contact" } },
-      { label: "Connexion", target: { kind: "page", slug: "connexion" } },
     ],
   },
   {
@@ -485,7 +483,6 @@ export const NAV_PRESETS: readonly NavPreset[] = [
       { label: "Accueil", target: { kind: "page", slug: "" } },
       { label: "Galeries", target: { kind: "page", slug: "galeries" } },
       { label: "Contact", target: { kind: "page", slug: "contact" } },
-      { label: "Connexion", target: { kind: "page", slug: "connexion" } },
     ],
   },
 ];

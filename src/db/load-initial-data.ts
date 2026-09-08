@@ -24,6 +24,7 @@ import type { PageModule, SitePage } from "../lib/pages";
 import { DEMO_PROFILE_ID } from "./constants";
 import { getPagesWithModules } from "./repositories/pages.repository";
 import { getNavigation } from "./repositories/navigation.repository";
+import { ensureTenantSeeded } from "./seed-tenant";
 
 /** Données initiales attendues par `PagesStoreProvider` (prop `initialData`). */
 export interface PagesInitialData {
@@ -53,10 +54,16 @@ export async function loadInitialData(
   photographerId: string = DEMO_PROFILE_ID
 ): Promise<SiteInitialData> {
   try {
-    const [pagesData, navigation] = await Promise.all([
-      getPagesWithModules(photographerId),
-      getNavigation(photographerId),
-    ]);
+    let pagesData = await getPagesWithModules(photographerId);
+    let navigation = await getNavigation(photographerId);
+
+    // Tenant sans page → amorçage de vraies lignes (UUID) pour que le store
+    // soit hydraté avec des ids réels (plus de `seed-home` factices).
+    if (pagesData.pages.length === 0) {
+      await ensureTenantSeeded(photographerId);
+      pagesData = await getPagesWithModules(photographerId);
+      navigation = await getNavigation(photographerId);
+    }
 
     const initial: Omit<SiteInitialData, "dbAvailable"> = {};
     if (pagesData.pages.length > 0) {

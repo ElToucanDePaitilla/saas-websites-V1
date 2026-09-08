@@ -1,8 +1,9 @@
 "use client";
 
+import { MediaUploadButton } from "@/components/backoffice/media/MediaUploadButton";
 import type { ModuleContent } from "@/lib/pages";
 
-import { MediaFields, TextAreaField, TextField } from "./form-fields";
+import { TextAreaField, TextField } from "./form-fields";
 
 /**
  * ============================================================================
@@ -62,11 +63,25 @@ export function ModuleHeroEditor({
         />
       </div>
 
-      <MediaFields
-        labelUrl="Image d’arrière-plan (URL)"
-        value={content.media}
-        onChange={(media) => onChangeContent({ ...content, media })}
-      />
+      {/* Média d’arrière-plan — upload local direct (aucun champ URL). */}
+      <div className="grid gap-3">
+        <MediaUploadButton
+          onUploaded={(url, alt) =>
+            onChangeContent({
+              ...content,
+              media: { ...content.media, url, alt: content.media.alt || alt },
+            })
+          }
+        />
+        <TextField
+          label="Texte alternatif (SEO)"
+          value={content.media.alt}
+          hint="Décrivez l’image pour le référencement et l’accessibilité."
+          onChange={(alt) =>
+            onChangeContent({ ...content, media: { ...content.media, alt } })
+          }
+        />
+      </div>
     </div>
   );
 }

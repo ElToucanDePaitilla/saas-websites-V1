@@ -6,6 +6,7 @@ import { ArrowUpRight } from "lucide-react";
 
 import { useNavigationStore } from "@/components/backoffice/navigation/NavigationStoreProvider";
 import { NavLink } from "@/components/common/NavLink";
+import type { NavMenuEntry } from "@/lib/navigation";
 import { legalLinks, siteName, socialLinks } from "@/lib/site";
 
 /**
@@ -36,11 +37,20 @@ const columnTitleStyle = { fontFamily: "var(--font-body)" } as const;
 export default function Footer() {
   const { getEntries } = useNavigationStore();
 
-  // Entrées Footer **visibles** uniquement (filtre `hidden !== true`, §0.3).
-  const navEntries = React.useMemo(
-    () => getEntries("footer").filter((entry) => !entry.hidden),
-    [getEntries]
-  );
+  // Entrées Footer **visibles** uniquement (filtre `hidden !== true`, §0.3)
+  // et dédoublonnées par cible (`href`) pour éviter l'affichage en double.
+  const navEntries = React.useMemo(() => {
+    const seen = new Set<string>();
+    const result: NavMenuEntry[] = [];
+    for (const entry of getEntries("footer")) {
+      if (entry.hidden || seen.has(entry.href)) {
+        continue;
+      }
+      seen.add(entry.href);
+      result.push(entry);
+    }
+    return result;
+  }, [getEntries]);
 
   const year = new Date().getFullYear();
 

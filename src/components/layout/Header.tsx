@@ -60,6 +60,20 @@ import { siteName } from "@/lib/site";
 const desktopLinkClass =
   "rounded-full px-3 py-2 text-sm font-medium text-foreground/70 transition-colors duration-200 hover:bg-accent/40 hover:text-foreground";
 
+/** Évite l'affichage d'entrées dupliquées (même cible `href`). */
+function dedupeHref(entries: NavMenuEntry[]): NavMenuEntry[] {
+  const seen = new Set<string>();
+  const result: NavMenuEntry[] = [];
+  for (const entry of entries) {
+    if (seen.has(entry.href)) {
+      continue;
+    }
+    seen.add(entry.href);
+    result.push(entry);
+  }
+  return result;
+}
+
 /**
  * Navigation Desktop — Niveau 1 + sous-menus Niveau 2 au survol/focus.
  * Ne reçoit que les entrées racine **visibles**.
@@ -71,8 +85,8 @@ function DesktopNavMenu({ entries }: { entries: NavMenuEntry[] }) {
       className="hidden items-center gap-1 md:flex"
     >
       {entries.map((entry) => {
-        const children = (entry.children ?? []).filter(
-          (child) => !child.hidden
+        const children = dedupeHref(
+          (entry.children ?? []).filter((child) => !child.hidden)
         );
         // Sans enfant visible → lien direct de Niveau 1.
         if (children.length === 0) {
@@ -132,8 +146,8 @@ function MobileNavMenu({
   return (
     <Accordion type="single" collapsible className="w-full">
       {entries.map((entry) => {
-        const children = (entry.children ?? []).filter(
-          (child) => !child.hidden
+        const children = dedupeHref(
+          (entry.children ?? []).filter((child) => !child.hidden)
         );
         // Sans enfant visible → lien pleine largeur.
         if (children.length === 0) {
@@ -186,7 +200,7 @@ export default function Header() {
 
   // Entrées racine Header **visibles** uniquement (filtre `hidden !== true`).
   const entries = React.useMemo(
-    () => getEntries("header").filter((entry) => !entry.hidden),
+    () => dedupeHref(getEntries("header").filter((entry) => !entry.hidden)),
     [getEntries]
   );
 

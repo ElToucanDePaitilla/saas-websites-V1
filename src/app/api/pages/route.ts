@@ -31,6 +31,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+    console.error("POST /api/pages failed:", error);
     const message = error instanceof Error ? error.message : "Erreur inconnue";
     return NextResponse.json(
       { ok: false, error: message },

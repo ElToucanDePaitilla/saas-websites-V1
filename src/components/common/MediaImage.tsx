@@ -48,6 +48,10 @@ export function MediaImage({
   priority = false,
   blurDataUrl,
 }: MediaImageProps) {
+  // URL vide → aucun rendu (évite le warning `<img src="">` et une requête réseau).
+  if (src === "") {
+    return null;
+  }
   if (!canUseNextImage(src)) {
     // eslint-disable-next-line @next/next/no-img-element
     return <img src={src} alt={alt} className={className} />;

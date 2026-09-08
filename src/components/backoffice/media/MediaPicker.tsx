@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ImagePlus, Loader2 } from "lucide-react";
+import { ImagePlus, Loader2, UploadCloud } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -13,7 +13,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { MediaImage } from "@/components/common/MediaImage";
-import { useMediaAssets, type MediaAsset } from "@/lib/media-client";
+import {
+  uploadMedia,
+  useMediaAssets,
+  type MediaAsset,
+} from "@/lib/media-client";
 
 /**
  * ============================================================================
@@ -34,11 +38,34 @@ export function MediaPicker({
   onOpenChange: (open: boolean) => void;
   onPick: (asset: MediaAsset) => void;
 }) {
-  const { assets, loading, demo } = useMediaAssets();
+  const { assets, loading, demo, refresh } = useMediaAssets();
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   function handlePick(asset: MediaAsset) {
     onPick(asset);
     onOpenChange(false);
+  }
+
+  async function handleFiles(files: FileList | null) {
+    const file = files?.[0];
+    if (!file) return;
+    setBusy(true);
+    setError(null);
+    try {
+      // Upload local puis sélection immédiate du nouvel actif.
+      const asset = await uploadMedia(file);
+      await refresh();
+      handlePick(asset);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Upload impossible.");
+    } finally {
+      setBusy(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
   }
 
   return (
@@ -53,6 +80,12 @@ export function MediaPicker({
           </DialogDescription>
         </DialogHeader>
 
+        {error ? (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        ) : null}
+
         {loading ? (
           <div className="flex items-center justify-center gap-2 py-10 text-muted-foreground">
             <Loader2 className="size-4 animate-spin" />
@@ -60,7 +93,9 @@ export function MediaPicker({
           </div>
         ) : assets.length === 0 ? (
           <p className="py-10 text-center text-sm text-muted-foreground">
-            Aucune image disponible.
+            {demo
+              ? "Aucune image d’exemple."
+              : "Aucune image — utilisez « Importer depuis l’ordinateur » ci-dessous."}
           </p>
         ) : (
           <div className="grid max-h-[50vh] grid-cols-2 gap-3 overflow-y-auto sm:grid-cols-3">
@@ -84,14 +119,35 @@ export function MediaPicker({
           </div>
         )}
 
-        <DialogFooter>
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => onOpenChange(false)}
-          >
-            Annuler
-          </Button>
+        <DialogFooter className="justify-between">
+          {!demo ? (
+            <div className="flex flex-1 items-center justify-between gap-3">
+              <span className="text-xs text-muted-foreground">
+                {busy ? "Upload en cours…" : "JPG, PNG, WebP, AVIF — 15 Mo max."}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={busy || loading}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <UploadCloud className="size-4" />
+                Importer depuis l’ordinateur
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/avif,image/gif"
+                className="hidden"
+                onChange={(event) => handleFiles(event.target.files)}
+              />
+            </div>
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              Mode démo — import désactivé.
+            </span>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

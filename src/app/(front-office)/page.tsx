@@ -44,12 +44,14 @@ export default async function Home() {
     notFound();
   }
 
-  const firstIsHero = page.modules[0]?.content.type === "hero";
+  // Modules **visibles** uniquement (le Toggle Eye masque sur le site public).
+  const visibleModules = page.modules.filter((module) => !module.hidden);
+  const firstIsHero = visibleModules[0]?.content.type === "hero";
 
   return (
     <main className="flex-1">
       {!firstIsHero ? <h1 className="sr-only">{page.title}</h1> : null}
-      {page.modules.map((module) => (
+      {visibleModules.map((module) => (
         <PageModuleRenderer
           key={module.id}
           module={module}

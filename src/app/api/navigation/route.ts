@@ -35,6 +35,7 @@ export async function PUT(request: NextRequest) {
         { status: 400 }
       );
     }
+    console.error("PUT /api/navigation failed:", error);
     const message = error instanceof Error ? error.message : "Erreur inconnue";
     return NextResponse.json(
       { ok: false, error: message },

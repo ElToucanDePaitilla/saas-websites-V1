@@ -16,7 +16,10 @@ import exifr from "exifr";
 import sharp from "sharp";
 
 import { listMedia, createMedia } from "@/db/repositories/media.repository";
-import { resolvePhotographerId } from "@/lib/supabase/session";
+import {
+  ensurePhotographerProfile,
+  resolvePhotographerId,
+} from "@/lib/supabase/session";
 import { createClient } from "@/lib/supabase/server";
 import { isStorageConfigured } from "@/lib/supabase/demo";
 import { uploadImage } from "@/lib/supabase/storage";
@@ -73,6 +76,8 @@ export async function POST(request: NextRequest) {
     );
   }
   const photographerId = user.id;
+  // Garantit profiles(id = auth.uid()) avant l'insertion `media` (FK).
+  await ensurePhotographerProfile(photographerId, user.email ?? null);
 
   try {
     const formData = await request.formData();
