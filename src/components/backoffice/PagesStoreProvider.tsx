@@ -2,10 +2,10 @@
 
 import * as React from "react";
 import {
-  buildSeedModules,
   createModule,
+  demotedHomeSlug,
   reorderModules,
-  seedPages,
+  type ModuleVariant,
   type PageMetadataDraft,
   type PageModule,
   type PageModuleType,
@@ -14,6 +14,7 @@ import {
 import {
   persistCreatePage,
   persistDeletePage,
+  persistSetHomePage,
   persistUpdateModules,
   persistUpdatePage,
 } from "@/lib/persistence-client";
@@ -61,8 +62,12 @@ export type PagesStoreValue = {
   deletePage: (id: string) => void;
   /** Modules d'une page, dans l'ordre vertical (tableau vide si inconnue). */
   getModules: (pageId: string) => PageModule[];
-  /** Ajoute un module par défaut en fin de page. */
-  addModule: (pageId: string, type: PageModuleType) => void;
+  /**
+   * Ajoute un module par défaut en fin de page.
+   * `variant` préconfigure le contenu des familles à variantes (rubriques Héro
+   * et Galeries & Portfolio).
+   */
+  addModule: (pageId: string, type: PageModuleType, variant?: ModuleVariant) => void;
   /** Supprime un module d'une page. */
   removeModule: (pageId: string, moduleId: string) => void;
   /** Masque (hidden=true) ou affiche (hidden=false) un module sur le site public. */
@@ -78,6 +83,10 @@ export type PagesStoreValue = {
   ) => void;
   /** Réordonne les modules d'une page (Drag & Drop). */
   moveModule: (pageId: string, from: number, to: number) => void;
+  /** Réordonne les pages du menu « Pages » (Drag & Drop sur la poignée). */
+  movePage: (from: number, to: number) => void;
+  /** Désigne la page d'accueil du site (Étape 10.1). */
+  setHomePage: (id: string) => void;
 };
 
 /** État initial chargé côté serveur (BDD) — prop facultative du Provider. */
@@ -90,13 +99,13 @@ const PagesStoreContext = React.createContext<PagesStoreValue | undefined>(
   undefined
 );
 
-/** État initial unique : pages seed + modules par défaut par page. */
+/**
+ * État initial **vide** (Étape 10.1) : le seed n'est plus un défaut implicite —
+ * il est fourni **explicitement** par le serveur (`loadInitialData`) quand la
+ * BDD est injoignable. Une BDD vide produit donc un site vide, sans fantôme.
+ */
 function createInitialState(): StoreState {
-  const modulesByPage: Record<string, PageModule[]> = {};
-  for (const page of seedPages) {
-    modulesByPage[page.id] = buildSeedModules(page.slug);
-  }
-  return { pages: seedPages, modulesByPage };
+  return { pages: [], modulesByPage: {} };
 }
 
 export function PagesStoreProvider({
@@ -230,6 +239,7 @@ export function PagesStoreProvider({
       const newPage: SitePage = {
         id: crypto.randomUUID(),
         ...draft,
+        isHome: false,
         updatedAt: now,
       };
       setState((previous) => ({
@@ -266,10 +276,14 @@ export function PagesStoreProvider({
     const getModules = (pageId: string): PageModule[] =>
       modulesByPage[pageId] ?? [];
 
-    const addModule = (pageId: string, type: PageModuleType): void => {
+    const addModule = (
+      pageId: string,
+      type: PageModuleType,
+      variant?: ModuleVariant
+    ): void => {
       setState((previous) => {
         const current = previous.modulesByPage[pageId] ?? [];
-        const nextModule = createModule(type, current.length + 1);
+        const nextModule = createModule(type, current.length + 1, variant);
         return {
           ...previous,
           modulesByPage: {
@@ -341,6 +355,47 @@ export function PagesStoreProvider({
       });
     };
 
+    const movePage = (from: number, to: number): void => {
+      setState((previous) => ({
+        ...previous,
+        pages: reorderModules(previous.pages, from, to),
+      }));
+    };
+
+    /**
+     * Désigne la page d'accueil (Étape 10.1) : l'ancien accueil est démis
+     * (slug libéré) et la page cible reçoit le slug canonique `""`. Mise à jour
+     * locale optimiste + persistance transactionnelle dédiée (API).
+     */
+    const setHomePage = (id: string): void => {
+      const now = new Date().toISOString();
+      setState((previous) => {
+        const currentHome = previous.pages.find((page) => page.isHome);
+        return {
+          ...previous,
+          pages: previous.pages.map((page) => {
+            if (page.id === id) {
+              return { ...page, isHome: true, slug: "", updatedAt: now };
+            }
+            if (currentHome && page.id === currentHome.id) {
+              return {
+                ...page,
+                isHome: false,
+                slug: demotedHomeSlug(page.id),
+                updatedAt: now,
+              };
+            }
+            return page;
+          }),
+        };
+      });
+      if (persistenceEnabled) {
+        persistSetHomePage(id).catch((error: unknown) => {
+          console.error("Persistance accueil :", error);
+        });
+      }
+    };
+
     return {
       pages,
       getPage,
@@ -353,8 +408,10 @@ export function PagesStoreProvider({
       setModuleHidden,
       updateModule,
       moveModule,
+      movePage,
+      setHomePage,
     };
-  }, [state]);
+  }, [state, persistenceEnabled]);
 
   return (
     <PagesStoreContext.Provider value={value}>

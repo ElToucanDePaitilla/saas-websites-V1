@@ -6,6 +6,7 @@ import { usePagesStore } from "@/components/backoffice/PagesStoreProvider";
 import { pageHref, type SitePage } from "@/lib/pages";
 import {
   findNavEntry,
+  isOrphanNavEntry,
   type NavMenuEntry,
 } from "@/lib/navigation";
 
@@ -139,6 +140,18 @@ export function PagesNavigationSync() {
         continue;
       }
       if (!pageById.has(entry.pageId)) {
+        const inHeader = findNavEntry(header, entry.id) !== undefined;
+        removeEntry(inHeader ? "header" : "footer", entry.id);
+      }
+    }
+
+    // ---- 5 : liens INTERNES orphelins (10.1.a) — entrées `custom` sans
+    //          `pageId` ciblant un slug inexistant (ancres du seed,
+    //          placeholders de presets…). Les URL externes et les ancres
+    //          locales sont conservées. ----
+    const slugs = new Set(pages.map((page) => page.slug));
+    for (const entry of [...headerEntries, ...footer]) {
+      if (isOrphanNavEntry(entry, slugs)) {
         const inHeader = findNavEntry(header, entry.id) !== undefined;
         removeEntry(inHeader ? "header" : "footer", entry.id);
       }

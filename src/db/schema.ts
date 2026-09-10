@@ -38,7 +38,9 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
+import type { OwnerProfile } from "../lib/owner-profile";
 import type { ModuleContent } from "../lib/pages";
+import type { VisualIdentity } from "../lib/visual-identity";
 
 /* --------------------------------------------------------------------------
    ENUMS — valeurs alignées sur les unions TypeScript des modèles mock
@@ -105,6 +107,11 @@ export const pages = pgTable(
     menuTitle: text("menu_title").notNull(),
     status: pageStatusEnum("status").notNull().default("draft"),
     isInMenu: boolean("is_in_menu").notNull().default(true),
+    /**
+     * Page d'accueil du site (Étape 10.1) : **source de vérité** de la route
+     * `/` (au lieu du slug vide). Un seul accueil par photographe (index partiel).
+     */
+    isHome: boolean("is_home").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -117,6 +124,10 @@ export const pages = pgTable(
       table.photographerId,
       table.slug
     ),
+    // Un seul accueil par photographe (index unique **partiel**).
+    uniqueIndex("pages_home_unique")
+      .on(table.photographerId)
+      .where(sql`${table.isHome}`),
   ]
 );
 
@@ -215,6 +226,54 @@ export const media = pgTable("media", {
   // Placeholder flou (data URI) pour `next/image` (blurDataURL).
   blurDataUrl: text("blur_data_url"),
   createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
+/* --------------------------------------------------------------------------
+   SITE_OWNER_PROFILE — profil complet du photographe (Étape 8.2)
+   --------------------------------------------------------------------------
+   1 ligne par photographe (photographer_id = PK/FK → profiles.id). Le profil
+   entier est stocké en `data` JSONB typé `OwnerProfile` (validé par
+   `OwnerProfileSchema` aux frontières API). RLS owner-only (migration 0003) :
+   pas de lecture `anon` — la marque publique (Header/Footer) est injectée côté
+   serveur (rôle service) via l'hydratation SSR.
+   -------------------------------------------------------------------------- */
+
+export const siteOwnerProfile = pgTable("site_owner_profile", {
+  photographerId: uuid("photographer_id")
+    .primaryKey()
+    .references(() => profiles.id, { onDelete: "cascade" }),
+  data: jsonb("data").$type<OwnerProfile>().notNull().default(sql`'{}'::jsonb`),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
+/* --------------------------------------------------------------------------
+   SITE_VISUAL_IDENTITY — espace marque du Header (Étape 9.1)
+   --------------------------------------------------------------------------
+   1 ligne par photographe (photographer_id = PK/FK → profiles.id). Configuration
+   **manuelle** (modes texte/logo) stockée en `data` JSONB typé `VisualIdentity`
+   (validé par `VisualIdentitySchema`). RLS owner-only (migration 0004) ; le
+   Header public est alimenté côté serveur via l'hydratation SSR.
+   -------------------------------------------------------------------------- */
+
+export const siteVisualIdentity = pgTable("site_visual_identity", {
+  photographerId: uuid("photographer_id")
+    .primaryKey()
+    .references(() => profiles.id, { onDelete: "cascade" }),
+  data: jsonb("data")
+    .$type<VisualIdentity>()
+    .notNull()
+    .default(sql`'{}'::jsonb`),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
 });

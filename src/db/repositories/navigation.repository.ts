@@ -23,6 +23,7 @@
 import { and, asc, eq } from "drizzle-orm";
 
 import {
+  isOrphanNavEntry,
   resolveNavPreset,
   type NavArea,
   type NavMenuEntry,
@@ -36,7 +37,7 @@ import {
   pages,
   type NavigationEntryInsert,
 } from "../schema";
-import { getPagesWithModules } from "./pages.repository";
+import { getPagesWithModules, listPageSlugs } from "./pages.repository";
 
 type NavigationRow = typeof navigationEntries.$inferSelect;
 
@@ -75,20 +76,70 @@ function buildZoneEntries(
 }
 
 /**
+ * Déduplique les lignes de navigation (doublons accumulés en BDD) :
+ * une seule entrée conservée par (zone, parent, page_id OU href), en gardant la
+ * première occurrence (position la plus faible). Les enfants dont le parent
+ * a été retiré (doublon) sont eux-mêmes retirés (anti-orphelins).
+ */
+function dedupeNavigationRows(rows: NavigationRow[]): NavigationRow[] {
+  const firstByKey = new Map<string, NavigationRow>();
+
+  // Tri stable pour choisir « la première » : zone → racines d'abord → position.
+  const sorted = rows.slice().sort((a, b) => {
+    if (a.zone !== b.zone) {
+      return a.zone.localeCompare(b.zone);
+    }
+    const aRoot = a.parentId === null ? 0 : 1;
+    const bRoot = b.parentId === null ? 0 : 1;
+    if (aRoot !== bRoot) {
+      return aRoot - bRoot;
+    }
+    return a.position - b.position;
+  });
+
+  for (const row of sorted) {
+    const pageKey =
+      row.pageId !== null ? `page:${row.pageId}` : `href:${row.href}`;
+    const key = `${row.zone}|${row.parentId ?? "root"}|${pageKey}`;
+    if (!firstByKey.has(key)) {
+      firstByKey.set(key, row);
+    }
+  }
+
+  const kept = rows.filter((row) => {
+    const pageKey =
+      row.pageId !== null ? `page:${row.pageId}` : `href:${row.href}`;
+    const key = `${row.zone}|${row.parentId ?? "root"}|${pageKey}`;
+    return firstByKey.get(key) === row;
+  });
+
+  // Retire les enfants dont le parent a été supprimé en doublon.
+  const rootIds = new Set(
+    kept.filter((row) => row.parentId === null).map((row) => row.id)
+  );
+  return kept.filter(
+    (row) => row.parentId === null || rootIds.has(row.parentId)
+  );
+}
+
+/**
  * Charge la navigation complète d'un photographe (Header + Footer).
  * Retourne des listes vides si le tenant n'a aucune entrée (le loader décidera
- * alors de basculer sur le seed en mémoire).
+ * alors de basculer sur le seed en mémoire). Déduplique les éventuels doublons
+ * accumulés en BDD (voir `dedupeNavigationRows`).
  */
 export async function getNavigation(
   photographerId: string
 ): Promise<SiteNavigation> {
   const database = getDatabase();
 
-  const rows = await database
+  const rawRows = await database
     .select()
     .from(navigationEntries)
     .where(eq(navigationEntries.photographerId, photographerId))
     .orderBy(asc(navigationEntries.position));
+
+  const rows = dedupeNavigationRows(rawRows);
 
   const childrenByParent = new Map<string, NavigationRow[]>();
   for (const row of rows) {
@@ -103,6 +154,61 @@ export async function getNavigation(
     header: buildZoneEntries(rows, "header", childrenByParent),
     footer: buildZoneEntries(rows, "footer", childrenByParent),
   };
+}
+
+/**
+ * Purge les **liens de navigation orphelins** (Étape 10.1.a) : entrées sans
+ * `pageId` (liens libres / placeholders) dont le `href` cible un slug interne
+ * qui n'existe plus. Les entrées rattachées à une page sont déjà nettoyées par
+ * la FK `ON DELETE CASCADE` ; ce nettoyage couvre les entrées `custom` (ancres
+ * du seed, placeholders de presets…).
+ *
+ * Retourne le nombre d'entrées supprimées (0 → aucune écriture).
+ * À n'appeler que lorsque le site est **vide** (0 page) pour ne jamais
+ * supprimer un placeholder volontaire d'un site en construction.
+ */
+export async function pruneOrphanNavigation(
+  photographerId: string
+): Promise<number> {
+  const [navigation, slugs] = await Promise.all([
+    getNavigation(photographerId),
+    listPageSlugs(photographerId),
+  ]);
+  if (navigation.header.length === 0 && navigation.footer.length === 0) {
+    return 0;
+  }
+  const slugSet = new Set(slugs);
+  let removed = 0;
+
+  // Header (racine + sous-menu Niveau 2) : un parent retiré emporte ses enfants.
+  const filterHeader = (entries: NavMenuEntry[]): NavMenuEntry[] =>
+    entries
+      .filter((entry) => {
+        if (isOrphanNavEntry(entry, slugSet)) {
+          removed += 1;
+          return false;
+        }
+        return true;
+      })
+      .map((entry) => ({
+        ...entry,
+        children: entry.children ? filterHeader(entry.children) : entry.children,
+      }));
+
+  const header = filterHeader(navigation.header);
+  const footer = navigation.footer.filter((entry) => {
+    if (isOrphanNavEntry(entry, slugSet)) {
+      removed += 1;
+      return false;
+    }
+    return true;
+  });
+
+  if (removed === 0) {
+    return 0;
+  }
+  await saveNavigation(photographerId, { header, footer });
+  return removed;
 }
 
 /* --------------------------------------------------------------------------

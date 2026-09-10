@@ -20,10 +20,13 @@ import { isMediaDemoMode, uploadMedia } from "@/lib/media-client";
 export function MediaUploadButton({
   onUploaded,
   label = "Cliquer ici pour uploader votre photo",
+  accept = "image/jpeg,image/png,image/webp,image/avif,image/gif",
 }: {
   /** Appelé avec l'URL publique et le nom du fichier une fois l'upload fait. */
   onUploaded: (url: string, alt: string) => void;
   label?: string;
+  /** Types MIME acceptés par le sélecteur de fichier. */
+  accept?: string;
 }) {
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -83,7 +86,7 @@ export function MediaUploadButton({
       <input
         ref={inputRef}
         type="file"
-        accept="image/jpeg,image/png,image/webp,image/avif,image/gif"
+        accept={accept}
         className="hidden"
         onChange={(event) => handleFiles(event.target.files)}
       />

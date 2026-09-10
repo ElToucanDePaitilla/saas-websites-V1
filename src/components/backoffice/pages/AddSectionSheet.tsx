@@ -10,7 +10,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { moduleCatalog, type PageModuleType } from "@/lib/pages";
+import { moduleCatalog, type ModuleCatalogEntry } from "@/lib/pages";
 
 import { ModuleIcon } from "./ModuleIcon";
 
@@ -27,7 +27,8 @@ import { ModuleIcon } from "./ModuleIcon";
 type AddSectionSheetProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onAdd: (type: PageModuleType) => void;
+  /** Reçoit l'entrée du catalogue (type + variante pré-configurée). */
+  onAdd: (entry: ModuleCatalogEntry) => void;
 };
 
 export function AddSectionSheet({
@@ -75,9 +76,9 @@ export function AddSectionSheet({
               <div className="grid gap-2">
                 {items.map((meta) => (
                   <button
-                    key={meta.type}
+                    key={meta.id}
                     type="button"
-                    onClick={() => onAdd(meta.type)}
+                    onClick={() => onAdd(meta)}
                     className="group flex items-start gap-3 rounded-lg border border-border bg-card p-3 text-left transition-colors hover:border-ring hover:bg-accent"
                   >
                     <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground transition-colors group-hover:bg-primary group-hover:text-primary-foreground">

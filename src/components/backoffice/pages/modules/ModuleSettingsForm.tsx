@@ -14,7 +14,7 @@ import {
   galleryHoverAnimationOrder,
   moduleAnimationLabels,
   moduleAnimationOrder,
-  resolveGalleryLayout,
+  resolveGalleryContent,
   type GalleryHoverAnimation,
   type ModuleAnimation,
   type ModuleContent,
@@ -66,7 +66,7 @@ export function ModuleSettingsForm({
       ? (module.content as Extract<ModuleContent, { type: "gallery" }>)
       : null;
   const galleryLayout = galleryContent
-    ? resolveGalleryLayout(galleryContent.layout)
+    ? resolveGalleryContent(galleryContent).layout
     : null;
 
   /** Met à jour l'animation au survol des vignettes (module Galerie). */
@@ -135,35 +135,45 @@ export function ModuleSettingsForm({
           )}
         </div>
 
-        {/* Animation d'entrée */}
-        <div className="grid gap-1.5">
-          <label
-            className="text-xs font-medium text-foreground"
-            htmlFor="module-animation"
-          >
-            Animation d’entrée
-          </label>
-          <Select
-            value={module.animation}
-            onValueChange={(value) =>
-              onChange({ animation: value as ModuleAnimation })
-            }
-          >
-            <SelectTrigger id="module-animation" className="w-full">
-              <SelectValue placeholder="Choisir une animation" />
-            </SelectTrigger>
-            <SelectContent>
-              {moduleAnimationOrder.map((animation) => (
-                <SelectItem key={animation} value={animation}>
-                  {moduleAnimationLabels[animation]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-muted-foreground">
-            Surcharge l’animation d’entrée du thème pour ce bloc.
-          </p>
-        </div>
+        {/* Animation d'entrée — pour la famille Héro, elle se règle dans la
+            rubrique « Animations & Effets » du contenu (7.1, source unique). */}
+        {module.content.type === "hero" && module.content.variant === "static" ? (
+          <div className="grid gap-1.5">
+            <p className="text-xs text-muted-foreground">
+              L’animation d’entrée du Héro statique se règle dans la rubrique
+              « 🎬 Animations & Effets » de son contenu.
+            </p>
+          </div>
+        ) : (
+          <div className="grid gap-1.5">
+            <label
+              className="text-xs font-medium text-foreground"
+              htmlFor="module-animation"
+            >
+              Animation d’entrée
+            </label>
+            <Select
+              value={module.animation}
+              onValueChange={(value) =>
+                onChange({ animation: value as ModuleAnimation })
+              }
+            >
+              <SelectTrigger id="module-animation" className="w-full">
+                <SelectValue placeholder="Choisir une animation" />
+              </SelectTrigger>
+              <SelectContent>
+                {moduleAnimationOrder.map((animation) => (
+                  <SelectItem key={animation} value={animation}>
+                    {moduleAnimationLabels[animation]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Surcharge l’animation d’entrée du thème pour ce bloc.
+            </p>
+          </div>
+        )}
 
         {/* Animation au survol (spécifique au module Galerie) */}
         {galleryLayout ? (

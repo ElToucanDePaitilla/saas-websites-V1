@@ -1,6 +1,10 @@
 "use client";
 
-import type { ModuleContent } from "@/lib/pages";
+import type {
+  ModuleAnimation,
+  ModuleContent,
+  PageModule,
+} from "@/lib/pages";
 
 import { ModuleAboutEditor } from "./ModuleAboutEditor";
 import { ModuleContactEditor } from "./ModuleContactEditor";
@@ -8,6 +12,9 @@ import { ModuleCtaBannerEditor } from "./ModuleCtaBannerEditor";
 import { ModuleFaqEditor } from "./ModuleFaqEditor";
 import { ModuleGalleryEditor } from "./ModuleGalleryEditor";
 import { ModuleHeroEditor } from "./ModuleHeroEditor";
+import { ModuleHeroSliderEditor } from "./ModuleHeroSliderEditor";
+import { ModuleHeroParallaxEditor } from "./ModuleHeroParallaxEditor";
+import { ModuleHeroVideoEditor } from "./ModuleHeroVideoEditor";
 import { ModuleServicesEditor } from "./ModuleServicesEditor";
 
 /**
@@ -32,15 +39,53 @@ type ModuleContentEditorProps = {
   content: ModuleContent;
   /** Commite un nouveau contenu complet (→ updateModule). */
   onChangeContent: (content: ModuleContent) => void;
+  /** Scalaire d'animation d'entrée (source unique) — transmis au Héro (7.1). */
+  moduleAnimation?: ModuleAnimation;
+  /** Applique un patch scalaire au module (ex. animation) — transmis au Héro. */
+  onChangeModule?: (patch: Partial<PageModule>) => void;
 };
 
 export function ModuleContentEditor({
   content,
   onChangeContent,
+  moduleAnimation,
+  onChangeModule,
 }: ModuleContentEditorProps) {
   switch (content.type) {
     case "hero":
-      return <ModuleHeroEditor content={content} onChangeContent={onChangeContent} />;
+      // Aiguillage par variante : slider (7.2) / video (7.3) / static (7.1).
+      if (content.variant === "slider") {
+        return (
+          <ModuleHeroSliderEditor
+            content={content}
+            onChangeContent={onChangeContent}
+          />
+        );
+      }
+      if (content.variant === "video") {
+        return (
+          <ModuleHeroVideoEditor
+            content={content}
+            onChangeContent={onChangeContent}
+          />
+        );
+      }
+      if (content.variant === "parallax") {
+        return (
+          <ModuleHeroParallaxEditor
+            content={content}
+            onChangeContent={onChangeContent}
+          />
+        );
+      }
+      return (
+        <ModuleHeroEditor
+          content={content}
+          onChangeContent={onChangeContent}
+          moduleAnimation={moduleAnimation}
+          onChangeModule={onChangeModule}
+        />
+      );
     case "about":
       return <ModuleAboutEditor content={content} onChangeContent={onChangeContent} />;
     case "services":

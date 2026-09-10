@@ -11,6 +11,443 @@ NOTICE D'UTILISATION DU FICHIER CHANGELOG.MD
 
 ---
 
+## 2026-09-10 – 13:41 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Phase 11 — Correctifs après recette (Étapes 11.9 → 11.15)**.
+- **11.9 — Gallery Dynamic** : ouverture au **clic simple** (au lieu du double-clic), avec garde-fou de 300 ms empêchant le clic résiduel du double-clic de refermer la modale ; le double-clic reste dédié au cycle de zoom **dans** la Lightbox. [`GalleryCtaPanel`](src/components/backoffice/pages/modules/gallery/GalleryCtaPanel.tsx) affiche désormais une **alerte** (icône + texte) quand le bouton CTA est activé sans libellé ou sans lien (les trois variantes).
+- **11.10 — Lightbox, pan fiable & fluidité** [`LightboxModal`](src/components/modules/gallery/LightboxModal.tsx) : l'état de glissement est armé **avant** `setPointerCapture` (avec `try/catch`), le déplacement est piloté par des **écouteurs fenêtre** (`pointermove/up/cancel`, nettoyés au démontage), transform `translate3d` + `transformOrigin: center`, `user-select: none`, `overscroll-behavior: contain` → **plus d'ascenseur natif** en mode zoomé, glissement fluide au clic maintenu, borné. **Préchargement** des images voisines (n−1 / n+1) pour une navigation quasi instantanée.
+- **11.11 — Anneau coloré** [`GalleryItem`](src/components/modules/gallery/GalleryItem.tsx) : la modalité d'ouverture (clavier vs souris) est propagée de la vignette jusqu'à la Lightbox ; le focus n'est restauré sur la vignette **que** pour une ouverture clavier (plus de bordure rose après un clic souris), et l'anneau de focus est rendu discret.
+- **11.12 — Galeries vides par défaut** [`pages.ts`](src/lib/pages.ts) : `createGalleryStaticContent` / `createGalleryDynamicContent` démarrent **sans photo** et `createGalleryPortfolioContent` **sans album** (ajout dynamique d'autant de thématiques que souhaité) ; messages d'aide dans l'éditeur ; le **seed** n'instancie plus de galerie vide (Accueil et Portfolio).
+- **11.13 — WebP qualité 80 à l'upload** [`/api/media`](src/app/api/media/route.ts) : conversion **sharp → WebP q80** (orientation EXIF appliquée, métadonnées retirées) avant Storage pour JPEG/PNG/WebP/AVIF ; **SVG, GIF animés et vidéos** conservés tels quels ; **repli sur l'original** si la conversion échoue ; `mimeType`/extension `.webp`, `size` du WebP ; **EXIF lu sur l'original**, dimensions et blur calculés sur le WebP.
+- **11.14 — Lazy loading & qualité** : prop `quality` ajoutée à [`MediaImage`](src/components/common/MediaImage.tsx) (utilisée à **80** dans la Lightbox et les grilles) ; toutes les photos de galerie restent en **lazy loading** (seule la première en `priority`), image active de la Lightbox en chargement immédiat.
+- Vérifications : `npx tsc --noEmit` OK ; `npx eslint src` OK ; `npm run build` OK (18 pages).
+
+### Fichiers créés ou modifiés
+- Modifiés : `src/components/modules/gallery/{GalleryManager,GalleryItem,GalleryGrid,LightboxModal}.tsx`, `src/components/backoffice/pages/modules/gallery/GalleryCtaPanel.tsx`, `src/components/common/MediaImage.tsx`, `src/lib/pages.ts`, `src/app/api/media/route.ts`, `ROADMAP.md`, `CHANGELOG.md`
+- BDD : **aucune** migration.
+
+### Prochaine étape prévue
+Nouvelle passe de recette `/demo` : Gallery Dynamic au clic simple (sans fermeture parasite), pan au clic maintenu sans ascenseur, cycle de zoom fit → 1,5× → 2,5×, absence d'anneau rose après un clic souris, fluidité du diaporama (préchargement + WebP), galeries vides à la création puis import multiple/dossier complet, alerte CTA incomplet.
+
+---
+
+## 2026-09-10 – 12:11 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Phase 11 — Rubrique « Galeries & Portfolio » : Gallery Static, Gallery Dynamic, Gallery Portfolio** (plan [`plans/ROADMAP-11.1-galleries-portfolio.md`](plans/ROADMAP-11.1-galleries-portfolio.md) validé).
+- **Architecture** : famille unique `type: "gallery"` à **variantes discriminées dans le JSONB** (`static` / `dynamic` / `portfolio`) — pattern de la rubrique Héro, **aucune migration BDD** (`module_type` conserve `gallery`). `GalleryVariant` (mode d'affichage) renommé `GalleryDisplayMode` + `layout.display`, avec **lecture rétro-compatible** de l'ancien `layout.variant` ; un contenu sans `variant` bascule vers `static` (legacy « Galerie photo masonry »).
+- **Domaine** [`pages.ts`](src/lib/pages.ts) : `GalleryContent` (`GalleryStaticContent` / `GalleryDynamicContent` / `GalleryPortfolioContent`), effets exclusifs (`GalleryEffectSettings` light/normal/strong), ombre (`none`→`strong`), bordure (épaisseur + couleur), CTA, réglages Lightbox (zoom 1,5× / 2,5×, EXIF, légendes), albums imbriqués (`GalleryAlbum`), badges paramétrables, fabriques par variante, `resolveGalleryContent` (rétro-compat.), `galleryImageSources`, `galleryAlbumCover/PhotoCount`, `ModuleVariant` généralisé, catalogue à **3 cartes**.
+- **Schémas** [`persistence.ts`](src/lib/schemas/persistence.ts) : `galleryContentSchema` (union discriminée, miroir du domaine). [`public-page.ts`](src/lib/public-page.ts) : collecte SEO/OG des images galerie **albums inclus**.
+- **Effets** [`gallery-effects.ts`](src/lib/gallery-effects.ts) : mapping pur effet + intensité → styles (Passe-partout de Musée, Sous-Verre/glassmorphism, Polaroid papier glacé + reflet), ombre nacre et bordure indépendantes.
+- **Rendu public** : [`GalleryManager`](src/components/modules/gallery/GalleryManager.tsx) orchestre les 3 variantes ; [`GalleryGrid`](src/components/modules/gallery/GalleryGrid.tsx) (uniforme/masonry, colonnes responsives par variables CSS) ; [`GalleryItem`](src/components/modules/gallery/GalleryItem.tsx) (`MediaImage` lazy, ratio réservé anti-CLS, effets, survol, curseurs selon variante, double-clic/ clic simple) ; [`GalleryAlbumBadge`](src/components/modules/gallery/GalleryAlbumBadge.tsx) ; [`CTAButton`](src/components/modules/gallery/CTAButton.tsx) (conditions habituelles show + label + href).
+- **Lightbox unique** [`LightboxModal`](src/components/modules/gallery/LightboxModal.tsx) partagée Dynamic (toutes les images) + Portfolio (album exclusif) : clavier ← →, Échap, **focus trap**, ARIA, restauration du focus, scroll verrouillé, **Zoom HD**, **plein écran**, **cycle de zoom fit → 1,5× → 2,5× → fit**, **pan au clic maintenu** borné et **sans scroll** (molette neutralisée).
+- **Back-Office** : [`ModuleGalleryEditor`](src/components/backoffice/pages/modules/ModuleGalleryEditor.tsx) (routeur par variante) + panneaux [`ImportMediaPanel`](src/components/backoffice/pages/modules/gallery/ImportMediaPanel.tsx) (multiple + dossier non compressé), [`GalleryImagesPanel`](src/components/backoffice/pages/modules/gallery/GalleryImagesPanel.tsx) (CRUD, réordonnancement, masquage), [`AlbumManagerPanel`](src/components/backoffice/pages/modules/gallery/AlbumManagerPanel.tsx) (thématiques + badges), `GalleryLayoutPanel`, `EffectSettingsPanel`, `GalleryCtaPanel`, `LightboxSettingsPanel`, `fields`.
+- **Responsivité** : colonnes dégradées automatiquement (≤1024 → min(cols,3) ; ≤640 → min(cols,2) ; ≤400 → 1) et typographies fluides `clamp()` (titres, badges, légendes Polaroid).
+- Vérifications : `npx tsc --noEmit` OK ; `npx eslint src` OK ; `npm run build` OK.
+
+### Fichiers créés ou modifiés
+- Créés : `src/lib/gallery-effects.ts` ; `src/components/modules/gallery/{GalleryManager,GalleryGrid,GalleryItem,GalleryAlbumBadge,LightboxModal,CTAButton}.tsx` ; `src/components/backoffice/pages/modules/gallery/{ImportMediaPanel,GalleryImagesPanel,AlbumManagerPanel,GalleryLayoutPanel,EffectSettingsPanel,GalleryCtaPanel,LightboxSettingsPanel,fields}.tsx` ; `plans/ROADMAP-11.1-galleries-portfolio.md`
+- Modifiés : `src/lib/pages.ts`, `src/lib/schemas/persistence.ts`, `src/lib/public-page.ts`, `src/app/globals.css`, `src/components/modules/PublicModules.tsx`, `src/components/backoffice/PagesStoreProvider.tsx`, `src/components/backoffice/pages/modules/{ModuleGalleryEditor,ModuleSettingsForm}.tsx`, `src/app/(front-office)/demo/page.tsx`, `ROADMAP.md`, `CHANGELOG.md`
+- Supprimé : `src/components/modules/GalleryGrid.tsx` (logique migrée vers `src/components/modules/gallery/`)
+- BDD : **aucune** migration (contenu JSONB uniquement).
+
+### Prochaine étape prévue
+Contrôle visuel `/demo` : Gallery Static (aucune interaction, Passe-partout + CTA), Gallery Dynamic (double-clic → diaporama, aucun voile au survol), Gallery Portfolio (clic simple → album exclusif + badges) ; cycle de zoom fit → 1,5× → 2,5× et pan au clic maintenu ; import multiple et dossier non compressé depuis `/admin/pages` ; responsivité mobile / tablette / desktop.
+
+---
+
+## 2026-09-09 – 22:11 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Amendement 10.1.a — Liens de navigation orphelins & site vierge** (plan [`plans/ROADMAP-10.1-site-starter-onboarding.md`](plans/ROADMAP-10.1-site-starter-onboarding.md))
+- **Cause identifiée** : `PagesNavigationSync` nettoie bien les entrées **liées à une page** (et la FK cascade en BDD), mais les entrées **`custom` (`pageId: null`)** — ancres du seed (`/portfolio#mariages`…), placeholders de presets (`/series`, `/galeries`), liens manuels — **n'étaient jamais nettoyées** → liens résiduels dans `/admin/navigation` et dans le Header.
+- **Domaine** [`navigation.ts`](src/lib/navigation.ts) : `internalHrefSlug(href)` (`/portfolio#mariages` → `portfolio` ; `/` → `""` ; `#ancre`/`https://…` → `null`) et `isOrphanNavEntry(entry, slugs)` (liens internes morts uniquement — externes et ancres locales préservés).
+- **Serveur** : `listPageSlugs()` ([`pages.repository.ts`](src/db/repositories/pages.repository.ts)) + **`pruneOrphanNavigation()`** ([`navigation.repository.ts`](src/db/repositories/navigation.repository.ts), réutilise `saveNavigation`) ; appel dans [`loadInitialData`](src/db/load-initial-data.ts) **uniquement si 0 page** → purge douce et ciblée (aucune suppression de placeholder sur un site qui a des pages).
+- **Client** [`PagesNavigationSync`](src/components/backoffice/navigation/PagesNavigationSync.tsx) : **étape 5** — suppression immédiate des entrées `custom` orphelines (Header racine/sous-menu + Footer).
+- **Action explicite** : `clearNavigation(area | "all")` ([`NavigationStoreProvider`](src/components/backoffice/navigation/NavigationStoreProvider.tsx)) + carte **« Zone de réinitialisation »** avec confirmation destructrice dans [`NavigationManager`](src/components/backoffice/navigation/NavigationManager.tsx) → Header/Footer vidés, persistés par `PUT /api/navigation`.
+- **Onboarding autonome** [layout front-office](src/app/(front-office)/layout.tsx) : si `dbAvailable && !hasHomepage && 0 page` → rendu **sans Header/Footer** (aucune barre de nav vide/résiduelle).
+- **Informatif** [`NavEntryRow`](src/components/backoffice/navigation/NavEntryRow.tsx) : badge **« Lien mort »** sur une entrée interne sans cible (site avec pages — pas de suppression auto).
+- Vérifications : `npx tsc --noEmit` OK ; `npx eslint` OK (0 erreur, 0 avertissement) ; `npm run build` OK (18 pages).
+
+### Fichiers créés ou modifiés
+- Modifiés : `src/lib/navigation.ts`, `src/db/repositories/pages.repository.ts`, `src/db/repositories/navigation.repository.ts`, `src/db/load-initial-data.ts`, `src/components/backoffice/navigation/PagesNavigationSync.tsx`, `src/components/backoffice/navigation/NavigationStoreProvider.tsx`, `src/components/backoffice/navigation/NavigationManager.tsx`, `src/components/backoffice/navigation/NavEntryRow.tsx`, `src/app/(front-office)/layout.tsx`, `plans/ROADMAP-10.1-site-starter-onboarding.md`, `CHANGELOG.md`
+- BDD : **aucune** migration (réutilise `saveNavigation`).
+
+### Prochaine étape prévue
+Vérifier : supprimer toutes les pages → `/admin/navigation` **vide**, `/` **sans barre de navigation** (onboarding), `F5` stable ; « Vider la navigation » → menu vidé et persisté ; liens externes/ancres locales conservés ; badge « Lien mort » visible sur un lien interne sans cible.
+
+---
+
+## 2026-09-09 – 21:52 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Étape 10.1 — Démarrage de site & Onboarding public** (plan [`plans/ROADMAP-10.1-site-starter-onboarding.md`](plans/ROADMAP-10.1-site-starter-onboarding.md) validé) : suppression des **données fantômes** (seed) et écran public `WelcomeOnboarding`.
+- **Principe** : le seed n'est plus un défaut implicite des stores → **fallback serveur explicite uniquement si la BDD est injoignable**.
+- **BDD** [`schema.ts`](src/db/schema.ts) : colonne **`pages.is_home`** + **index unique partiel** (`uniques par photographe`) ; migration [`0005_jittery_turbo.sql`](drizzle/0005_jittery_turbo.sql) (générée + backfill `slug = '' → is_home = true` éditée à la main) — **`db:migrate` appliqué**.
+- **Domaine** [`pages.ts`](src/lib/pages.ts) : `SitePage.isHome`, `pageHrefFor(page)` (accueil → `/`), `demotedHomeSlug(pageId)` ; seed enrichi.
+- **Fini les fantômes** : [`getPublicPage`](src/lib/public-page.ts) ne retombe plus sur le seed **quand la BDD répond** ; **`getHomepageState()`** renvoie `ready | draft | missing` (un accueil brouillon ≠ onboarding) ; ✅ `PagesStoreProvider` et ✅ `navigation-store` ont un **défaut vide**.
+- **Loader** [`load-initial-data.ts`](src/db/load-initial-data.ts) : `pages`/`navigation` **toujours fournis si BDD OK (même vides)** + `hasHomepage` ; seed explicite si BDD down ; **plus d'auto-seed** (`ensureTenantSeeded` n'est plus appelé — reste en opt-in `npm run db:seed`).
+- **Repository** [`pages.repository.ts`](src/db/repositories/pages.repository.ts) : `getHomePage`, **`setHomePage` transactionnel** (ancien accueil démis + slug libéré, nouveau accueil en slug `""`), `ensurePhotographerProfile` à la demande (FK mode démo).
+- **API** [`POST /api/pages/[pageId]/home`](src/app/api/pages/[pageId]/home/route.ts) + `persistSetHomePage`.
+- **UI Pages** [`PagesManager`](src/components/backoffice/pages/PagesManager.tsx) : badge **« Accueil »** + action **« Définir comme page d'accueil »** ; [`PageMetadataForm`](src/components/backoffice/pages/PageMetadataForm.tsx) : `isHome` déduit de la page (plus du slug vide) — le parcours « page blanche » est **débloqué**.
+- **Écran public** [`WelcomeOnboarding`](src/components/onboarding/WelcomeOnboarding.tsx) (Server Component) rendu par [`/`](src/app/(front-office)/page.tsx) quand `missing` : 200 + **`noindex`**, 2 variantes (visiteur → CTA `/admin/login` ; admin → CTA `/admin/pages` et `/admin/navigation`). Accueil `draft` → 404.
+- Vérifications : `npx tsc --noEmit` OK ; `npx eslint` OK (0 erreur, 0 avertissement) ; `npm run build` OK (18 pages, route `/api/pages/[pageId]/home` présente).
+
+### Fichiers créés ou modifiés
+- Créés : `src/components/onboarding/WelcomeOnboarding.tsx`, `src/app/api/pages/[pageId]/home/route.ts`, `drizzle/0005_jittery_turbo.sql`, `plans/ROADMAP-10.1-site-starter-onboarding.md`
+- Modifiés : `src/db/schema.ts`, `src/db/load-initial-data.ts`, `src/db/repositories/pages.repository.ts`, `src/lib/pages.ts`, `src/lib/public-page.ts`, `src/lib/navigation-store.ts`, `src/lib/persistence-client.ts`, `src/components/backoffice/PagesStoreProvider.tsx`, `src/components/backoffice/pages/PagesManager.tsx`, `src/components/backoffice/pages/PageMetadataForm.tsx`, `src/app/(front-office)/page.tsx`, `CHANGELOG.md`
+- BDD : `pages.is_home` + index partiel + backfill (migration 0005).
+
+### Prochaine étape prévue
+Scénarios DoD à vérifier par l'utilisateur : supprimer toutes les pages → `F5` sur `/` (aucune recréation, écran d'onboarding, menu vide) ; cas anon/admin ; créer une 1ʳᵉ page → **Définir comme page d'accueil** → **Publier** → `/` la sert. *Reporté en v2* : `site_mode`, reset in-app, support `?redirect=` après login.
+
+---
+
+## 2026-09-09 – 20:36 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Module « Identité visuelle / Logo » — amendement 9.1.b** (demandes utilisateur) :
+1. **échelle de taille calibrée** (ligne 1 ≈ +25 % du texte du menu ; ligne 1 ≈ +20 % de la ligne 2) + **2 niveaux supérieurs ajoutés** ;
+2. **couleur par défaut des deux lignes = `#1E293B`** ;
+3. **palette sur mesure** (2 rangées) + **pipette écran** (échantillonnage hors onglet).
+- **Domaine** [`visual-identity.ts`](src/lib/visual-identity.ts) : `VisualIdentityTextSize` passe à **5 niveaux** (`small, medium, large, xlarge, xxlarge`) ; `textSizeLabels` (Petite · Moyenne (défaut) · Grande · Très grande · Énorme) ; **`TEXT_LINE_PX` recalibré** — ligne 1 : 14/18/22/25/30 px, ligne 2 : 12/15/18/21/25 px (défaut **18/15** = ratio 1,2 exact et ≈ +28,6 % vs menu 14 px) ; `TEXT_SIZE_LETTER_SPACING` sur 5 niveaux ; **défauts couleur `#1E293B`** pour les 2 lignes ; palettes **`VISUAL_IDENTITY_NEUTRALS`** (8) + **`VISUAL_IDENTITY_ACCENTS`** (10) ; `readSize` tolérant étendu.
+- **Zod** [`persistence.ts`](src/lib/schemas/persistence.ts) : enum taille 5 niveaux + défauts couleur `#1E293B`.
+- **Écran** [`VisualIdentityScreen.tsx`](src/components/backoffice/visual-identity/VisualIdentityScreen.tsx) : color picker sur **2 rangées** (neutres puis accents) ; bouton **« Pipette »** par ligne utilisant l'**EyeDropper API** (`new EyeDropper().open()`) → prélèvement **n'importe où à l'écran, y compris hors de l'onglet** ; détection de support (message si non supporté) ; note des nouvelles métriques.
+- **Header** [`Header.tsx`](src/components/layout/Header.tsx) : aucun changement de logique — applique les nouvelles px/espacements par ligne via `TEXT_LINE_PX` / `TEXT_SIZE_LETTER_SPACING`.
+- Vérifications : `npx tsc --noEmit` OK ; `npx eslint` OK (0 erreur, 0 avertissement) ; `npm run build` OK (18 pages).
+
+### Fichiers créés ou modifiés
+- Modifiés : `src/lib/visual-identity.ts`, `src/lib/schemas/persistence.ts`, `src/components/backoffice/visual-identity/VisualIdentityScreen.tsx`, `plans/ROADMAP-9.1-visual-identity-logo.md`, `CHANGELOG.md`
+- BDD : **aucune** migration (JSONB — tokens de taille inchangés, valeurs px recalculées à l'affichage).
+
+### Prochaine étape prévue
+Test utilisateur : `/admin/identite-visuelle` → « Moyenne » (défaut) doit paraître nettement plus grande que le menu ; tester « Très grande »/« Énorme » ; utiliser la **pipette** pour échantillonner une couleur hors onglet ; vérifier que les deux lignes valent `#1E293B` par défaut.
+
+---
+
+## 2026-09-09 – 20:25 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Module « Identité visuelle / Logo » — amendement 9.1.a** (demande utilisateur) :
+1. **Paramètres typographiques distincts par ligne** (ligne 1 et ligne 2 indépendantes) ;
+2. **Fond d'aperçu neutre médian** (ni blanc ni noir) pour vérifier la lisibilité d'un texte blanc, noir ou gris.
+- **Domaine pur** [`visual-identity.ts`](src/lib/visual-identity.ts) : `VisualIdentityTextLine { value, color, size, weight }`, `text: { line1, line2 }` ; `TEXT_LINE_PX` (ligne 1 → 12/14/16 px ; ligne 2 → 10/12/13 px), `TEXT_SIZE_LETTER_SPACING`, `VISUAL_IDENTITY_PREVIEW_BG = "#808080"`, **`normalizeVisualIdentity()`** (rétro-compat de l'ancienne forme plate v1 → v2, sans lever) ; fichier **sans `"use client"`** → importable côté serveur.
+- **Store séparé** [`visual-identity-store.ts`](src/lib/visual-identity-store.ts) (nouveau, `"use client"`) : snapshot/hydratation/subscription + `useVisualIdentity()`.
+- **Zod v2** [`persistence.ts`](src/lib/schemas/persistence.ts) : `line1` (max 35, graisse 600 par défaut) et `line2` (max 45, graisse 400) avec chacun couleur/taille/graisse.
+- **Repository** [`visual-identity.repository.ts`](src/db/repositories/visual-identity.repository.ts) : décodage via `normalizeVisualIdentity` puis Zod (contenus JSONB existants **migrés à la volée**, aucune migration SQL nécessaire).
+- **Écran** [`VisualIdentityScreen.tsx`](src/components/backoffice/visual-identity/VisualIdentityScreen.tsx) : composant `TextLineFields` réutilisé → **rubrique « Ligne 1 » et « Ligne 2 » avec contrôles indépendants** (texte, couleur + presets, taille, graisse) ; **fond d'aperçu `#808080`** (aperçu en direct + encadré « Logo actuel »), repli `siteName` en gris foncé lisible.
+- **Header** [`Header.tsx`](src/components/layout/Header.tsx) : chaque ligne applique **ses propres** couleur/taille/graisse/espacement.
+- Vérifications : `npx tsc --noEmit` OK ; `npx eslint` OK (0 erreur, 0 avertissement) ; `npm run build` OK (18 pages).
+
+### Fichiers créés ou modifiés
+- Créés : `src/lib/visual-identity-store.ts`
+- Modifiés : `src/lib/visual-identity.ts`, `src/lib/schemas/persistence.ts`, `src/db/repositories/visual-identity.repository.ts`, `src/components/backoffice/visual-identity/VisualIdentityProvider.tsx`, `src/components/backoffice/visual-identity/VisualIdentityScreen.tsx`, `src/components/layout/Header.tsx`, `plans/ROADMAP-9.1-visual-identity-logo.md`, `CHANGELOG.md`
+- BDD : **aucune** migration (JSONB — normalisation applicative).
+
+### Prochaine étape prévue
+Test utilisateur : `/admin/identite-visuelle` → régler séparément Ligne 1 et Ligne 2 (couleur/taille/graisse propres) → aperçu sur fond gris : les textes blanc, noir et gris doivent rester lisibles → « Enregistrer » → Header conforme.
+
+---
+
+## 2026-09-09 – 19:59 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Nouveau module « Identité visuelle / Logo » (ROADMAP 9.1)** — configuration **100 % manuelle** de l'espace marque du Header (plan [`plans/ROADMAP-9.1-visual-identity-logo.md`](plans/ROADMAP-9.1-visual-identity-logo.md) validé)
+- **BDD** [`schema.ts`](src/db/schema.ts) : table **`site_visual_identity`** (1 ligne/photographe, `data` **JSONB typé** `VisualIdentity`, timestamps). Migration **`drizzle/0004_steady_mikhail_rasputin.sql`** (générée + **RLS owner-only** ajoutée à la main) — **`db:migrate` appliqué avec succès**.
+- **Domaine** [`visual-identity.ts`](src/lib/visual-identity.ts) (nouveau) : types (`VisualIdentityMode`, tailles, graisses), `DEFAULT_VISUAL_IDENTITY` (**champs vierges**, aucun pré-remplissage Profil), `TEXT_SIZE_METRICS` (12/10 · 14/12 · 16/13 px + espacement auto), contraintes (35/45 car., logo 2 Mo / 200×60), palette, `isVisualIdentityEmpty`, store module + `useVisualIdentity()`.
+- **Zod** [`persistence.ts`](src/lib/schemas/persistence.ts) : `VisualIdentitySchema` (enums + défauts, **tolérant**, longueurs max appliquées).
+- **Repository** [`visual-identity.repository.ts`](src/db/repositories/visual-identity.repository.ts) (nouveau) : `getVisualIdentity` / `upsertVisualIdentity` ; [`load-initial-data.ts`](src/db/load-initial-data.ts) : `visualIdentity?`.
+- **Provider** [`VisualIdentityProvider.tsx`](src/components/backoffice/visual-identity/VisualIdentityProvider.tsx) (nouveau) : hydratation post-montage + persistance débouncée 400 ms ; monté dans les layouts [front-office](src/app/(front-office)/layout.tsx) et [admin](src/app/(back-office)/admin/layout.tsx).
+- **API** [`/api/visual-identity`](src/app/api/visual-identity/route.ts) (nouveau, GET/PUT) + [`persistVisualIdentity`](src/lib/persistence-client.ts).
+- **Écran** [`/admin/identite-visuelle`](src/app/(back-office)/admin/identite-visuelle/page.tsx) + [`VisualIdentityScreen.tsx`](src/components/backoffice/visual-identity/VisualIdentityScreen.tsx) : sélecteur **Texte | Logo**, rubrique Texte (2 lignes 35/45, couleur `input type=color` + 10 presets + Hex/RGBA, taille 3 positions, graisse 3 positions, espacement auto), rubrique Logo (**drag & drop**, SVG/PNG/JPG/WebP, **≤ 2 Mo**, altText, rendu **≤ 200×60 `object-contain`**), **aperçu en direct**, « Enregistrer » (flush BDD + états).
+- **Sidebar** [`SidebarNav.tsx`](src/components/backoffice/SidebarNav.tsx) : entrée exacte **« Identité visuelle / Logo »** (icône Palette) → `/admin/identite-visuelle`.
+- **Header** [`Header.tsx`](src/components/layout/Header.tsx) : la marque rend le **mode Texte** (2 lignes stylées) ou le **mode Logo** (≤ 200×60) ; **repli `siteName`** si non configuré (aucun lien avec Profil).
+- **SVG** : [`/api/media`](src/app/api/media/route.ts) accepte `image/svg+xml` + [`extensionFromMime`](src/lib/supabase/storage.ts:23) mappe `svg`.
+- Vérifications : `npx tsc --noEmit` OK ; `npx eslint` OK (0 erreur, 0 avertissement) ; `npm run build` OK (18 pages, routes `/admin/identite-visuelle` et `/api/visual-identity`).
+
+### Fichiers créés ou modifiés
+- Créés : `plans/ROADMAP-9.1-visual-identity-logo.md`, `src/lib/visual-identity.ts`, `src/db/repositories/visual-identity.repository.ts`, `src/app/api/visual-identity/route.ts`, `src/components/backoffice/visual-identity/VisualIdentityProvider.tsx`, `src/components/backoffice/visual-identity/VisualIdentityScreen.tsx`, `src/app/(back-office)/admin/identite-visuelle/page.tsx`, `drizzle/0004_steady_mikhail_rasputin.sql`
+- Modifiés : `src/db/schema.ts`, `src/db/load-initial-data.ts`, `src/lib/schemas/persistence.ts`, `src/lib/persistence-client.ts`, `src/components/backoffice/SidebarNav.tsx`, `src/components/layout/Header.tsx`, `src/app/(front-office)/layout.tsx`, `src/app/(back-office)/admin/layout.tsx`, `src/app/api/media/route.ts`, `src/lib/supabase/storage.ts`, `CHANGELOG.md`
+- BDD : nouvelle table `site_visual_identity` + migration 0004 appliquée (RLS owner).
+
+### Prochaine étape prévue
+Test utilisateur : `/admin/identite-visuelle` → mode Texte (2 lignes, couleur/taille/graisse) ou Logo (SVG/PNG ≤ 2 Mo) → « Enregistrer » → le Header reflète immédiatement la configuration ; **F5** → conservée (BDD).
+
+---
+
+## 2026-09-09 – 19:19 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Header — la marque (gauche) n'est plus auto-complétée par le module « Profil »** (demande utilisateur : une fonctionnalité dédiée « Nom + baseline ou logo à télécharger » sera développée ultérieurement pour cet espace)
+- [`Header.tsx`](src/components/layout/Header.tsx) : la zone **marque (gauche)** revient à l'affichage **statique `siteName`** — suppression de l'auto-complétion depuis le Profil pour le **nom** (`profile.brandName`) et le **logo** (`profile.logoUrl`) ; le **favicon** (onglet navigateur, hors zone marque) reste alimenté par le Profil.
+- Le module Profil conserve sa **persistance BDD** (8.2) ; seules les injections Header (nom/logo) sont retirées — aucun impact sur `/admin/profile`, Footer ni l'API `/api/profile`.
+- Vérifications : `npx tsc --noEmit` OK ; `npx eslint` OK (0 erreur, 0 avertissement) ; `npm run build` OK (16 pages).
+
+### Fichiers créés ou modifiés
+- Modifiés : `src/components/layout/Header.tsx`, `CHANGELOG.md`
+- Aucune table/enum BDD modifiée.
+
+### Prochaine étape prévue
+Fonctionnalité dédiée (ultérieure) : configurer l'espace marque du Header (nom + baseline et/ou logo à télécharger) via un module/réglage dédié du Back-Office.
+
+---
+
+## 2026-09-09 – 19:05 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Correctif « Persistance BDD refusée (HTTP 400) — Email invalide »** (module Profil)
+- **Cause** : `OwnerProfileSchema` validait `publicEmail`/`contactFormEmail` avec `z.string().email(...)` ; toute valeur non conforme (ex. email saisi sans TLD ou texte libre) faisait échouer **`PUT /api/profile` → 400**, bloquant la sauvegarde du profil entier (le Provider en débounce journalisait l'erreur et « Enregistrer » échouait).
+- **Correctif** [`persistence.ts`](src/lib/schemas/persistence.ts:229) : emails passés en **texte libre** (`z.string().default("")`) — la persistance n'est plus jamais bloquée par un email ; l'indication de format reste portée par `type="email"` dans [`ProfileScreen.tsx`](src/components/backoffice/profile/ProfileScreen.tsx). Retrait du log de debug temporaire et message d'échec `save()` rendu générique (« base de données indisponible ou erreur serveur »).
+- Vérifications : `npx tsc --noEmit` OK ; `npx eslint` OK (0 erreur, 0 avertissement) ; `npm run build` OK.
+
+### Fichiers créés ou modifiés
+- Modifiés : `src/lib/schemas/persistence.ts`, `src/components/backoffice/profile/ProfileScreen.tsx`, `CHANGELOG.md`
+- Aucune table/enum BDD modifiée.
+
+### Prochaine étape prévue
+Test utilisateur : saisir un profil avec un email « libre » (ex. sans TLD) → « Enregistrer » → message vert BDD (plus de 400) → F5 → données conservées.
+
+---
+
+## 2026-09-09 – 18:33 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Module Profil — persistance BDD durable (ROADMAP 8.2)** — corrige « les infos entrées dans Profil ne sont pas sauvegardées » (diagnostic : état uniquement en mémoire, perdu au rechargement)
+- **BDD** [`schema.ts`](src/db/schema.ts) : nouvelle table **`site_owner_profile`** (1 ligne/photographe : `photographer_id` PK/FK → `profiles`, profil complet en `data` **JSONB typé** `OwnerProfile`, timestamps). Migration **`drizzle/0003_serious_clea.sql`** (générée par `db:generate` puis éditée à la main) : **RLS owner-only** (`authenticated`, `photographer_id = auth.uid()` ; SELECT/INSERT/UPDATE/DELETE) — aucune lecture `anon`. **`db:migrate` appliqué avec succès** (Supabase joignable).
+- **Repository** [`owner-profile.repository.ts`](src/db/repositories/owner-profile.repository.ts) (nouveau, serveur) : `getOwnerProfile` (decode Zod tolérant → `null` si absente) + `upsertOwnerProfile` (`onConflictDoUpdate`, PK).
+- **Domaine** [`owner-profile.ts`](src/lib/owner-profile.ts) : ajout de **`hydrateOwnerProfile(profile)`** (fusion `DEFAULT`) + retrait du log de debug temporaire. [`persistence.ts`](src/lib/schemas/persistence.ts) : `OwnerProfileSchema` assoupli (noms autorisés vides, cohérent avec le fallback Header `siteName`).
+- **Hydratation SSR** [`load-initial-data.ts`](src/db/load-initial-data.ts) : `SiteInitialData.profile` chargé côté serveur.
+- **Provider** [`OwnerProfileProvider.tsx`](src/components/backoffice/profile/OwnerProfileProvider.tsx) (nouveau, client) : hydratation unique post-montage + **persistance débouncée (400 ms)** quand BDD dispo (ignorant 1er rendu & hydratation) ; monté dans le layout **[front-office](src/app/(front-office)/layout.tsx)** (Header/Footer) et le layout **[admin](src/app/(back-office)/admin/layout.tsx)**.
+- **API** [`/api/profile`](src/app/api/profile/route.ts) (nouveau) : `GET` (profil) + `PUT` (upsert validé `OwnerProfileSchema`, scope `resolvePhotographerId`) ; [`persistence-client.ts`](src/lib/persistence-client.ts) : `persistOwnerProfile`.
+- **UI** [`ProfileScreen.tsx`](src/components/backoffice/profile/ProfileScreen.tsx) : « Enregistrer » = **flush immédiat réel** (PUT) avec retours d'état — succès « Profil enregistré dans la base de données » (vert) ; échec/hors-BDD → « Base de données indisponible : conservé en mémoire, sera perdu au rechargement » (rouge, plus de faux « en mémoire »).
+- Vérifications : `npx tsc --noEmit` OK ; `npx eslint` OK (0 erreur, 0 avertissement) ; `npm run build` OK (16 pages, route `/api/profile` présente).
+
+### Fichiers créés ou modifiés
+- Créés : `src/db/repositories/owner-profile.repository.ts`, `src/components/backoffice/profile/OwnerProfileProvider.tsx`, `src/app/api/profile/route.ts`, `drizzle/0003_serious_clea.sql`, `plans/ROADMAP-8.2-owner-profile-persistence.md`
+- Modifiés : `src/db/schema.ts`, `src/db/load-initial-data.ts`, `src/lib/owner-profile.ts`, `src/lib/persistence-client.ts`, `src/lib/schemas/persistence.ts`, `src/components/backoffice/profile/ProfileScreen.tsx`, `src/app/(front-office)/layout.tsx`, `src/app/(back-office)/admin/layout.tsx`, `CHANGELOG.md`
+- BDD : nouvelle table `site_owner_profile` + migration 0003 appliquée (RLS owner).
+
+### Prochaine étape prévue
+Test utilisateur : saisir/modifier `/admin/profile` → « Enregistrer » (message vert BDD) → **F5** → les données restent (hydratées depuis la BDD). Sans Supabase, message rouge explicite attendu.
+
+---
+
+## 2026-09-09 – 17:57 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Module Hero Parallaxe — échelle d'intensité étendue à 7 niveaux « par force »** (demande utilisateur : les niveaux créés étaient trop légers ; ajouter 4 niveaux supérieurs + renommer par force d'intensité)
+- **Domaine** [`pages.ts`](src/lib/pages.ts:669) : `ParallaxSpeed` passe de 3 à **7 tokens** `very-light | light | medium | pronounced | strong | very-strong | extreme` ; ordre Select + libellés « force » **« Très léger / Léger / Modéré / Marqué / Fort / Très fort / Extrême »** ; `PARALLAX_FACTOR` retravaillé (`0.07 → 0.60`) et nouveau **`PARALLAX_OVERSCAN`** (`0.10 → 0.44`) ; résolveur `resolveHeroParallaxContent` **rétro-compatible** (l'ancien token `subtle` de l'Étape 7.4 → `very-light` ; `medium`/`strong` conservés).
+- **Zod** [`persistence.ts`](src/lib/schemas/persistence.ts:131) : `parallaxSpeedSchema` = `z.enum` des 7 niveaux.
+- **Rendu** [`HeroParallaxBackground.tsx`](src/components/modules/hero/HeroParallaxBackground.tsx) : l'**overscan de l'image devient proportionnel à l'intensité** (`top`/`height` en style inline au lieu de `top-[-12%] h-[124%]` fixes) et le **plafond de déplacement** passe de 12 % fixe à `rect.height * overscan` → les niveaux « Fort / Très fort / Extrême » produisent un effet réellement marqué (défilement jusqu'à ±44 % de la hauteur) ; dépendance `overscan` ajoutée (eslint 0 warning).
+- **Éditeur** [`ModuleHeroParallaxEditor.tsx`](src/components/backoffice/pages/modules/ModuleHeroParallaxEditor.tsx) : rubrique ⚙️ affiche les 7 libellés + tooltip « i » expliquant l'échelle (« Modéré » = classique).
+- Vérifications : `npx tsc --noEmit` OK ; `npx eslint` OK (0 erreur, 0 avertissement) ; `npm run build` OK.
+
+### Fichiers créés ou modifiés
+- Modifiés : `src/lib/pages.ts`, `src/lib/schemas/persistence.ts`, `src/components/modules/hero/HeroParallaxBackground.tsx`, `src/components/backoffice/pages/modules/ModuleHeroParallaxEditor.tsx`, `CHANGELOG.md`
+- Aucune table/enum BDD modifiée (contenus JSONB rétro-compatibles via le résolveur).
+
+### Prochaine étape prévue
+Contrôle visuel navigateur (desktop ≥ 1024 px) : tester chaque niveau « Très léger → Extrême » au défilement — les niveaux forts doivent montrer un décalage nettement plus ample ; vérifier qu'aucune bordure d'image n'apparaît sur les plus fortes amplitudes.
+
+---
+
+## 2026-09-09 – 17:45 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Correctif runtime SSR — « Missing getServerSnapshot » (module Profil)** (signalé après la phase 8.1)
+- **Cause** : [`owner-profile.ts`](src/lib/owner-profile.ts) (`useOwnerProfile`) appelait `useSyncExternalStore(subscribeOwnerProfile, getOwnerProfileSnapshot)` **sans le 3ᵉ argument `getServerSnapshot`**. Le [`Header`](src/components/layout/Header.tsx:241) étant un Client Component rendu en SSR via le layout serveur async [`(front-office)/layout.tsx`](src/app/(front-office)/layout.tsx:55), React 19 / Next 16.3.4 levait une erreur runtime « Missing getServerSnapshot … Will revert to client rendering » (le store Navigation passe déjà ce 3ᵉ argument — voir [`NavigationStoreProvider.tsx`](src/components/backoffice/navigation/NavigationStoreProvider.tsx:174)).
+- **Correctif** [`owner-profile.ts`](src/lib/owner-profile.ts) : ajout de **`getOwnerProfileServerSnapshot()`** (retourne le snapshot du module, comme `getNavigationServerSnapshot`) passé en 3ᵉ argument de `useSyncExternalStore` ; suppression des logs de debug temporaires ajoutés pour la validation.
+- Vérifications : `npx tsc --noEmit` OK ; `npx eslint` OK (0 erreur, 0 avertissement) ; `npm run build` OK (SSR des pages front-office `/`, `/[slug]`, `/demo` régénéré sans erreur).
+
+### Fichiers créés ou modifiés
+- Modifiés : `src/lib/owner-profile.ts`, `CHANGELOG.md`
+- Aucune table/enum BDD modifiée.
+
+### Prochaine étape prévue
+Contrôle visuel navigateur (aucune erreur SSR à l’ouverture d’une page publique). Ensuite : **étoffer l’échelle d’intensité du module Hero Parallaxe** (4 niveaux supérieurs demandés par l’utilisateur) — à planifier (étiquette/niveaux, facteurs d’amplitude, rétro-compatibilité `parallaxSpeed` stocké, Zod).
+
+---
+
+## 2026-09-09 – 17:27 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Module Profil — ajustements finaux UI demandés par l’utilisateur** (écran [`ProfileScreen.tsx`](src/components/backoffice/profile/ProfileScreen.tsx))
+- 🏷️ Rubrique « 📍 Contacts & adresses » : libellé **« Email de contact public » → « Email de contact »** et toggle **« Utiliser l’email public pour les formulaires » → « Utiliser l’email pour recevoir les formulaires »** (tips mis à jour en cohérence).
+- ℹ️ Ajout d’un **tooltip « i »** sur « Client idéal / Persona » (explique le persona à un non-technique et son usage IA).
+- 📄 Remplacement des deux champs « PDF — Présentation / Bio (URL) » et « PDF — CV (URL) » par un **champ unique de téléchargement** « Téléchargements d’informations complémentaires (Bio, CV, actualités…) » (accepte `.doc, .pdf, .docx, .jpg, .jpeg, .png`), qui alimente `profile.documents` (multi-fichiers, liste de noms retirables) — documents destinés à une **analyse ultérieure par l’assistant IA** (cf. fiche : « … analysés plus tard par l’IA »).
+- **Domaine/Zod déjà alignés** : [`owner-profile.ts`](src/lib/owner-profile.ts) (`documents: string[]`, `DEFAULT` `[]`) et [`persistence.ts`](src/lib/schemas/persistence.ts) (`OwnerProfileSchema.documents`) — aucune régression.
+- Vérifications : `npx tsc --noEmit` OK ; `npx eslint` OK (0 erreur, 0 avertissement) ; `npm run build` OK (route `/admin/profile` présente).
+
+### Fichiers créés ou modifiés
+- Modifiés : `src/components/backoffice/profile/ProfileScreen.tsx`, `CHANGELOG.md`
+- Aucune table/enum BDD modifiée.
+
+### Prochaine étape prévue
+Validation utilisateur du rendu (`/admin/profile`) puis persistance BDD `site_owner_profile` + endpoint mot de passe réel (Supabase) et analyse IA des `documents`.
+
+---
+
+## 2026-09-09 – 16:48 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Phase 8 – Module « Profil » (`site_owner_profile`)** — MVP validé (plan [`plans/ROADMAP-8.1-owner-profile.md`](plans/ROADMAP-8.1-owner-profile.md))
+- **Domaine** [`src/lib/owner-profile.ts`](src/lib/owner-profile.ts) (nouveau) : type `OwnerProfile` (Identité/Contacts/Légal/IA), `DEFAULT_OWNER_PROFILE`, constantes (grammaticalPerson, communicationStyle), **store partagé** (module) + hook **`useOwnerProfile()`** (update) et **`getAIContextPrompt(profile)`**.
+- **Zod** [`persistence.ts`](src/lib/schemas/persistence.ts) : `OwnerProfileSchema` + `ProfileSecuritySchema` (force : majuscule/chiffre/symbole/8 min, correspondance).
+- **Back-Office** : route **`/admin/profile`** (page.tsx) + entrée sidebar **« Profil »** ([`SidebarNav.tsx`](src/components/backoffice/SidebarNav.tsx)) + écran [`ProfileScreen.tsx`](src/components/backoffice/profile/ProfileScreen.tsx) en **4 rubriques** avec tooltips « i » : 🏢 Identité & visuels (logo upload + vignette, favicon…), 📍 Contacts & adresses (toggles affichage, email formulaire masqué si même email, réseaux sociaux), ⚖️ Légal & ligne éditoriale IA (statut/SIRET/TVA/publication, personne/style, persona, PDF), 🔒 Sécurité & mot de passe (currentPassword obligatoire, force, confirmation, revoke ; MVP : validation + message démo — endpoint réel Supabase/email à connecter).
+- **Intégrations Builder** : [`Header.tsx`](src/components/layout/Header.tsx) — **brandName/logo** du Profil (repli `siteName`) + **favicon** dynamique ; [`Footer.tsx`](src/components/layout/Footer.tsx) — marque ©, **réseaux sociaux** du Profil fusionnés, ligne **mentions légales** (statut/SIRET/directeur publication).
+- Vérifications : `npx tsc --noEmit` OK ; `npx eslint` OK (0 erreur, 0 avertissement) ; `npm run build` OK. **Restant (dépend de Supabase/Resend)** : persistance BDD `site_owner_profile`, endpoint `POST /api/profile/password` + révocation sessions + email d’alerte.
+
+### Fichiers créés ou modifiés
+- Créés : `plans/ROADMAP-8.1-owner-profile.md`, `src/lib/owner-profile.ts`, `src/app/(back-office)/admin/profile/page.tsx`, `src/components/backoffice/profile/ProfileScreen.tsx`
+- Modifiés : `src/lib/schemas/persistence.ts`, `src/components/backoffice/SidebarNav.tsx`, `src/components/layout/Header.tsx`, `src/components/layout/Footer.tsx`
+
+### Prochaine étape prévue
+Validation utilisateur (`/admin/profile` + nav/footer alimentés) puis persistance BDD du profil + sécurité réelle (Supabase/Resend).
+
+---
+
+## 2026-09-09 – 16:08 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Correctif — sous-menu de la barre de navigation qui ne se refermait pas après un clic**
+- **Cause** : le dropdown desktop était piloté **uniquement par le survol CSS** (`group-hover`) ; après un clic sur un enfant du sous-menu, le pointeur restant dans le groupe, le panneau ne se refermait pas.
+- **Correctif** [`Header.tsx`](src/components/layout/Header.tsx) : `DesktopNavMenu` passe d’un dropdown CSS à un **dropdown contrôlé par état React** (`openId`) — ouvert au survol/focus du groupe, **fermé** à la sortie de la souris, **après activation d’un lien (parent ou enfant)** (`onNavigate` → `closeAfterNavigate`) et si le focus quitte le panneau (`onBlur`). Le menu mobile (Sheet + Accordion) se refermait déjà via `onNavigate`.
+- Vérifications : `npx tsc --noEmit` OK ; `npx eslint` OK (0 erreur, 0 avertissement) ; `npm run build` OK.
+
+### Fichiers créés ou modifiés
+- Modifiés : `src/components/layout/Header.tsx`
+- Aucune table/enum BDD modifiée.
+
+### Prochaine étape prévue
+Validation utilisateur (ouvrir un sous-menu desktop puis cliquer un lien → le menu doit se refermer ; survol hors du menu → fermeture ; navigation clavier).
+
+---
+
+## 2026-09-09 – 15:45 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Phase 7 (Modules « prêts à l'emploi ») – Étape 7.4 : Hero Parallaxe (`variant: "parallax"`)** (plan [`plans/ROADMAP-7.4-hero-parallax.md`](plans/ROADMAP-7.4-hero-parallax.md) validé : héritage `BaseHero`, parallaxe GPU desktop ≥1024px, désactivation mobile verrouillée)
+- **Domaine** [`src/lib/pages.ts`](src/lib/pages.ts) : `ParallaxSpeed` (subtle/medium/strong), `HeroParallaxContent extends HeroBaseShared` (`media: HeroStaticMedia`, `parallaxSpeed`, `disableOnMobile: true`) ; `HeroContent` élargie `static | slider | video | parallax` ; `PARALLAX_FACTOR`, libellés ; fabrique `createHeroParallaxContent`, `resolveHeroParallaxContent`, `heroParallaxImageSources` ; carte catalogue **« Hero Parallaxe »** ; `createModuleContent(type, variant?)` gère `"parallax"`.
+- **Zod** [`persistence.ts`](src/lib/schemas/persistence.ts) : schéma `heroParallaxContentSchema` (media static + `parallaxSpeed` + `disableOnMobile: z.literal(true)`) ajouté à `heroContentSchema`.
+- **Front** : [`HeroParallaxBackground.tsx`](src/components/modules/hero/HeroParallaxBackground.tsx) (client) — desktop **≥1024px** : image surdimensionnée translatée `translate3d` (GPU, `will-change-transform`) pilotée au scroll dans un `requestAnimationFrame` (amplitude `PARALLAX_FACTOR[speed]`), suspendue hors viewport via IntersectionObserver ; **mobile/reduced-motion : aucune animation** → `<picture>` fixe `object-cover` ; orchestrateur [`HeroModule.tsx`](src/components/modules/hero/HeroModule.tsx) branche `parallax` → `BaseHero` + background.
+- **Back-Office** : [`ModuleHeroParallaxEditor.tsx`](src/components/backoffice/pages/modules/ModuleHeroParallaxEditor.tsx) en **3 rubriques** — 🖼️ Image Parallaxe & Fallback (desktop 16:9 HD requis, mobile 9:16 fixe obligatoire, tablette 4:3, tooltips), 📝 Textes & Bouton hérités, ⚙️ Intensité (`parallax_speed`, mobile désactivé verrouillé) ; aiguillage [`ModuleContentEditor.tsx`](src/components/backoffice/pages/modules/ModuleContentEditor.tsx).
+- **Helpers** : [`public-page.ts`](src/lib/public-page.ts) variante `parallax` (images collectées, OG = desktop).
+- Vérifications : `npx tsc --noEmit` OK ; `npx eslint` OK (0 erreur, 0 avertissement) ; `npm run build` OK. **Restant (utilisateur)** : contrôle visuel (ajouter un « Hero Parallaxe ») : desktop ≥1024px = profondeur au scroll, mobile < 1024px = image fixe.
+
+### Fichiers créés ou modifiés
+- Créés : `plans/ROADMAP-7.4-hero-parallax.md`, `src/components/modules/hero/HeroParallaxBackground.tsx`, `src/components/backoffice/pages/modules/ModuleHeroParallaxEditor.tsx`
+- Modifiés : `src/lib/pages.ts`, `src/lib/public-page.ts`, `src/lib/schemas/persistence.ts`, `src/components/modules/hero/HeroModule.tsx`, `src/components/backoffice/pages/modules/ModuleContentEditor.tsx`
+- Aucune table/enum BDD modifiée (`module_type` conserve `hero`).
+
+### Prochaine étape prévue
+Validation utilisateur (parallaxe desktop / mobile fixe) — rubrique Héro désormais complète (static, slider, video, parallax) sur la base commune `BaseHero`.
+
+---
+
+## 2026-09-09 – 15:10 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Diagnostic & correctif — liens dupliqués (~70) dans « Menu principal – Header »**
+- **Diagnostic** : la table `navigation_entries` contenait des **doublons accumulés** (plusieurs lignes par page/lien) ; `getNavigation` les lisait tels quels → le menu Header affichait une liste énorme de liens jamais créés.
+- **Correctif** [`navigation.repository.ts`](src/db/repositories/navigation.repository.ts) : déduplication **à la lecture** `dedupeNavigationRows` — une seule entrée conservée par `(zone, parent, page_id OU href)`, la première occurrence (position la plus faible) est gardée, les **enfants orphelins** d'un parent-doublon retiré sont eux-mêmes retirés. La BDD est ensuite **nettoyée automatiquement** à la prochaine sauvegarde (`saveNavigation` = delete + insert de la liste dédupliquée).
+- Vérifications : `npx tsc --noEmit` OK ; `npx eslint` OK (0 erreur, 0 avertissement).
+
+### Fichiers créés ou modifiés
+- Modifiés : `src/db/repositories/navigation.repository.ts`
+- Aucune table/enum BDD modifiée.
+
+### Prochaine étape prévue
+Validation utilisateur (recharger `/admin/navigation` : la liste Header doit redevenir courte) ; au besoin, purge SQL manuelle des doublons en base ou déclencher une modification de menu pour nettoyer.
+
+---
+
+## 2026-09-09 – 15:00 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Dashboard Pages — Réordonnancement vertical des pages (Drag & Drop sur poignée)**
+- **Store** [`PagesStoreProvider.tsx`](src/components/backoffice/PagesStoreProvider.tsx) : nouvelle action **`movePage(from, to)`** (helper `reorderModules`, immuable) exposée dans `PagesStoreValue`.
+- **Écran** [`PagesManager.tsx`](src/components/backoffice/pages/PagesManager.tsx) : la liste « Pages » affiche désormais les pages dans **l'ordre du store** (le tri « mis à jour » est retiré de l'écran) et chaque ligne dispose d'une **colonne poignée ⋮⋮** à gauche — **glisser-déposer vertical** (`@hello-pangea/dnd`, comme les sections d'une page : `DragDropContext`/`Droppable` (tbody)/`Draggable` (tr), `dragHandleProps` sur la poignée uniquement, ombre `ring` pendant le drag). `onDragEnd` → `movePage(source.index, destination.index)`.
+- A11y : poignée en bouton avec `aria-label`/`title` ; zone draggable limitée à la poignée (les clics sur la ligne restent libres pour éditer/supprimer).
+- Vérifications : `npx tsc --noEmit` OK ; `npx eslint` (fichiers modifiés) OK (0 erreur, 0 avertissement) ; `npm run build` OK. **Note** : l'ordre est réordonné dans le store (conservé en session) ; la persistance BDD d'un ordre de pages reste une extension future (aucune colonne d'ordre en base pour l'instant).
+
+### Fichiers créés ou modifiés
+- Modifiés : `src/components/backoffice/PagesStoreProvider.tsx`, `src/components/backoffice/pages/PagesManager.tsx`
+- Aucune table/enum BDD modifiée.
+
+### Prochaine étape prévue
+Validation utilisateur (glisser-déposer des pages dans le Dashboard) puis extension éventuelle : persistance de l'ordre des pages (colonne position / endpoint).
+
+---
+
+## 2026-09-09 – 14:15 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Phase 7 (Modules « prêts à l'emploi ») – Étape 7.3 : Hero Vidéo (`variant: "video"`)** (plan [`plans/ROADMAP-7.3-hero-video.md`](plans/ROADMAP-7.3-hero-video.md) validé : héritage 100 % `BaseHero`, fallback mobile < 768px, poster desktop au chargement, schémas Zod)
+- **Domaine** [`src/lib/pages.ts`](src/lib/pages.ts) : `HeroVideoMedia` (`videoUrl`, `loop`, `posterDesktop` 16:9 optionnel, `fallbackMobile` 9:16 obligatoire) & `HeroVideoContent extends HeroBaseShared` (variant `"video"`) ; `HeroContent` élargie `static | slider | video` ; `DEMO_HERO_VIDEO_URL` (MP4 bucket Google stable) ; fabrique `createHeroVideoContent`, `resolveHeroVideoContent`, `heroVideoImageSources` ; catalogue carte **« Hero Vidéo »** ; `createModuleContent(type, variant?)` gère `"video"`.
+- **Zod** [`src/lib/schemas/persistence.ts`](src/lib/schemas/persistence.ts) : schémas Héro (`heroOverlaySchema`, `fontWeightSchema`, `artSourceSchema`, `heroSharedSchema`, variantes static/slider/video) et export **`heroContentSchema`** (union `z.discriminatedUnion("variant", …)`) pour la validation de persistance.
+- **Front** : [`HeroVideoBackground.tsx`](src/components/modules/hero/HeroVideoBackground.tsx) (client) — `<video>` HTML5 `autoPlay muted loop playsInline controls={false}` `object-cover` + poster desktop au chargement ; **< 768px : vidéo non montée, image fallback 9:16 affichée** (`matchMedia` + `prefers-reduced-motion` → poster) ; orchestrateur [`HeroModule.tsx`](src/components/modules/hero/HeroModule.tsx) branche `video` → `BaseHero` + `HeroVideoBackground` (textes/overlay/CTA centrés partagés).
+- **Back-Office** : [`ModuleHeroVideoEditor.tsx`](src/components/backoffice/pages/modules/ModuleHeroVideoEditor.tsx) en **3 rubriques** — 🎬 Média Vidéo & Fallback (URL, loop, fallback mobile obligatoire 9:16 + alt, poster desktop 16:9, tooltips), 📝 Textes & Bouton hérités (overlay, H1/H2/desc, tone, graisses, CTA), ⚙️ Réglages & Performance (muted/playsinline toujours actifs) ; [`ModuleContentEditor.tsx`](src/components/backoffice/pages/modules/ModuleContentEditor.tsx) bascule `video`.
+- **Helpers publics** : [`public-page.ts`](src/lib/public-page.ts) (variante `video` : images poster/fallback collectées, OG = poster) .
+- **Upload vidéo (post-feedback)** : possibilité d’**uploader une vidéo MP4/WebM ou de coller une URL** (au choix) dans la rubrique Média de l’éditeur Hero Vidéo — `MediaUploadButton` accepte désormais un paramètre `accept` ; route [`/api/media`](src/app/api/media/route.ts) élargie (`video/mp4`, `video/webm`, 50 Mo max ; upload brut **sans** sharp/EXIF/blur pour les vidéos) ; mapping d’extension dans [`storage.ts`](src/lib/supabase/storage.ts).
+- Vérifications : `npx tsc --noEmit` OK ; `npx eslint` (fichiers modifiés) OK (0 erreur, 0 avertissement) ; `npm run build` OK. **Restant (utilisateur)** : contrôle visuel (ajouter un « Hero Vidéo » dans `/admin/pages`) : desktop = vidéo autoplay/boucle avec poster ; mobile (< 768px) = photo fallback 9:16 ; uploader/remplacer la vidéo par la sienne.
+
+### Fichiers créés ou modifiés
+- Créés : `plans/ROADMAP-7.3-hero-video.md`, `src/components/modules/hero/HeroVideoBackground.tsx`, `src/components/backoffice/pages/modules/ModuleHeroVideoEditor.tsx`
+- Modifiés : `src/lib/pages.ts`, `src/lib/public-page.ts`, `src/lib/schemas/persistence.ts`, `src/components/modules/hero/HeroModule.tsx`, `src/components/backoffice/pages/modules/ModuleContentEditor.tsx`
+- Aucune table/enum BDD modifiée (`module_type` conserve `hero`).
+
+### Prochaine étape prévue
+Validation utilisateur (rendu vidéo desktop/mobile) puis extension Héro restante : **HeroParallax** (`HeroContent` + `BaseHero`).
+
+---
+
+## 2026-09-09 – 12:20 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Phase 7 (Modules « prêts à l'emploi ») – Étape 7.2 : Hero Slider (`variant: "slider"`)** (plan [`plans/ROADMAP-7.2-hero-slider.md`](plans/ROADMAP-7.2-hero-slider.md) validé : D-2 refactor `HeroTextBlock` partagé, D-3 overlay/textes **par slide** + poids/réglages **au module**, D-4 réordonnancement ↑/↓, D-6 un seul `h1` actif)
+- **Domaine** [`src/lib/pages.ts`](src/lib/pages.ts) : `HeroSliderSlide` (art-direction `<picture>` + textes/CTA/overlay/tone par slide), `HeroSliderSettings` + `HeroAutoplaySpeed` + `HeroSliderTransition`, `HeroSliderContent` ; `HeroContent` élargie `static | slider` ; constantes/labels (vitesses, transitions, `DEFAULT_HERO_SLIDER_SETTINGS`) ; fabriques `createHeroSliderSlide`/`createHeroSliderContent` (3 slides pré-chargées picsum + alt SEO) ; `resolveHeroSliderContent` (slides/settings partiels normalisés) ; `heroSliderImageSources` ; `moduleCatalog` carte **« Hero Slider »** (`id hero-slider`, `variant slider`) ; `createModuleContent(type, variant?)` & `createModule` (passe la variante).
+- **Front** : refactor **`HeroTextBlock`** (nouveau [`src/components/modules/hero/HeroTextBlock.tsx`](src/components/modules/hero/HeroTextBlock.tsx)) — bloc texte/CTA partagé (h1 géant clamp/h2/p, poids, tone, CTA, alignement `center`/`bottom-left`) ; [`BaseHero.tsx`](src/components/modules/hero/BaseHero.tsx) refactorisé dessus (static inchangé) ; **`HeroSlider.tsx`** (nouveau, client) — slides empilées GPU, transition `slide` (translateX) / `fade` (opacité), autoplay (pause survol/focus), flèches desktop, puces, **swipe tactile** pointer events (`touch-action pan-y`), `prefers-reduced-motion` + retour boucle sans glissade, A11y `aria-hidden` slides inactives ; orchestrateur [`HeroModule.tsx`](src/components/modules/hero/HeroModule.tsx) bascule `variant` static/slider.
+- **Back-Office** : **`ModuleHeroSliderEditor.tsx`** (nouveau) en **3 rubriques** — 🖼️ Slides & Photos (ajout `+ slide`, suppression, réordonnancement ↑/↓, 3 `ArtSourceField` par slide), 📝 Textes & Boutons par slide (overlay segmenté, H1/H2/paragraphe, tone, CTA, graisses globales), ⚙️ Réglages du Slider (autoplay/vitesse, transition glissement/fondu, flèches, puces) ; [`ModuleContentEditor.tsx`](src/components/backoffice/pages/modules/ModuleContentEditor.tsx) bascule par variante ; [`ModuleSettingsForm.tsx`](src/components/backoffice/pages/modules/ModuleSettingsForm.tsx) masque l'animation générique pour **static uniquement**.
+- **Helpers/démo** : [`public-page.ts`](src/lib/public-page.ts) multi-variantes (`collectImageUrls`, `publicDescription` 1re slide, `publicOgImage`) ; démo [`demo/page.tsx`](src/app/(front-office)/demo/page.tsx) ajoute un HeroSlider (3 slides).
+- Vérifications : `npx tsc --noEmit` OK ; `npx eslint` (fichiers modifiés) OK (0 erreur, 0 avertissement) ; `npm run build` OK. **Restant (utilisateur)** : validation visuelle `/demo` (autoplay, transitions, swipe tactile, flèches/puces, overlay, texte bas-gauche desktop/centré mobile) et édition d'un « Hero Slider » dans `/admin/pages`.
+- **Correctif assombrissement (post-feedback)** : le voile (`overlay_level`) était appliqué en `background-color` sur le conteneur de la slide (donc **sous** l’image) dans `HeroSlider` — déplacé vers un `<div>` **au-dessus de l’image** (`absolute inset-0 z-[2]`) dans chaque slide ; voile du `BaseHero` (HeroStatic) garanti au-dessus du fond via `z-[2]`.
+- **Correctif moteur slider (post-feedback)** : suppression de la **rupture de cycle** en mode « Glissement » — ajout d’un **clone de la 1re slide** en fin de piste : au retour automatique, la piste ramène sur la vraie 1re slide **sans transition** (visuel identique, aucun saut brutal) ; suppression de la pause autoplay au **simple survol** (pause conservée au focus clavier et pendant le geste tactile) → démarrage stable et régulier.
+- **Correctif pleine hauteur / responsif (post-feedback)** : sections Héro (slider & statique) recalées pour occuper l’espace **du bas de la barre de navigation (`h-16` fixe) jusqu’au bas de l’écran** (`min-h-[calc(100svh-4rem)]` + `-mt-4`) avec fallback **`dvh`** (`supports-[height:100dvh]:min-h-[calc(100dvh-4rem)]`) pour tenir compte de la barre d’adresse mobile ; dans `/demo`, le **HeroSlider est désormais le premier module** (héro plein écran en haut de page) pour valider ce comportement.
+- **Correctif racine pleine hauteur (post-feedback) — mode « Glissement »** : la piste était un enfant **dans le flux** (`h-full` sur un parent à hauteur auto) → hauteur non résolue et vide sous les visuels. La piste est désormais **`absolute inset-0`** dans la section : elle remplit réellement toute la hauteur (≥ `min-h-[calc(100svh-4rem)]`) et chaque slide la couvre (`object-cover`), sans vide en bas, sur desktop et mobile.
+
+### Fichiers créés ou modifiés
+- Créés : `plans/ROADMAP-7.2-hero-slider.md`, `src/components/modules/hero/HeroTextBlock.tsx`, `src/components/modules/hero/HeroSlider.tsx`, `src/components/backoffice/pages/modules/ModuleHeroSliderEditor.tsx`
+- Modifiés : `src/lib/pages.ts`, `src/lib/public-page.ts`, `src/components/modules/hero/BaseHero.tsx`, `src/components/modules/hero/HeroModule.tsx`, `src/components/backoffice/pages/modules/ModuleContentEditor.tsx`, `src/components/backoffice/pages/modules/ModuleSettingsForm.tsx`, `src/app/(front-office)/demo/page.tsx`
+- Aucune table/enum BDD modifiée (`module_type` conserve `hero`) ; enum Zod `persistence.ts` inchangée.
+
+### Prochaine étape prévue
+Validation utilisateur (rendu + éditeur HeroSlider) puis extensions Héro (HeroVideo / HeroParallax via `HeroContent` + `BaseHero`).
+
+---
+
+## 2026-09-09 – 11:05 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Phase 7 (Modules « prêts à l'emploi ») – Étape 7.1 : Rubrique Héro — HeroStatic & base commune `BaseHero`**
+- **Plan validé** : [`plans/ROADMAP-7.1-hero-static-basehero.md`](plans/ROADMAP-7.1-hero-static-basehero.md). Décision structurante : **famille `hero` unique + discriminant `variant`** (aucune migration d'enum BDD) ; nommage camelCase groupé ; animation d'entrée **source unique** = `module.animation` ; `textTone` sémantique ; injection défauts = fabrique riche + résolveur (pattern `resolveGalleryLayout`).
+- **Domaine** [`src/lib/pages.ts`](src/lib/pages.ts) : types Héro (`HeroVariant`, `HeroOverlayLevel`, `HeroTextTone`, `FontWeightClass`, `HeroCtaStyle`, `HeroStaticMedia`, `HeroBaseShared`, `HeroStaticContent`, union `ModuleContent` ouverte `{ type: "hero" } & HeroStaticContent`) ; constantes (`HERO_OVERLAY_OPACITY`, ordres/libellés Select, `DEFAULT_HERO_SHARED`, `DEFAULT_HERO_STATIC_MEDIA` picsum 16:9/4:3/9:16) ; `createHeroStaticContent`, `cloneArtSource/cloneHeroStaticMedia`, `heroStaticArtSources`, **`resolveHeroContent`** (upgrade legacy `hero` simple + fusion des défauts, zéro `any`) ; catalogue `moduleCatalog` → `ModuleCatalogEntry` (clé `id` + `variant`), carte « Hero Statique » ; `createModule(type, seq, variant?)` sélectionne l'entrée par type+variant ; seeds Accueil migrés vers le contenu static.
+- **Rendu public** : [`src/components/modules/hero/BaseHero.tsx`](src/components/modules/hero/BaseHero.tsx) (structure commune : overlay `overlayLevel` auto-inversé selon `textTone`, textes H2 `clamp()`/H3/paragraphe avec graisses, CTA `ctaShow`+`ctaStyle`, ancre, animation) ; [`HeroStaticBackground.tsx`](src/components/modules/hero/HeroStaticBackground.tsx) (`<picture>` art-direction : desktop ≥1024, tablette ≥768 avec **repli auto desktop**, `<img>` mobile 9:16, alt SEO, `fetchpriority`) ; [`RevealHero.tsx`](src/components/modules/hero/RevealHero.tsx) (client, IntersectionObserver GPU + `motion-reduce`) ; [`HeroModule.tsx`](src/components/modules/hero/HeroModule.tsx) (orchestrateur `resolveHeroContent` → `BaseHero`) ; [`PublicModules.tsx`](src/components/modules/PublicModules.tsx) route `hero` vers le nouveau module (ancien `HeroModule` inline supprimé).
+- **Back-Office** : [`ModuleHeroEditor.tsx`](src/components/backoffice/pages/modules/ModuleHeroEditor.tsx) réécrit en **3 rubriques** (🖼️ Images de fond — 3 `ArtSourceField` à vignettes/ratios/tooltips ; 📝 Textes & Bouton — overlay, textes, tone, graisses, CTA switch+style ; 🎬 Animations & Effets — pilotée par `module.animation`) ; nouveau [`ArtSourceField.tsx`](src/components/backoffice/pages/modules/ArtSourceField.tsx) (vignette + upload + alt SEO + URL) ; [`form-fields.tsx`](src/components/backoffice/pages/modules/form-fields.tsx) enrichi (`HelpTip`/`LabelWithTip`, prop `tip`, `SelectField` générique) ; [`ModuleContentEditor.tsx`](src/components/backoffice/pages/modules/ModuleContentEditor.tsx)/[`ModuleRow.tsx`](src/components/backoffice/pages/ModuleRow.tsx)/[`ModuleSettingsForm.tsx`](src/components/backoffice/pages/modules/ModuleSettingsForm.tsx) (animation transmise au Héro, sélecteur générique masqué pour la famille `hero`) ; [`PagesStoreProvider.tsx`](src/components/backoffice/PagesStoreProvider.tsx) `addModule(pageId, type, variant?)` ; [`AddSectionSheet.tsx`](src/components/backoffice/pages/AddSectionSheet.tsx)/[`PageEditor.tsx`](src/components/backoffice/pages/PageEditor.tsx) `onAdd(entry)` + clé `id`.
+- **SEO/helpers & démo** : [`src/lib/public-page.ts`](src/lib/public-page.ts) (`collectImageUrls` multi-sources, `publicDescription`, `publicOgImage` via `heroStaticArtSources`/`resolveHeroContent`) ; [`demo/page.tsx`](src/app/(front-office)/demo/page.tsx) hero art-direction 3 images (desktop/tablet/mobile).
+- **Ajustement sémantique & typographique (post-validation)** : la section Héro porte le **titre principal `<h1>`** de la page → `titleH2` devient `titleH1`, `subtitleH3` devient `subtitleH2` (balise `<h2>`), graisses `weightH1`/`weightH2`/`weightText` ; `descriptionText` conservée (`<p>`). Schéma TS, `BaseHero` (H1 géant `clamp()` + H2), seeds/démo et libellés/tooltips de l'éditeur ajustés (voir §9 du plan).
+- Vérifications : `npx tsc --noEmit` OK ; `npx eslint` (fichiers modifiés) OK (0 erreur, 0 avertissement) ; `npm run build` OK (Next.js 16.3.4 / Turbopack — compilation + TypeScript + génération statique). **Restant (environnement utilisateur)** : validation visuelle `/demo` & `/` (art-direction, overlay, clamp, CTA, animation), pages `/admin/pages` (rubriques Héro) ; BDD : JSONB legacy normalisé à la lecture par `resolveHeroContent`.
+
+### Fichiers créés ou modifiés
+- Créés : `plans/ROADMAP-7.1-hero-static-basehero.md`, `src/components/modules/hero/BaseHero.tsx`, `src/components/modules/hero/HeroStaticBackground.tsx`, `src/components/modules/hero/RevealHero.tsx`, `src/components/modules/hero/HeroModule.tsx`, `src/components/backoffice/pages/modules/ArtSourceField.tsx`
+- Modifiés : `src/lib/pages.ts`, `src/lib/public-page.ts`, `src/components/modules/PublicModules.tsx`, `src/app/(front-office)/demo/page.tsx`, `src/components/backoffice/PagesStoreProvider.tsx`, `src/components/backoffice/pages/AddSectionSheet.tsx`, `src/components/backoffice/pages/PageEditor.tsx`, `src/components/backoffice/pages/ModuleRow.tsx`, `src/components/backoffice/pages/modules/ModuleHeroEditor.tsx`, `src/components/backoffice/pages/modules/ModuleContentEditor.tsx`, `src/components/backoffice/pages/modules/ModuleSettingsForm.tsx`, `src/components/backoffice/pages/modules/form-fields.tsx`
+- Aucune table/enum BDD modifiée (`module_type` conserve `hero`) ; enum Zod `persistence.ts` inchangée.
+
+### Prochaine étape prévue
+Validation utilisateur (rendu `/demo` & `/`, éditeur 3 rubriques, bascule responsive) puis extensions Héro (Slider/Video/Parallax via `HeroContent` + `BaseHero`) et médiathèque.
+
+---
+
 ## 2026-09-07 – 16:06 (heure locale America/Bogota)
 
 ### Tâche exécutée

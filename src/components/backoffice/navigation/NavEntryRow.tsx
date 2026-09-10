@@ -45,6 +45,8 @@ type NavEntryRowProps = {
   level: 1 | 2;
   /** Nombre d'enfants d'un parent de Niveau 1 (0/absent sinon). */
   submenuCount?: number;
+  /** true si le lien interne cible une page inexistante (10.1.a). */
+  isOrphan?: boolean;
   /** Poignée du `Draggable` parent (posée sur le bouton grip). */
   dragHandleProps?: DraggableProvidedDragHandleProps | null;
   /** true pendant le glisser (style `snapshot.isDragging`). */
@@ -59,6 +61,7 @@ export function NavEntryRow({
   entry,
   level,
   submenuCount = 0,
+  isOrphan = false,
   dragHandleProps,
   snapshotIsDragging = false,
   onToggleHidden,
@@ -115,6 +118,14 @@ export function NavEntryRow({
             </Badge>
           )}
           {hidden && <Badge variant="outline">Masqué</Badge>}
+          {isOrphan ? (
+            <Badge
+              variant="destructive"
+              className="shrink-0 rounded-sm px-1.5 py-0 text-[10px] font-medium uppercase tracking-wide"
+            >
+              Lien mort
+            </Badge>
+          ) : null}
         </p>
         <p className="flex items-center gap-1.5 truncate text-xs text-muted-foreground">
           <Badge

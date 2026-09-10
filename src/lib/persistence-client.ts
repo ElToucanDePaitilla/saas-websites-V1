@@ -17,6 +17,8 @@
 import type { SitePage } from "./pages";
 import type { SiteNavigation } from "./navigation";
 import type { PageMetadataDraft } from "./pages";
+import type { OwnerProfile } from "./owner-profile";
+import type { VisualIdentity } from "./visual-identity";
 
 /** Corps JSON typé des modules (content ouvert à la frontière API). */
 type PersistModule = {
@@ -84,6 +86,13 @@ export async function persistDeletePage(pageId: string): Promise<void> {
   );
 }
 
+/** Désigne la page d'accueil du site (Étape 10.1 — transaction serveur). */
+export async function persistSetHomePage(pageId: string): Promise<void> {
+  await send(
+    jsonRequest(`/api/pages/${encodeURIComponent(pageId)}/home`, "POST")
+  );
+}
+
 /** Remplace la liste complète des modules d'une page. */
 export async function persistUpdateModules(
   pageId: string,
@@ -103,4 +112,18 @@ export async function persistNavigation(
   navigation: SiteNavigation
 ): Promise<void> {
   await send(jsonRequest("/api/navigation", "PUT", navigation));
+}
+
+/** Upsert du profil propriétaire complet (Étape 8.2). */
+export async function persistOwnerProfile(
+  profile: OwnerProfile
+): Promise<void> {
+  await send(jsonRequest("/api/profile", "PUT", profile));
+}
+
+/** Upsert de l'identité visuelle du Header (Étape 9.1). */
+export async function persistVisualIdentity(
+  visualIdentity: VisualIdentity
+): Promise<void> {
+  await send(jsonRequest("/api/visual-identity", "PUT", visualIdentity));
 }

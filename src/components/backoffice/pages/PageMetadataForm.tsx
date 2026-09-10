@@ -76,8 +76,8 @@ export function PageMetadataForm({
     initial === undefined
   );
 
-  /** Page d'accueil (slug vide) : le slug vide est autorisé (route racine `/`). */
-  const isHome = initial?.slug === "";
+  /** Page d'accueil désignée (Étape 10.1) : le slug vide reste autorisé (`/`). */
+  const isHome = initial?.isHome === true;
 
   /** Slug actuel déjà occupé par une autre page (indication temps réel). */
   const slugTaken =

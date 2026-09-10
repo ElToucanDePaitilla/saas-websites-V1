@@ -8,7 +8,9 @@ import {
   Images,
   LayoutTemplate,
   Menu,
+  Palette,
   Settings,
+  UserRound,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -40,6 +42,12 @@ type SidebarNavItem = {
 const sidebarNav: SidebarNavItem[] = [
   { label: "Pages", href: "/admin/pages", icon: FileText },
   { label: "Navigation", href: "/admin/navigation", icon: Menu },
+  { label: "Profil", href: "/admin/profile", icon: UserRound },
+  {
+    label: "Identité visuelle / Logo",
+    href: "/admin/identite-visuelle",
+    icon: Palette,
+  },
   { label: "Médias", href: "/admin/media", icon: Images },
   { label: "Modules", icon: LayoutTemplate, disabled: true },
   { label: "Portfolio", icon: Images, disabled: true },

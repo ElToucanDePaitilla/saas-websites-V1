@@ -130,6 +130,49 @@ export function hasNavChildren(entry: NavMenuEntry): boolean {
   return (entry.children?.length ?? 0) > 0;
 }
 
+/* --------------------------------------------------------------------------
+   LIENS ORPHELINS (Étape 10.1.a) — entrées `custom` sans `pageId` pointant
+   vers une page interne inexistante (ancres du seed, placeholders de presets…).
+   -------------------------------------------------------------------------- */
+
+/**
+ * Slug interne ciblé par un `href` :
+ *   - `"/portfolio#mariages"` → `"portfolio"` ; `"/"` → `""` ;
+ *   - `""`, `"#ancre"` (locale) ou `"https://…"` (externe) → `null` (jamais
+ *     considéré orphelin).
+ */
+export function internalHrefSlug(href: string): string | null {
+  const trimmed = href.trim();
+  if (trimmed === "" || !trimmed.startsWith("/")) {
+    return null;
+  }
+  const path = trimmed.split("#")[0] ?? "";
+  if (path === "/") {
+    return "";
+  }
+  const slug = path.replace(/^\/+/, "").replace(/\/+$/, "");
+  return slug === "" ? null : slug;
+}
+
+/**
+ * Vrai si l'entrée est un **lien interne mort** : elle n'est rattachée à aucune
+ * page (`pageId === null`) et son `href` cible un slug qui n'existe plus.
+ * Les entrées rattachées à une page sont gérées par la cascade (FK + synchro).
+ */
+export function isOrphanNavEntry(
+  entry: NavMenuEntry,
+  slugs: ReadonlySet<string>
+): boolean {
+  if (entry.pageId !== null) {
+    return false;
+  }
+  const slug = internalHrefSlug(entry.href);
+  if (slug === null) {
+    return false;
+  }
+  return !slugs.has(slug);
+}
+
 /**
  * Recherche récursive d'un item par id dans une liste racine (descend dans les
  * `children`). Retourne `undefined` si introuvable.

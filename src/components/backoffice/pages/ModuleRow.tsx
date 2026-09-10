@@ -235,6 +235,9 @@ export function ModuleRow({
             <ModuleContentEditor
               content={module.content}
               onChangeContent={(content) => onUpdateModule({ content })}
+              // Scalaire d'animation partagé — rubrique « Animations & Effets » du Héro (7.1).
+              moduleAnimation={module.animation}
+              onChangeModule={onUpdateModule}
             />
           </section>
         </div>

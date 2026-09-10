@@ -1,35 +1,22 @@
 /**
  * ============================================================================
- * STORE MOCK PARTAGÉ — Navigation (Étape 4.5)
+ * STORE MOCK PARTAGÉ — Navigation (Étape 4.5, ajusté en 10.1)
  * ----------------------------------------------------------------------------
  * État **partagé au niveau module** (singleton en mémoire) de la navigation du
  * site. Il est consommé par `NavigationStoreProvider` via `useSyncExternalStore`
  * à la fois dans le layout Back-Office `/admin` et dans le layout public `/`.
  *
- * Pourquoi un état au niveau module ?
- *   - `/admin` et `/` sont des route groups avec des layouts **distincts** :
- *     un `useState` local au Provider créerait une instance isolée par montage,
- *     réinitialisée sur le seed à chaque changement de layout — les presets et
- *     éditions du Back-Office ne seraient jamais visibles sur le site public ;
- *   - l'état vit ici (module), les actions le mutent via `setNavigationState`
- *     et tous les Providers montés s'abonnent : au sein d'une **même session**
- *     (sans rechargement plein du navigateur), naviguer de `/admin` vers `/`
- *     conserve l'état édité.
- *
- * Limite du mock (documentée) : un **rechargement plein** du navigateur
- * réinitialise le module sur le seed `buildSeedNavigation()` — la persistance
- * durable viendra avec l'intégration BDD/Supabase.
+ * Étape 10.1 — le défaut est désormais une navigation **VIDE** : le seed n'est
+ * plus un fallback implicite du store. Il est fourni **explicitement** par le
+ * serveur (`loadInitialData`) lorsque la BDD est injoignable — un site dont la
+ * BDD est vide n'affiche donc plus de menu fantôme.
  *
  * TypeScript strict, zéro `any`. Aucune dépendance externe.
- * Référence : plans/ROADMAP-4.5-front-navigation.md §0.1
+ * Référence : plans/ROADMAP-4.5-front-navigation.md §0.1 — ROADMAP-10.1 §D-3
  * ============================================================================
  */
 
-import {
-  buildSeedNavigation,
-  type NavPresetId,
-  type SiteNavigation,
-} from "./navigation";
+import type { NavPresetId, SiteNavigation } from "./navigation";
 
 /** État complet partagé par toutes les instances du Provider. */
 export type NavigationSnapshot = {
@@ -39,7 +26,8 @@ export type NavigationSnapshot = {
 };
 
 let snapshot: NavigationSnapshot = {
-  navigation: buildSeedNavigation(),
+  // Défaut **vide** (10.1) : plus aucune navigation de démonstration implicite.
+  navigation: { header: [], footer: [] },
   appliedPresetId: null,
 };
 

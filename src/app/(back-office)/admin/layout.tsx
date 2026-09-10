@@ -6,6 +6,8 @@ import { PagesStoreProvider } from "@/components/backoffice/PagesStoreProvider";
 import { SidebarNav } from "@/components/backoffice/SidebarNav";
 import { PagesNavigationSync } from "@/components/backoffice/navigation/PagesNavigationSync";
 import { NavigationStoreProvider } from "@/components/backoffice/navigation/NavigationStoreProvider";
+import { OwnerProfileProvider } from "@/components/backoffice/profile/OwnerProfileProvider";
+import { VisualIdentityProvider } from "@/components/backoffice/visual-identity/VisualIdentityProvider";
 import { Button } from "@/components/ui/button";
 import { loadInitialData } from "@/db/load-initial-data";
 import { siteName } from "@/lib/site";
@@ -127,18 +129,28 @@ export default async function AdminLayout({
           Pages ↔ Navigation via `PagesNavigationSync`).
         */}
         <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
-          <PagesStoreProvider
-            initialData={initial.pages}
+          <OwnerProfileProvider
+            initialProfile={initial.profile}
             persistenceEnabled={initial.dbAvailable}
           >
-            <NavigationStoreProvider
-              initialData={initial.navigation}
+            <VisualIdentityProvider
+              initialVisualIdentity={initial.visualIdentity}
               persistenceEnabled={initial.dbAvailable}
             >
-              <PagesNavigationSync />
-              {children}
-            </NavigationStoreProvider>
-          </PagesStoreProvider>
+              <PagesStoreProvider
+                initialData={initial.pages}
+                persistenceEnabled={initial.dbAvailable}
+              >
+                <NavigationStoreProvider
+                  initialData={initial.navigation}
+                  persistenceEnabled={initial.dbAvailable}
+                >
+                  <PagesNavigationSync />
+                  {children}
+                </NavigationStoreProvider>
+              </PagesStoreProvider>
+            </VisualIdentityProvider>
+          </OwnerProfileProvider>
         </main>
       </div>
     </div>

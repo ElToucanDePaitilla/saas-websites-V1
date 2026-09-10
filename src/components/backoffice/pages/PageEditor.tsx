@@ -8,7 +8,7 @@ import { ArrowLeft, ExternalLink, Plus, SquarePen } from "lucide-react";
 import { usePagesStore } from "@/components/backoffice/PagesStoreProvider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { pageHref, type PageModuleType } from "@/lib/pages";
+import { pageHref, type ModuleCatalogEntry } from "@/lib/pages";
 
 import { AddSectionSheet } from "./AddSectionSheet";
 import { ModuleDndList } from "./ModuleDndList";
@@ -37,8 +37,9 @@ export function PageEditor({ pageId }: PageEditorProps) {
   const page = getPage(pageId);
   const modules = getModules(pageId);
 
-  function handleAddSection(type: PageModuleType) {
-    addModule(pageId, type);
+  function handleAddSection(entry: ModuleCatalogEntry) {
+    // La variante (ex. "static" pour la rubrique Héro) préconfigure le contenu.
+    addModule(pageId, entry.type, entry.variant);
     setCatalogueOpen(false);
   }
 

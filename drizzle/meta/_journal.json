@@ -22,6 +22,27 @@
       "when": 1788811828466,
       "tag": "0002_dapper_lethal_legion",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1788995824855,
+      "tag": "0003_serious_clea",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789000736772,
+      "tag": "0004_steady_mikhail_rasputin",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789007876711,
+      "tag": "0005_jittery_turbo",
+      "breakpoints": true
     }
   ]
 }

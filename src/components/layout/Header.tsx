@@ -6,6 +6,13 @@ import { ChevronDown, Menu } from "lucide-react";
 
 import { useNavigationStore } from "@/components/backoffice/navigation/NavigationStoreProvider";
 import { NavLink } from "@/components/common/NavLink";
+import { useOwnerProfile } from "@/lib/owner-profile";
+import {
+  TEXT_LINE_PX,
+  TEXT_SIZE_LETTER_SPACING,
+  isVisualIdentityEmpty,
+} from "@/lib/visual-identity";
+import { useVisualIdentity } from "@/lib/visual-identity-store";
 import {
   Accordion,
   AccordionContent,
@@ -23,6 +30,7 @@ import {
 } from "@/components/ui/sheet";
 import type { NavMenuEntry } from "@/lib/navigation";
 import { siteName } from "@/lib/site";
+import { cn } from "@/lib/utils";
 
 /**
  * ============================================================================
@@ -75,10 +83,30 @@ function dedupeHref(entries: NavMenuEntry[]): NavMenuEntry[] {
 }
 
 /**
- * Navigation Desktop — Niveau 1 + sous-menus Niveau 2 au survol/focus.
- * Ne reçoit que les entrées racine **visibles**.
+ * Navigation Desktop — Niveau 1 + sous-menus Niveau 2.
+ * Dropdown **contrôlé par état React** : ouvert au survol/focus, fermé à la
+ * sortie du groupe, après activation d'un lien (parent OU enfant) ou si le
+ * focus quitte le panneau — le sous-menu se referme donc bien après un clic.
  */
 function DesktopNavMenu({ entries }: { entries: NavMenuEntry[] }) {
+  const [openId, setOpenId] = React.useState<string | null>(null);
+
+  /** Ferme après activation d'un lien (clic) — évite un menu resté ouvert. */
+  function closeAfterNavigate() {
+    setOpenId(null);
+  }
+
+  /** Ferme si le focus sort du groupe (clavier / clic ailleurs). */
+  function handleBlur(
+    event: React.FocusEvent<HTMLDivElement>,
+    entryId: string
+  ) {
+    const next = event.relatedTarget as Node | null;
+    if (!next || !event.currentTarget.contains(next)) {
+      setOpenId((current) => (current === entryId ? null : current));
+    }
+  }
+
   return (
     <nav
       aria-label="Navigation principale"
@@ -96,28 +124,48 @@ function DesktopNavMenu({ entries }: { entries: NavMenuEntry[] }) {
             </NavLink>
           );
         }
-        // Parent avec sous-menu → dropdown au survol/focus (groupe CSS).
+        // Parent avec sous-menu → dropdown piloté par état (hover/focus/clic).
+        const isOpen = openId === entry.id;
         return (
-          <div key={entry.id} className="group relative">
+          <div
+            key={entry.id}
+            className="relative"
+            onMouseEnter={() => setOpenId(entry.id)}
+            onMouseLeave={() => setOpenId(null)}
+            onFocus={() => setOpenId(entry.id)}
+            onBlur={(event) => handleBlur(event, entry.id)}
+          >
             <NavLink
               href={entry.href}
               ariaLabel={`${entry.label} : sous-menu`}
+              aria-expanded={isOpen}
+              onNavigate={closeAfterNavigate}
               className={`inline-flex items-center gap-1 ${desktopLinkClass}`}
             >
               {entry.label}
               <ChevronDown
                 aria-hidden="true"
-                className="size-3.5 transition-transform duration-200 group-hover:rotate-180"
+                className={cn(
+                  "size-3.5 transition-transform duration-200",
+                  isOpen && "rotate-180"
+                )}
               />
             </NavLink>
-            {/* Panneau déroulant : invisible tant que le groupe n'est ni survolé
-                ni focusé (clavier). `pointer-events` neutralisé quand masqué. */}
-            <div className="invisible absolute left-0 top-full pt-3 opacity-0 transition-all duration-200 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:pointer-events-auto pointer-events-none">
+            {/* Panneau déroulant — visible quand le groupe est survolé/focusé. */}
+            <div
+              className={cn(
+                "absolute left-0 top-full pt-3 transition-all duration-200",
+                isOpen
+                  ? "visible opacity-100"
+                  : "pointer-events-none invisible opacity-0"
+              )}
+            >
               <div className="min-w-44 rounded-xl border border-[var(--border-color)] bg-card/95 p-2 shadow-lg backdrop-blur-sm">
                 {children.map((child) => (
                   <NavLink
                     key={child.id}
                     href={child.href}
+                    onNavigate={closeAfterNavigate}
                     className="block rounded-lg px-3 py-2 text-sm text-foreground/70 transition-colors duration-200 hover:bg-accent/40 hover:text-foreground"
                   >
                     {child.label}
@@ -196,7 +244,14 @@ function MobileNavMenu({
 
 export default function Header() {
   const { getEntries } = useNavigationStore();
+  const { profile } = useOwnerProfile();
+  const { visualIdentity } = useVisualIdentity();
   const [menuOpen, setMenuOpen] = React.useState(false);
+
+  // Espace marque : configuration « Identité visuelle / Logo » (Étape 9.1) —
+  // repli `siteName` tant que rien n'est configuré (aucun lien avec Profil).
+  const brandConfigured = !isVisualIdentityEmpty(visualIdentity);
+  const { line1, line2 } = visualIdentity.text;
 
   // Entrées racine Header **visibles** uniquement (filtre `hidden !== true`).
   const entries = React.useMemo(
@@ -204,19 +259,80 @@ export default function Header() {
     [getEntries]
   );
 
+  // Favicon alimenté par le Profil (si renseigné).
+  React.useEffect(() => {
+    if (profile.faviconUrl === "") {
+      return;
+    }
+    let link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+    if (!link) {
+      link = document.createElement("link");
+      link.rel = "icon";
+      document.head.appendChild(link);
+    }
+    link.href = profile.faviconUrl;
+  }, [profile.faviconUrl]);
+
   return (
     <header
       role="banner"
       className="glass fixed inset-x-0 top-0 z-50 border-b border-[var(--border-color)]/60"
     >
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-6 px-4 sm:px-6 lg:px-8">
-        {/* ---- Marque (gauche) : lien retour accueil, serif Cormorant ---- */}
+        {/* ---- Marque (gauche) : « Identité visuelle / Logo » (Étape 9.1).
+             Mode texte → 2 lignes stylées ; mode logo → image ≤ 200×60 px
+             `object-contain` ; sinon repli `siteName` (aucun lien avec Profil). ---- */}
         <Link
           href="/"
-          style={{ fontFamily: "var(--font-heading)" }}
-          className="shrink-0 text-xl font-medium tracking-wide text-foreground transition-opacity duration-200 hover:opacity-75"
+          className="flex shrink-0 items-center gap-2 transition-opacity duration-200 hover:opacity-75"
         >
-          {siteName}
+          {brandConfigured ? (
+            visualIdentity.mode === "logo" ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={visualIdentity.logo.url}
+                alt={visualIdentity.logo.altText || siteName}
+                style={{ maxWidth: 200, maxHeight: 60 }}
+                className="h-auto w-auto object-contain"
+              />
+            ) : (
+              <span className="flex flex-col leading-tight">
+                {line1.value !== "" ? (
+                  <span
+                    style={{
+                      fontFamily: "var(--font-heading)",
+                      color: line1.color,
+                      fontSize: TEXT_LINE_PX.line1[line1.size],
+                      letterSpacing: TEXT_SIZE_LETTER_SPACING[line1.size],
+                      fontWeight: Number(line1.weight),
+                    }}
+                  >
+                    {line1.value}
+                  </span>
+                ) : null}
+                {line2.value !== "" ? (
+                  <span
+                    style={{
+                      fontFamily: "var(--font-heading)",
+                      color: line2.color,
+                      fontSize: TEXT_LINE_PX.line2[line2.size],
+                      letterSpacing: TEXT_SIZE_LETTER_SPACING[line2.size],
+                      fontWeight: Number(line2.weight),
+                    }}
+                  >
+                    {line2.value}
+                  </span>
+                ) : null}
+              </span>
+            )
+          ) : (
+            <span
+              style={{ fontFamily: "var(--font-heading)" }}
+              className="text-xl font-medium tracking-wide text-foreground"
+            >
+              {siteName}
+            </span>
+          )}
         </Link>
 
         {/* ---- Navigation principale — Desktop (Niveau 1 + sous-menus) ---- */}

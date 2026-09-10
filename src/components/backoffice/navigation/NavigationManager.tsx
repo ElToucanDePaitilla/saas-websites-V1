@@ -24,6 +24,7 @@ import { pageHref } from "@/lib/pages";
 import {
   findNavParentId,
   hasNavChildren,
+  isOrphanNavEntry,
   resolveNavPreset,
   type NavArea,
   type NavMenuEntry,
@@ -136,10 +137,13 @@ function countAll(entries: NavMenuEntry[]): number {
  */
 function NavigationList({
   area,
+  pageSlugs,
   onEdit,
   onRequestDelete,
 }: {
   area: NavArea;
+  /** Slugs existants — détecte les « liens morts » (10.1.a). */
+  pageSlugs: ReadonlySet<string>;
   onEdit: (area: NavArea, entry: NavMenuEntry) => void;
   onRequestDelete: (area: NavArea, entry: NavMenuEntry) => void;
 }) {
@@ -204,6 +208,7 @@ function NavigationList({
                         entry={entry}
                         level={1}
                         submenuCount={children.length}
+                        isOrphan={isOrphanNavEntry(entry, pageSlugs)}
                         dragHandleProps={dragProvided.dragHandleProps}
                         snapshotIsDragging={dragSnapshot.isDragging}
                         onToggleHidden={handleToggleHidden}
@@ -249,6 +254,10 @@ function NavigationList({
                                           <NavEntryRow
                                             entry={child}
                                             level={2}
+                                            isOrphan={isOrphanNavEntry(
+                                              child,
+                                              pageSlugs
+                                            )}
                                             dragHandleProps={
                                               childProvided.dragHandleProps
                                             }
@@ -310,6 +319,7 @@ export function NavigationManager() {
     removeEntry,
     relocateEntry,
     applyPreset,
+    clearNavigation,
     appliedPresetId,
   } = useNavigationStore();
   const { pages, updatePage } = usePagesStore();
@@ -321,6 +331,8 @@ export function NavigationManager() {
   const [deleteTarget, setDeleteTarget] = React.useState<DeleteTarget | null>(
     null
   );
+  /** Confirmation de la réinitialisation complète du menu (10.1.a). */
+  const [confirmClear, setConfirmClear] = React.useState(false);
 
   const pageTargets: NavTargetPage[] = React.useMemo(
     () =>
@@ -329,6 +341,12 @@ export function NavigationManager() {
         menuTitle: page.menuTitle,
         href: pageHref(page.slug),
       })),
+    [pages]
+  );
+
+  /** Slugs existants — détection des « liens morts » (10.1.a). */
+  const pageSlugs = React.useMemo(
+    () => new Set(pages.map((page) => page.slug)),
     [pages]
   );
 
@@ -444,6 +462,61 @@ export function NavigationManager() {
         onApply={handleApplyPreset}
       />
 
+      {/* ---- Zone de réinitialisation (Étape 10.1.a) ---- */}
+      <section className="rounded-lg border border-destructive/40 bg-card">
+        <div className="border-b border-destructive/30 px-4 py-3">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <Trash2 aria-hidden="true" className="size-4 text-destructive" />
+            Zone de réinitialisation
+          </h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Vide entièrement le Header et le Footer — utile pour repartir d’un
+            site réellement vierge (les pages ne sont pas supprimées).
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3 p-3">
+          <p className="text-xs text-muted-foreground">
+            Action irréversible : liens manuels et sous-menus seront supprimés.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0 text-destructive"
+            onClick={() => setConfirmClear(true)}
+          >
+            Vider la navigation
+          </Button>
+        </div>
+      </section>
+
+      {/* ---- Dialog Confirmation « vider la navigation » ---- */}
+      <Dialog open={confirmClear} onOpenChange={setConfirmClear}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Vider toute la navigation ?</DialogTitle>
+            <DialogDescription>
+              Toutes les entrées du Header et du Footer seront supprimées (y
+              compris les sous-menus et les liens manuels). Les pages ne sont
+              pas supprimées. Cette action est irréversible.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setConfirmClear(false)}>
+              Annuler
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                clearNavigation("all");
+                setConfirmClear(false);
+              }}
+            >
+              Vider la navigation
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* ---- Zones Header / Footer ---- */}
       <div className="grid gap-6">
         {AREAS.map((config) => {
@@ -480,6 +553,7 @@ export function NavigationManager() {
               <div className="p-3">
                 <NavigationList
                   area={config.area}
+                  pageSlugs={pageSlugs}
                   onEdit={openEdit}
                   onRequestDelete={(area, entry) =>
                     setDeleteTarget({ area, entry })

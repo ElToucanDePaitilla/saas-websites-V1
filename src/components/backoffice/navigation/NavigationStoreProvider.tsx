@@ -125,6 +125,11 @@ type NavigationStoreValue = {
    * et mémorise le preset appliqué (4.4). Le Footer n'est jamais modifié.
    */
   applyPreset: (header: NavMenuEntry[], presetId: NavPresetId) => void;
+  /**
+   * Vide les entrées d'une zone (ou **tout** : Header + Footer) — Étape 10.1.a.
+   * Permet de repartir d'un site réellement vierge (persisté par le Provider).
+   */
+  clearNavigation: (area: NavArea | "all") => void;
 };
 
 const NavigationStoreContext = React.createContext<
@@ -358,6 +363,17 @@ export function NavigationStoreProvider({
       }));
     };
 
+    /** Vide une zone (ou tout) — « site vierge » (10.1.a). */
+    const clearNavigation = (area: NavArea | "all"): void => {
+      setNavigationState((previous) => ({
+        navigation:
+          area === "all"
+            ? { header: [], footer: [] }
+            : { ...previous.navigation, [area]: [] },
+        appliedPresetId: null,
+      }));
+    };
+
     return {
       navigation,
       appliedPresetId,
@@ -369,6 +385,7 @@ export function NavigationStoreProvider({
       moveNavItem,
       moveEntry,
       applyPreset,
+      clearNavigation,
     };
   }, [navigation, appliedPresetId]);
 

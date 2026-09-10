@@ -1,7 +1,8 @@
 import { MediaImage } from "@/components/common/MediaImage";
-import { GalleryGrid } from "@/components/modules/GalleryGrid";
+import { GalleryManager } from "@/components/modules/gallery/GalleryManager";
+import { HeroModule } from "@/components/modules/hero/HeroModule";
 import { Button } from "@/components/ui/button";
-import type { PageModule } from "@/lib/pages";
+import { resolveGalleryContent, type PageModule } from "@/lib/pages";
 
 /**
  * ============================================================================
@@ -17,50 +18,6 @@ import type { PageModule } from "@/lib/pages";
  * client (`GalleryGrid`) pour la Lightbox.
  * ============================================================================
  */
-
-/** Hero (contenu : titre + accroche + CTA + média). */
-export function HeroModule({ module }: { module: PageModule }) {
-  const content =
-    module.content.type === "hero" ? module.content : null;
-  if (!content) return null;
-
-  const hasImage = content.media.url !== "";
-
-  return (
-    <section className="relative flex min-h-[calc(100svh-4rem)] w-full -mt-4 items-center justify-center overflow-hidden bg-background px-6">
-      {hasImage ? (
-        <div className="absolute inset-0" aria-hidden="true">
-          <MediaImage
-            src={content.media.url}
-            alt={content.media.alt || content.heading}
-            fill
-            priority
-            sizes="100vw"
-            className="object-cover"
-          />
-          <div className="absolute inset-0 bg-black/45" />
-        </div>
-      ) : null}
-      <div className="relative mx-auto flex max-w-3xl flex-col items-center text-center">
-        <h2
-          id={module.anchorId}
-          style={{ fontFamily: "var(--font-heading)" }}
-          className="text-4xl font-light tracking-wide text-white sm:text-5xl lg:text-6xl"
-        >
-          {content.heading}
-        </h2>
-        <p className="mt-5 max-w-xl text-base leading-relaxed text-white sm:text-lg">
-          {content.subheading}
-        </p>
-        {content.ctaLabel && content.ctaHref ? (
-          <Button asChild size="lg" className="mt-8">
-            <a href={content.ctaHref}>{content.ctaLabel}</a>
-          </Button>
-        ) : null}
-      </div>
-    </section>
-  );
-}
 
 /** Image + texte (contenu `about`). */
 export function AboutModule({ module }: { module: PageModule }) {
@@ -98,7 +55,12 @@ export function AboutModule({ module }: { module: PageModule }) {
   );
 }
 
-/** Galerie (contenu `gallery`) — grille + Lightbox EXIF (client). */
+/**
+ * Galerie (contenu `gallery`) — variantes static / dynamic / portfolio.
+ * Le contenu JSONB est normalisé (`resolveGalleryContent`, rétro-compatible
+ * legacy masonry → static) puis confié à `GalleryManager` (client) qui gère la
+ * grille, les effets, le CTA et la Lightbox générique.
+ */
 export function GalleryModule({
   module,
   exifByUrl,
@@ -108,22 +70,22 @@ export function GalleryModule({
 }) {
   const content = module.content.type === "gallery" ? module.content : null;
   if (!content) return null;
-  if (content.images.length === 0) return null;
+
+  const resolved = resolveGalleryContent(content);
+  const hasVisibleImages =
+    resolved.variant === "portfolio"
+      ? resolved.albums.some((album) =>
+          album.images.some((image) => image.url !== "" && !image.hidden)
+        )
+      : resolved.images.some((image) => image.url !== "" && !image.hidden);
+  if (!hasVisibleImages) return null;
 
   return (
     <section id={module.anchorId} className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
-      {content.heading ? (
-        <h2
-          style={{ fontFamily: "var(--font-heading)" }}
-          className="mb-8 text-3xl font-light tracking-wide sm:text-4xl"
-        >
-          {content.heading}
-        </h2>
-      ) : null}
-      <GalleryGrid
-        images={content.images}
+      <GalleryManager
+        content={resolved}
         exifByUrl={exifByUrl}
-        layout={content.layout}
+        priorityFirst
       />
     </section>
   );

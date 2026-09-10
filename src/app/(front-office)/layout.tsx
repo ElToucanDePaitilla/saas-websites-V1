@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 
 import { NavigationStoreProvider } from "@/components/backoffice/navigation/NavigationStoreProvider";
+import { OwnerProfileProvider } from "@/components/backoffice/profile/OwnerProfileProvider";
+import { VisualIdentityProvider } from "@/components/backoffice/visual-identity/VisualIdentityProvider";
 import Footer from "@/components/layout/Footer";
 import Header from "@/components/layout/Header";
 import { loadInitialData } from "@/db/load-initial-data";
@@ -47,14 +49,48 @@ export default async function FrontOfficeLayout({
   const photographerId = await resolvePublicPhotographerId();
   const initial = await loadInitialData(photographerId);
 
+  // Étape 10.1.a — site **totalement vide** (BDD OK, aucune page, aucun
+  // accueil) : l'écran d'onboarding est autonome → **sans chrome** (une barre
+  // de navigation vide ou résiduelle paraîtrait cassée).
+  const isEmptySite =
+    initial.dbAvailable &&
+    initial.hasHomepage === false &&
+    (initial.pages?.pages.length ?? 0) === 0;
+
+  if (isEmptySite) {
+    return (
+      <OwnerProfileProvider
+        initialProfile={initial.profile}
+        persistenceEnabled={initial.dbAvailable}
+      >
+        <VisualIdentityProvider
+          initialVisualIdentity={initial.visualIdentity}
+          persistenceEnabled={initial.dbAvailable}
+        >
+          {children}
+        </VisualIdentityProvider>
+      </OwnerProfileProvider>
+    );
+  }
+
   return (
-    <NavigationStoreProvider
-      initialData={initial.navigation}
+    <OwnerProfileProvider
+      initialProfile={initial.profile}
       persistenceEnabled={initial.dbAvailable}
     >
-      <Header />
-      <main className="flex-1 pt-20">{children}</main>
-      <Footer />
-    </NavigationStoreProvider>
+      <VisualIdentityProvider
+        initialVisualIdentity={initial.visualIdentity}
+        persistenceEnabled={initial.dbAvailable}
+      >
+        <NavigationStoreProvider
+          initialData={initial.navigation}
+          persistenceEnabled={initial.dbAvailable}
+        >
+          <Header />
+          <main className="flex-1 pt-20">{children}</main>
+          <Footer />
+        </NavigationStoreProvider>
+      </VisualIdentityProvider>
+    </OwnerProfileProvider>
   );
 }

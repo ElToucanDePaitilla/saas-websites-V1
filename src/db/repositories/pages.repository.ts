@@ -20,9 +20,15 @@
  * ============================================================================
  */
 
-import { asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 
-import type { ModuleContent, PageModule, SitePage } from "../../lib/pages";
+import {
+  demotedHomeSlug,
+  type ModuleContent,
+  type PageModule,
+  type SitePage,
+} from "../../lib/pages";
+import { ensurePhotographerProfile } from "../../lib/supabase/session";
 import { getDatabase } from "../index";
 import { pageModules, pages } from "../schema";
 
@@ -41,6 +47,7 @@ function toSitePage(row: typeof pages.$inferSelect): SitePage {
     slug: row.slug,
     status: row.status,
     inMenu: row.isInMenu,
+    isHome: row.isHome,
     updatedAt: row.updatedAt.toISOString(),
   };
 }
@@ -116,6 +123,9 @@ export async function createPage(
     inMenu: boolean;
   }
 ): Promise<void> {
+  // Étape 10.1 : la ligne `profiles` (ancre FK) n'est plus garantie par
+  // l'auto-seed — on l'assure à la demande avant toute écriture (mode démo).
+  await ensurePhotographerProfile(photographerId, null);
   const database = getDatabase();
   await database.insert(pages).values({
     id: page.id,
@@ -157,6 +167,73 @@ export async function updatePage(
 export async function deletePage(pageId: string): Promise<void> {
   const database = getDatabase();
   await database.delete(pages).where(eq(pages.id, pageId));
+}
+
+/**
+ * Slugs de toutes les pages d'un photographe (select léger) — utilisé par la
+ * purge des liens de navigation orphelins (Étape 10.1.a).
+ */
+export async function listPageSlugs(photographerId: string): Promise<string[]> {
+  const database = getDatabase();
+  const rows = await database
+    .select({ slug: pages.slug })
+    .from(pages)
+    .where(eq(pages.photographerId, photographerId));
+  return rows.map((row) => row.slug);
+}
+
+/** Page d'accueil du photographe (Étape 10.1) — `null` si non définie. */
+export async function getHomePage(
+  photographerId: string
+): Promise<SitePage | null> {
+  const database = getDatabase();
+  const rows = await database
+    .select()
+    .from(pages)
+    .where(
+      and(eq(pages.photographerId, photographerId), eq(pages.isHome, true))
+    )
+    .limit(1);
+  const row = rows[0];
+  return row ? toSitePage(row) : null;
+}
+
+/**
+ * Désigne la page d'accueil (Étape 10.1) — **transaction** :
+ *  1. l'ancien accueil est démasqué et son slug vide est libéré (renommé) ;
+ *  2. la page cible devient `is_home = true` avec le slug canonique `""`.
+ */
+export async function setHomePage(
+  photographerId: string,
+  pageId: string
+): Promise<void> {
+  await ensurePhotographerProfile(photographerId, null);
+  const database = getDatabase();
+  await database.transaction(async (tx) => {
+    const currentRows = await tx
+      .select({ id: pages.id })
+      .from(pages)
+      .where(
+        and(eq(pages.photographerId, photographerId), eq(pages.isHome, true))
+      )
+      .limit(1);
+    const currentHome = currentRows[0];
+    if (currentHome && currentHome.id !== pageId) {
+      await tx
+        .update(pages)
+        .set({
+          isHome: false,
+          // Libère le slug vide (unique par photographe) avant la promotion.
+          slug: demotedHomeSlug(currentHome.id),
+          updatedAt: new Date(),
+        })
+        .where(eq(pages.id, currentHome.id));
+    }
+    await tx
+      .update(pages)
+      .set({ isHome: true, slug: "", updatedAt: new Date() })
+      .where(and(eq(pages.id, pageId), eq(pages.photographerId, photographerId)));
+  });
 }
 
 /**

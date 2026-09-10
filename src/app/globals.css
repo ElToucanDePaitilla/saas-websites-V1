@@ -250,3 +250,68 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* ==========================================================================
+   GALERIES — grilles responsives (Phase 11 : Galeries & Portfolio)
+   --------------------------------------------------------------------------
+   Les colonnes configurées dans l'éditeur s'appliquent au desktop puis se
+   dégradent automatiquement pour rester lisibles sur petit écran :
+     ≤ 1024 px → min(cols, 3) ; ≤ 640 px → min(cols, 2) ; ≤ 400 px → 1.
+   Les variables `--gallery-cols*` et `--gallery-gap-*` sont posées en style
+   inline par `GalleryGrid` (valeurs calculées côté composant).
+   ========================================================================== */
+.gallery-grid-uniform {
+  display: grid;
+  grid-template-columns: repeat(var(--gallery-cols, 3), minmax(0, 1fr));
+  column-gap: var(--gallery-gap-x, 16px);
+  row-gap: var(--gallery-gap-y, 16px);
+}
+
+.gallery-grid-masonry {
+  column-count: var(--gallery-cols, 3);
+  column-gap: var(--gallery-gap-x, 16px);
+}
+
+/* Chaque vignette masonry reste entière (jamais coupée entre deux colonnes). */
+.gallery-grid-masonry > * {
+  break-inside: avoid;
+}
+
+@media (max-width: 1024px) {
+  .gallery-grid-uniform {
+    grid-template-columns: repeat(var(--gallery-cols-md, 2), minmax(0, 1fr));
+  }
+
+  .gallery-grid-masonry {
+    column-count: var(--gallery-cols-md, 2);
+  }
+}
+
+@media (max-width: 640px) {
+  .gallery-grid-uniform {
+    grid-template-columns: repeat(var(--gallery-cols-sm, 1), minmax(0, 1fr));
+  }
+
+  .gallery-grid-masonry {
+    column-count: var(--gallery-cols-sm, 1);
+  }
+}
+
+@media (max-width: 400px) {
+  .gallery-grid-uniform {
+    grid-template-columns: repeat(var(--gallery-cols-xs, 1), minmax(0, 1fr));
+  }
+
+  .gallery-grid-masonry {
+    column-count: var(--gallery-cols-xs, 1);
+  }
+}
+
+/* Effets de survol des vignettes — rendu GPU (transform/opacity uniquement). */
+.gallery-hover-zoom :where(img) {
+  transition: transform 0.4s var(--ease-silk, cubic-bezier(0.16, 1, 0.3, 1));
+}
+
+.gallery-hover-zoom:hover :where(img) {
+  transform: scale(1.05);
+}

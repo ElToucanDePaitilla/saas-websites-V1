@@ -23,6 +23,8 @@ type MediaImageProps = {
   height?: number;
   priority?: boolean;
   blurDataUrl?: string | null;
+  /** Qualité de compression de l'optimiseur (1-100) — défaut next/image. */
+  quality?: number;
 };
 
 /** Hôtes distants autorisés par `next.config` (sinon `<img>` natif). */
@@ -47,6 +49,7 @@ export function MediaImage({
   height,
   priority = false,
   blurDataUrl,
+  quality,
 }: MediaImageProps) {
   // URL vide → aucun rendu (évite le warning `<img src="">` et une requête réseau).
   if (src === "") {
@@ -67,6 +70,7 @@ export function MediaImage({
       width={fill ? undefined : width}
       height={fill ? undefined : height}
       priority={priority}
+      quality={quality}
       placeholder={blurDataUrl ? "blur" : "empty"}
       blurDataURL={blurDataUrl ?? undefined}
     />

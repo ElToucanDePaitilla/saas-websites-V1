@@ -30,8 +30,45 @@ const ALLOWED_MIME = new Set([
   "image/webp",
   "image/avif",
   "image/gif",
+  // SVG : requis par le module « Identité visuelle / Logo » (Étape 9.1).
+  "image/svg+xml",
+  "video/mp4",
+  "video/webm",
 ]);
-const MAX_SIZE_BYTES = 15 * 1024 * 1024; // 15 Mo
+const MAX_SIZE_BYTES = 50 * 1024 * 1024; // 50 Mo (vidéos jusqu'à 50 Mo)
+
+/** Formats convertis en WebP (SVG, GIF animés et vidéos exclus). */
+const CONVERTIBLE_MIME = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/avif",
+]);
+
+/** Qualité de compression WebP appliquée à la conversion (80 %). */
+const WEBP_QUALITY = 80;
+
+/**
+ * Convertit un buffer image en **WebP qualité 80** (orientation EXIF appliquée,
+ * métadonnées retirées). Retourne `null` en cas d'échec → repli sur l'original.
+ */
+async function convertToWebp(buffer: Buffer): Promise<Buffer | null> {
+  try {
+    return await sharp(buffer)
+      .rotate()
+      .webp({ quality: WEBP_QUALITY })
+      .toBuffer();
+  } catch {
+    return null;
+  }
+}
+
+/** Remplace l'extension d'un nom de fichier par `.webp`. */
+function withWebpExtension(name: string): string {
+  const lastDot = name.lastIndexOf(".");
+  const base = lastDot > 0 ? name.slice(0, lastDot) : name;
+  return `${base}.webp`;
+}
 
 /** Génère un placeholder flou (data URI) via sharp — null si échec. */
 async function buildBlurDataUrl(buffer: Buffer): Promise<string | null> {
@@ -96,41 +133,67 @@ export async function POST(request: NextRequest) {
     }
     if (!ALLOWED_MIME.has(file.type)) {
       return NextResponse.json(
-        { ok: false, error: "Type de fichier non autorisé (image requise)." },
+        { ok: false, error: "Type de fichier non autorisé (image ou vidéo MP4/WebM)." },
         { status: 400 }
       );
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
+    const isVideo = file.type.startsWith("video/");
+
+    // Conversion systématique en **WebP qualité 80** (JPEG/PNG/WebP/AVIF). Les
+    // SVG, GIF animés et vidéos sont conservés tels quels ; si la conversion
+    // échoue, on retombe sur l'original (jamais bloquant).
+    let storedBuffer: Buffer = buffer;
+    let storedMime = file.type;
+    let storedName = file.name;
+    if (CONVERTIBLE_MIME.has(file.type)) {
+      const webp = await convertToWebp(buffer);
+      if (webp) {
+        storedBuffer = webp;
+        storedMime = "image/webp";
+        storedName = withWebpExtension(file.name);
+      }
+    }
 
     // Upload Storage (préfixe propriétaire) puis URL publique.
-    const uploaded = await uploadImage(supabase, photographerId, file, file.type);
+    const storedFile = new File([new Uint8Array(storedBuffer)], storedName, {
+      type: storedMime,
+    });
+    const uploaded = await uploadImage(
+      supabase,
+      photographerId,
+      storedFile,
+      storedMime
+    );
 
-    // Métadonnées : dimensions + EXIF (toléré si absent).
+    // Métadonnées image (dimensions + EXIF + blur) — ignorées pour les vidéos.
     let width: number | null = null;
     let height: number | null = null;
-    try {
-      const meta = await sharp(buffer).metadata();
-      width = meta.width ?? null;
-      height = meta.height ?? null;
-    } catch {
-      // dimensions non disponibles
-    }
-
     let exifData: unknown = {};
-    try {
-      exifData = (await exifr.parse(buffer)) ?? {};
-    } catch {
-      // EXIF absent (ex. export WebP) → {}
+    let blurDataUrl: string | null = null;
+    if (!isVideo) {
+      try {
+        const meta = await sharp(storedBuffer).metadata();
+        width = meta.width ?? null;
+        height = meta.height ?? null;
+      } catch {
+        // dimensions non disponibles
+      }
+      // EXIF lu depuis l'ORIGINAL : la conversion WebP retire les métadonnées.
+      try {
+        exifData = (await exifr.parse(buffer)) ?? {};
+      } catch {
+        // EXIF absent (ex. export WebP) → {}
+      }
+      blurDataUrl = await buildBlurDataUrl(storedBuffer);
     }
-
-    const blurDataUrl = await buildBlurDataUrl(buffer);
 
     const asset = await createMedia(photographerId, {
       url: uploaded.publicUrl,
-      filename: file.name,
-      size: file.size,
-      mimeType: file.type,
+      filename: storedName,
+      size: storedBuffer.length,
+      mimeType: storedMime,
       width,
       height,
       exifData,

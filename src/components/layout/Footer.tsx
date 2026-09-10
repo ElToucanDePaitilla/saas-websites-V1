@@ -7,6 +7,7 @@ import { ArrowUpRight } from "lucide-react";
 import { useNavigationStore } from "@/components/backoffice/navigation/NavigationStoreProvider";
 import { NavLink } from "@/components/common/NavLink";
 import type { NavMenuEntry } from "@/lib/navigation";
+import { useOwnerProfile } from "@/lib/owner-profile";
 import { legalLinks, siteName, socialLinks } from "@/lib/site";
 
 /**
@@ -36,6 +37,26 @@ const columnTitleStyle = { fontFamily: "var(--font-body)" } as const;
 
 export default function Footer() {
   const { getEntries } = useNavigationStore();
+  const { profile } = useOwnerProfile();
+
+  // Marque / réseaux / mentions légales issus du module « Profil » (8.1).
+  const brandName = profile.brandName.trim() !== "" ? profile.brandName : siteName;
+  const profileSocials = (Object.entries(profile.socialLinks) as Array<
+    [string, string]
+  >)
+    .filter(([, url]) => url.trim() !== "")
+    .map(([label, href]) => ({
+      href,
+      label: label === "x" ? "X" : label.charAt(0).toUpperCase() + label.slice(1),
+    }));
+  const combinedSocials = [...socialLinks, ...profileSocials];
+  const legalDetail = [
+    profile.legalStatus ? `Statut : ${profile.legalStatus}` : "",
+    profile.siret ? `SIRET : ${profile.siret}` : "",
+    profile.publicationDirector
+      ? `Directeur de la publication : ${profile.publicationDirector}`
+      : "",
+  ].filter(Boolean);
 
   // Entrées Footer **visibles** uniquement (filtre `hidden !== true`, §0.3)
   // et dédoublonnées par cible (`href`) pour éviter l'affichage en double.
@@ -69,7 +90,7 @@ export default function Footer() {
               style={{ fontFamily: "var(--font-heading)" }}
               className="inline-block text-2xl font-medium tracking-wide text-foreground transition-opacity duration-200 hover:opacity-75"
             >
-              {siteName}
+              {brandName}
             </Link>
             <p className="mt-3 max-w-sm text-sm leading-relaxed text-[var(--text-muted)]">
               Photographe professionnel — galeries privées, prestations et
@@ -79,7 +100,7 @@ export default function Footer() {
               className="mt-6 flex items-center gap-6"
               aria-label="Réseaux sociaux"
             >
-              {socialLinks.map((item) => (
+              {combinedSocials.map((item) => (
                 <li key={item.href}>
                   <a
                     href={item.href}
@@ -143,11 +164,16 @@ export default function Footer() {
         {/* ---- Ligne de séparation basse : copyright ---- */}
         <div className="mt-12 flex flex-col items-center justify-between gap-3 border-t border-[var(--border-color)] pt-6 sm:flex-row">
           <p className="text-xs text-[var(--text-muted)]">
-            © {year} {siteName}. Tous droits réservés.
+            © {year} {brandName}. Tous droits réservés.
           </p>
           <p className="text-xs text-[var(--text-muted)]">
             Portfolio & galeries privées
           </p>
+          {legalDetail.length > 0 ? (
+            <p className="text-xs text-[var(--text-muted)]">
+              {legalDetail.join(" · ")}
+            </p>
+          ) : null}
         </div>
       </div>
     </footer>

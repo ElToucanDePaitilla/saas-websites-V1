@@ -32,6 +32,12 @@ export function extensionFromMime(mimeType: string): string {
       return "avif";
     case "image/gif":
       return "gif";
+    case "image/svg+xml":
+      return "svg";
+    case "video/mp4":
+      return "mp4";
+    case "video/webm":
+      return "webm";
     default:
       return "bin";
   }
