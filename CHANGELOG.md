@@ -11,6 +11,95 @@ NOTICE D'UTILISATION DU FICHIER CHANGELOG.MD
 
 ---
 
+## 2026-09-10 – 22:31 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Phase 11 — Étape 11.19 : Héro vidéo, seconde passe — suppression définitive de l'« image fantôme »** (constat de recette après 11.18 : *« le problème existe toujours, mais maintenant avec en plus un fond noir qui apparaît un bref instant avant l'image fantôme puis la vidéo »*).
+- **Ce que 11.18 avait manqué** : elle avait corrigé deux défauts réels (branche desktop montée dès le SSR, image déclarée deux fois) mais **conservait le rôle de poster de chargement** attribué à la photo de secours — or c'est précisément ce rôle qui produit l'image fantôme : une image décodée avant le premier plan vidéo **est** montrée, aucun fondu ne peut l'empêcher. Pire, l'état initial « indécis » (`null`) alors introduit ajoutait une **frame au fond noir** avant la photo, d'où deux transitions parasites au lieu d'une.
+- **Nouvelle répartition des rôles — un média, un seul rôle** : `videoUrl` = habillage animé ; `fallbackMobile` = **remplace la vidéo sur téléphone** ; `posterDesktop` = **image de repli si la vidéo ne peut pas être lue** (fichier absent ou illisible, mouvement réduit) — **jamais pendant le chargement**. Le champ est renommé en conséquence dans l'éditeur (« **Image de repli — ordinateur (optionnelle)** ») et son aide explique ce nouveau rôle.
+- **Pendant le téléchargement** : fond **anthracite**, au même ton que l'overlay du Héro — donc perçu comme une intention et non comme un défaut. La vidéo se **révèle en fondu** dès la première image décodée (`onLoadedData`, plus précoce et plus fiable que `onPlaying`, et qui couvre aussi un autoplay bloqué par le navigateur : l'image fixe du premier plan reste visible).
+- **Images de repli choisies en CSS** (`md:hidden` / `hidden md:block`) et non plus en JavaScript : elles sont présentes dès le HTML du serveur, **sans frame « indécise »** — ce qui supprime le passage au noir introduit en 11.18. Le JavaScript ne décide plus que du **montage de la vidéo**.
+- **Décision assumée et documentée** : entre « une image fantôme à chaque visite » et « un fond neutre pendant le chargement », le second préserve l'effet recherché. Il n'existe pas de moyen d'afficher une image *sans* qu'elle soit vue.
+- Vérifications : `npx tsc --noEmit` OK ; `npm run lint` OK ; `npm run build` OK (18 pages).
+
+### Fichiers créés ou modifiés
+- Modifiés : `src/components/modules/hero/HeroVideoBackground.tsx`, `src/components/backoffice/pages/modules/ModuleHeroVideoEditor.tsx`, `ROADMAP.md`, `CHANGELOG.md`
+- BDD : **aucune** migration.
+
+### Prochaine étape prévue
+Recette du Héro vidéo : au rechargement (cache froid **et** chaud), la séquence doit être **une seule transition** — fond anthracite puis vidéo en fondu — sans aucune image intercalée ; sur téléphone, la photo 9:16 doit s'afficher immédiatement (et jamais la version ordinateur) ; en `prefers-reduced-motion`, l'image de repli doit apparaître à la place de la vidéo ; et si le visiteur a renseigné une URL vidéo invalide, l'image de repli doit prendre le relais.
+
+---
+
+## 2026-09-10 – 22:23 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Phase 11 — Étape 11.18 : correctif « flash » du Héro vidéo** (remontée de recette : *« lorsque l'on charge une page qui a un module Hero Video, un bref instant on aperçoit ce qui paraît être la Photo de secours — ordinateur. Ce qui tue l'UX attendu. »*).
+- **Cause 1 — mauvaise branche au premier rendu** [`HeroVideoBackground`](src/components/modules/hero/HeroVideoBackground.tsx) : `isDesktop` était initialisé à **`true`**, donc le HTML rendu côté serveur **et** le premier rendu client montaient la branche **desktop** — y compris sur téléphone. On voyait donc brièvement la photo de secours **ordinateur** avant la bascule vers la photo mobile. → L'état initial devient **indécis** (`null`) : **rien n'est monté** tant que les media queries ne sont pas résolues (fond anthracite neutre pendant une frame). Aucune image erronée n'est plus affichée, sur aucun écran.
+- **Cause 2 — photo de secours affichée deux fois** : elle l'était à la fois par l'attribut `poster` de `<video>` **et** par un `<img>` superposé — soit **deux images lourdes** téléchargées en concurrence avec la vidéo, ce qui retardait d'autant le premier plan vidéo et **prolongeait** le flash. → **Un seul mécanisme** subsiste (le `<img>`), **fondu en sortie** (`onPlaying`) dès que la vidéo produit réellement une image, et `preload="metadata"` remplacé par **`preload="auto"`**.
+- **Guidage de contenu** [`ModuleHeroVideoEditor`](src/components/backoffice/pages/modules/ModuleHeroVideoEditor.tsx) : l'aide du champ « Photo de secours — ordinateur (optionnelle) » invite désormais à choisir une image **extraite de la vidéo** (son premier plan) — le fondu devient alors invisible — ou à la laisser vide pour un fond sombre pendant le chargement.
+- Vérifications : `npx tsc --noEmit` OK ; `npm run lint` OK ; `npm run build` OK.
+
+### Fichiers créés ou modifiés
+- Modifiés : `src/components/modules/hero/HeroVideoBackground.tsx`, `src/components/backoffice/pages/modules/ModuleHeroVideoEditor.tsx`, `ROADMAP.md`, `CHANGELOG.md`
+- BDD : **aucune** migration. Aucun changement de schéma ni de contrat de données.
+
+### Prochaine étape prévue
+Recette du Héro vidéo sur une page réelle : recharger plusieurs fois (cache vidéo vide puis chaud) et confirmer qu'**aucune image** n'apparaît avant la vidéo sur ordinateur ; vérifier sur **téléphone** (et en émulation mobile) que c'est bien la photo 9:16 qui s'affiche, jamais la version ordinateur ; contrôler enfin que le `prefers-reduced-motion` affiche bien une image fixe sans vidéo.
+
+---
+
+## 2026-09-10 – 22:15 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Phase 11 — Étape 11.17 : Ergonomie des éditeurs de modules — zones, portée et libellés** (plan [`plans/ROADMAP-11.17-editor-zones-ux.md`](plans/ROADMAP-11.17-editor-zones-ux.md), validé).
+- **Diagnostic (cause racine)** : un module déplié empilait **quatre échelles** différentes — le bloc, la galerie, les albums, la photo — dans un même flux vertical sans aucun marqueur de niveau ([`ModuleGalleryEditor`](src/components/backoffice/pages/modules/ModuleGalleryEditor.tsx) ≈ 35 contrôles à plat). Le découpage « RÉGLAGES / CONTENU » de [`ModuleRow`](src/components/backoffice/pages/ModuleRow.tsx) recopiait la structure technique (scalaires vs JSONB). D'où des retours d'usage tous formulés « de quoi ? ».
+- **Lot A — libellés non techniques** [`pages.ts`](src/lib/pages.ts) : `Masonry` → **`Mosaïque (hauteurs libres)`**, `Uniforme` → `Grille régulière`, `Light/Normal/Strong` → **`Légère/Normale/Marquée`**, `Light/Medium/Normal/Strong` → **`Très discrète/Discrète/Normale/Forte`**, `Animation active` → `Zoom et élévation douce`, `Gallery Static/Dynamic/Portfolio` → **`Galerie fixe/interactive/portfolio`**. Panneaux : « Mise en page » → **« Disposition des photos »**, « Finitions & effets » → **« Cadre et finition des photos »**, « Diaporama (Lightbox) » → **« Agrandissement et diaporama »**, « Afficher les informations EXIF » → **« Afficher les réglages de l'appareil photo »**, « Afficher la légende » → « Afficher le titre et la description de la photo ». Alignement des `id`/`htmlFor` intra-document (`GalleryHoverPanel`, `LinkTargetField`).
+- **Lot A — deux corrections de véracité** : l'aide « Titre d'affichage » annonçait un libellé « visible dans le bandeau **et le menu du site** » — vérification faite par recherche, `module.title` n'est **jamais** rendu sur le site public (il n'alimente que le bandeau et les dialogues du back-office) ; l'aide est corrigée et le champ renommé **« Nom de la section dans le back-office »**. L'en-tête d'album affiche désormais **`Album n — {nom}`** au lieu d'un simple numéro.
+- **Lot B — réglages techniques sortis du flux** : les trois champs scalaires (`title`, `anchorId`, `animation`) sont regroupés dans une zone **« Réglages avancés » repliée**, en fin de formulaire ([`ModuleRow`](src/components/backoffice/pages/ModuleRow.tsx)) ; le rappel « Module visible / masqué » (redondant avec le Toggle Eye et le badge du bandeau) est supprimé.
+- **Lot B — doublon réel supprimé** : « Animation au survol de la photo » était exposée **deux fois** — dans [`ModuleSettingsForm`](src/components/backoffice/pages/modules/ModuleSettingsForm.tsx) et dans [`GalleryLayoutPanel`](src/components/backoffice/pages/modules/gallery/GalleryLayoutPanel.tsx) — les deux écrivant `layout.hoverAnimation`. Le réglage vit désormais dans le seul [`GalleryHoverPanel`](src/components/backoffice/pages/modules/gallery/GalleryHoverPanel.tsx) (nouveau), avec le voile dégradé, à l'intérieur de la zone « Apparence des photos ».
+- **Lot C — composant partagé [`EditorZone`](src/components/backoffice/pages/modules/EditorZone.tsx)** : titre qui **nomme la cible**, **phrase de portée obligatoire**, teinte d'accent, repli **sans dépendance nouvelle** (`@radix-ui/react-collapsible` n'est pas installé → état local + `aria-expanded`/`aria-controls`, un `<h5>` ne pouvant être enfant d'un `<button>`). Quatre teintes **génériques** en tokens CSS ([`globals.css`](src/app/globals.css) : `--zone-content/style/detail/action`) servent d'accent de bordure et de pastille, jamais de fond plein (contraste préservé). Convention visuelle : **bordure pleine + accent = zone**, **pointillés = sous-bloc** ([`EditorSubZone`](src/components/backoffice/pages/modules/EditorZone.tsx)).
+- **Lot C — refonte du panneau Galerie** en **4 zones** — Les albums · Apparence des photos (Disposition / Cadre et finition / Au survol) · Agrandissement et diaporama · Bouton d'appel à l'action — plus une **barre d'ancres collante** en tête (liens `#id` natifs, le défilement lissé étant déjà global). Les panneaux enfants ne portent plus leur propre cadre ni leur titre.
+- **Décision — onglets écartés** : le formulaire est déjà dans un accordéon ; les onglets cacheraient les valeurs par défaut (« Effet = Aucun », « Aucun affichage ») qu'il faut pouvoir reconnaître d'un coup d'œil ; ces réglages s'ajustent en regardant le résultat. Porte de sortie documentée : **deux onglets au maximum**, jamais plus fin.
+- **Lot D — généralisation aux 9 autres éditeurs** : Héro statique (4 zones, bouton isolé), Héro slider, Héro vidéo, Héro parallaxe, À propos, Services, FAQ, Contact, Bandeau CTA. Les `RubricTitle` locaux (3 duplications) sont remplacés par `EditorZone`.
+- Vérifications : `npx tsc --noEmit` OK ; `npm run lint` OK ; `npm run build` OK.
+
+### Fichiers créés ou modifiés
+- Créés : `src/components/backoffice/pages/modules/EditorZone.tsx`, `src/components/backoffice/pages/modules/gallery/GalleryHoverPanel.tsx`, `plans/ROADMAP-11.17-editor-zones-ux.md`
+- Modifiés : `src/lib/pages.ts`, `src/components/backoffice/pages/ModuleRow.tsx`, `src/components/backoffice/pages/modules/{ModuleSettingsForm,ModuleContentEditor,ModuleGalleryEditor,ModuleHeroEditor,ModuleHeroSliderEditor,ModuleHeroVideoEditor,ModuleHeroParallaxEditor,ModuleAboutEditor,ModuleServicesEditor,ModuleFaqEditor,ModuleContactEditor,ModuleCtaBannerEditor}.tsx`, `src/components/backoffice/pages/modules/gallery/{AlbumManagerPanel,GalleryLayoutPanel,EffectSettingsPanel,LightboxSettingsPanel,GalleryCtaPanel}.tsx`, `src/app/globals.css`, `ROADMAP.md`, `CHANGELOG.md`
+- BDD : **aucune** migration. **Aucun champ ajouté ni retiré** ; rendu public **inchangé**.
+
+### Prochaine étape prévue
+Recette `/admin/pages/{id}` : ouvrir un module de chaque famille et vérifier que chaque zone annonce bien sa cible et sa portée, que la barre d'ancres saute correctement à chaque rubrique, que « Réglages avancés » est replié par défaut (et que l'identifiant comme l'animation restent éditables), que les quatre teintes sont lisibles en thème clair, puis vérifier sur le site public que le rendu des sections est **strictement identique** à l'avant-refonte.
+
+---
+
+## 2026-09-10 – 20:02 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Phase 11 — Étape 11.16 : UX « Galeries & Portfolio » — vocabulaire « Album » et sélecteur de cible du CTA** (plan [`plans/ROADMAP-11.16-galleries-albums-cta-linkpicker.md`](plans/ROADMAP-11.16-galleries-albums-cta-linkpicker.md), validé).
+- **Vocabulaire « Album »** : « Thématique 1 » → **« Album 1 »**, « Photos de la thématique » → **« Photos de l'album »**, et alignement de tout le panneau (`Albums de la galerie`, `Ajouter un album`, `Affichage sur les couvertures`, `Quand afficher ces informations ?`, `Que faut-il afficher ?` → `Le nom de l'album` / `Le nombre de photos`, `Nom de l'album`, `Description de l'album`, 3 `aria-label`, état vide, libellé par défaut `Nouvel album`). Motif : l'UI contredisait le code (`GalleryAlbum`, `AlbumManagerPanel`, `galleryAlbumSchema`) et **« thème » est déjà le vocabulaire de l'identité visuelle** (« Par défaut du thème », `heroTextTone`) — collision sémantique réelle pour un non-technicien. **Aucune clé persistée renommée, aucune migration, aucun impact public/SEO.**
+- **Bloc « Affichage sur les couvertures »** (ex-« Badge de l'album », libellé rejeté comme jargon web) : le panneau est restructuré en **trois questions** — **quand** afficher (`badge.display`), **quoi** afficher (nom / nombre de photos), **comment** (position / style). La portée était par ailleurs trompeuse : ce réglage est **global à la galerie** (il s'applique à toutes les couvertures), d'où le pluriel.
+- **Nouveau réglage `badge.display`** : « Affiché en permanence » (défaut) / « Affiché au survol de la photo » / « Aucun affichage ». Champ **optionnel** dans `galleryBadgeSchema` + repli sur `always` dans `resolveGalleryBadge` → **aucune migration BDD**, rendu des contenus existants strictement inchangé. En mode « Aucun affichage », les réglages de contenu, de position et de style sont **masqués** (aucun réglage contradictoire).
+- **Repli tactile du mode « au survol »** (point critique) : Tailwind compile `group-hover:` sous `@media (hover: hover)` — sur téléphone et tablette, le texte serait resté **invisible en permanence**, donc le nom de l'album jamais lisible. L'opacité passe désormais par l'utilitaire CSS `.cover-text-hover` ([`globals.css`](src/app/globals.css)), **hors `@layer`** pour primer sur les utilitaires Tailwind : masqué uniquement sous `(hover: hover) and (pointer: fine)`, révélé au `:hover` **et** au `:focus-within` (clavier), transition supprimée sous `prefers-reduced-motion`, et **toujours visible au doigt**.
+- **Sélecteur de cible du CTA** [`LinkTargetField`](src/components/backoffice/pages/modules/LinkTargetField.tsx) : sous « Lien du bouton », **deux menus** — **« Aller vers une page du site »** (pages triées alphabétiquement, collator `fr`) et **« Aller vers une section de page »** (ancres de tous les modules, groupées par page via `SelectGroup`/`SelectLabel`, page en cours signalée) — **plus le champ libre conservé** (« Ou collez un lien » : `https://`, `mailto:`, `tel:`). Le mode est **DÉRIVÉ de `href`, jamais stocké** → exclusion mutuelle automatique via l'option sentinelle « — Aucune — », zéro état incohérent, repli en champ libre pour un `href` orphelin (aucune perte silencieuse).
+- **Aperçu de la destination** : phrase en clair (« Vous serez emmené vers : Portfolio › Galerie mariage ») + avertissement si la cible est un **brouillon**, une **section masquée** ou une **cible introuvable**.
+- **Helpers purs** [`link-targets.ts`](src/lib/link-targets.ts) : `collectPageTargets`, `collectAnchorTargets` (dédoublonnage par page, `#ancre` pour la page courante, `/slug#ancre` sinon via `pageHrefFor` — jamais `pageHref` seul, pour éviter le slug d'un ancien accueil démis), `detectCtaTargetMode`, `describeLinkTarget`, `compareLabelFr` (accents + tri numérique).
+- **Contexte** [`CurrentPageContext`](src/components/backoffice/pages/CurrentPageContext.tsx) posé par [`ModuleDndList`](src/components/backoffice/pages/ModuleDndList.tsx) : expose la page en cours d'édition aux éditeurs, sans prop drilling sur 4 niveaux. Hors Provider, `useCurrentPage()` retourne `{ pageId: null }` (aucune exception) → champ réutilisable ailleurs (ex. CTA du Héro).
+- **Défilement du CTA** [`CTAButton`](src/components/modules/gallery/CTAButton.tsx) : les liens internes (`/page`, `#ancre`, `/page#ancre`) passent par **`NavLink`** → défilement lissé **avec compensation du Header fixe** (auparavant un saut brut passait sous la barre) ; URL absolues en `_blank` + `rel="noopener noreferrer"` ; `mailto:`/`tel:` en `<a>` simple (même onglet).
+- **Vocabulaire de l'UI de cible** (D-3 révisée) : « sous-page », « page de niveau 1/2 » **proscrits** — « Niveau 1/2 » est le vocabulaire du module **Navigation** et qualifie une position dans un menu, pas une page (les items de niveau 2 du seed sont des liens `custom` vers des **ancres**, cf. [`navigation.ts`](src/lib/navigation.ts)). Le mot « ancre » n'apparaît que dans l'infobulle « i ».
+- Vérifications : `npx tsc --noEmit` OK ; `npm run lint` OK ; `npm run build` OK (18 pages).
+
+### Fichiers créés ou modifiés
+- Créés : `src/lib/link-targets.ts`, `src/components/backoffice/pages/CurrentPageContext.tsx`, `src/components/backoffice/pages/modules/LinkTargetField.tsx`, `plans/ROADMAP-11.16-galleries-albums-cta-linkpicker.md`
+- Modifiés : `src/components/backoffice/pages/modules/gallery/{AlbumManagerPanel,GalleryCtaPanel}.tsx`, `src/components/backoffice/pages/ModuleDndList.tsx`, `src/components/modules/gallery/{CTAButton,GalleryAlbumBadge,GalleryItem,GalleryGrid,GalleryManager,LightboxModal}.tsx`, `src/lib/pages.ts`, `src/lib/schemas/persistence.ts`, `src/app/globals.css`, `src/app/(front-office)/demo/page.tsx`, `ROADMAP.md`, `CHANGELOG.md`
+- BDD : **aucune** migration.
+
+### Prochaine étape prévue
+Recette `/admin/pages/{id}` sur une galerie Portfolio : libellés « Album n » / « Photos de l'album (n) », sélection d'une page puis d'une ancre (bascule automatique de l'autre menu sur « Aucune »), ancre de la page courante (`#ancre`) vs autre page (`/slug#ancre`), lien externe via le champ libre, alerte « brouillon » / « masquée », puis clic du bouton sur le site public (défilement sous le Header fixe). Cas limite : renommer le slug d'une page cible → le lien retombe en champ libre sans être perdu.
+
+---
+
 ## 2026-09-10 – 13:41 (heure locale America/Bogota)
 
 ### Tâche exécutée

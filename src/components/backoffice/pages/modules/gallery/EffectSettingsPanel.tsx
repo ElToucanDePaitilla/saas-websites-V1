@@ -44,10 +44,10 @@ export function EffectSettingsPanel({
   const isNone = effect.effect === "none";
 
   return (
-    <div className="grid gap-3 rounded-md border border-border bg-background/50 p-3">
-      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-        Finitions & effets
-      </p>
+    // Étape 11.17 : plus de boîte ni de titre propres — ils sont fournis par
+    // `EditorZone` (solidité du cadre et phrase de portée), ce panneau ne rend
+    // plus que les champs.
+    <div className="grid gap-3">
 
       <div className="grid gap-3 sm:grid-cols-2">
         <SelectField<GalleryEffectId>
@@ -61,7 +61,7 @@ export function EffectSettingsPanel({
           hint="Un seul effet de finition peut être actif à la fois."
         />
         <SelectField<GalleryEffectIntensity>
-          label="Intensité"
+          label="Intensité de l’effet"
           value={effect.intensity}
           options={galleryEffectIntensityOrder.map((value) => ({
             value,

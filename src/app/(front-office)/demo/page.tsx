@@ -145,7 +145,7 @@ function buildDemoModules(): PageModule[] {
     effect: { ...dynamicBase.effect, effect: "glass", intensity: "normal" },
   };
 
-  // Gallery Portfolio — albums thématiques, clic simple → album exclusif.
+  // Gallery Portfolio — albums, clic simple → album exclusif.
   const portfolioBase = createGalleryPortfolioContent();
   const albums = ["Mariage", "Portrait", "Corporate"].map((label, index) => {
     const album = {
@@ -159,9 +159,9 @@ function buildDemoModules(): PageModule[] {
   galleryPortfolio.content = {
     type: "gallery",
     ...portfolioBase,
-    heading: "Gallery Portfolio — albums thématiques",
+    heading: "Gallery Portfolio — albums",
     subheading:
-      "Chaque couverture ouvre le diaporama exclusif de son album (badge thème + nombre de photos).",
+      "Chaque couverture ouvre le diaporama exclusif de son album (badge album + nombre de photos).",
     albums,
     effect: { ...portfolioBase.effect, effect: "polaroid", intensity: "normal" },
   };

@@ -31,19 +31,25 @@ import {
 import { cn } from "@/lib/utils";
 
 import { ArtSourceField } from "./ArtSourceField";
+import { EditorZone } from "./EditorZone";
 import { HelpTip, SelectField, TextAreaField, TextField } from "./form-fields";
 
 /**
  * ============================================================================
- * ÉDITEUR DE CONTENU — Module « Hero Slider » (Étape 7.2)
+ * ÉDITEUR DE CONTENU — Module « Hero Slider » (Étape 7.2, revu en 11.17)
  * ----------------------------------------------------------------------------
- * Formulaire contrôlé par le store. Organisé en 3 rubriques no-tech :
- *   1. 🖼️ Slides & Photos   — liste des slides (ajout, suppression,
- *      réordonnancement ↑/↓) ; par slide : images art-direction desktop /
- *      mobile / tablette avec vignettes + alt SEO ;
- *   2. 📝 Textes & Boutons  — par slide : overlay, textes (H1/H2/paragraphe),
- *      ton et CTA ; graisses globales au module ;
- *   3. ⚙️ Réglages du Slider — autoplay, vitesse, transition, flèches, puces.
+ * Formulaire contrôlé par le store.
+ *
+ * Étape 11.17 — trois `EditorZone` nomment chacune leur cible et leur portée
+ * (plans/ROADMAP-11.17-editor-zones-ux.md §5) :
+ *   1. 🖼️ **Les slides du carrousel**       — liste des slides (ajout,
+ *      suppression, réordonnancement ↑/↓) ; par slide : images desktop / mobile
+ *      / tablette + textes alternatifs (SEO) ;
+ *   2. 📝 **Textes et boutons des slides**  — par slide : overlay, H1/H2,
+ *      paragraphe, ton et bouton ; graisses globales au module ;
+ *   3. ⚙️ **Défilement du carrousel**       — lecture automatique, vitesse,
+ *      transition, flèches et points de navigation.
+ *
  * Le contenu est normalisé (`resolveHeroSliderContent`) puis chaque changement
  * commite un contenu complet vers le store.
  * ============================================================================
@@ -59,24 +65,6 @@ type ModuleHeroSliderEditorProps = {
 
 const ALT_TOOLTIP =
   "Description de l'image pour le référencement (SEO Google) et les lecteurs d'écran.";
-
-/** Titre d'une rubrique (3 sections de la fiche HeroSlider). */
-function RubricTitle({
-  title,
-  description,
-}: {
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="grid gap-1">
-      <h5 className="text-[13px] font-semibold text-foreground">{title}</h5>
-      <p className="text-xs leading-relaxed text-muted-foreground">
-        {description}
-      </p>
-    </div>
-  );
-}
 
 /** Boutons segmentés (overlay / transition) — accessibles (aria-pressed). */
 function SegmentedButtons<T extends string>({
@@ -191,12 +179,12 @@ export function ModuleHeroSliderEditor({
 
   return (
     <div className="grid gap-5">
-      {/* ============ Rubrique 1 — 🖼️ Slides & Photos ============ */}
-      <section className="grid gap-3">
-        <RubricTitle
-          title="🖼️ Slides & Photos"
-          description="Plusieurs visuels qui défilent. Trois slides d’exemple sont pré-chargées : ajoutez, réordonnez (↑/↓) ou supprimez-les. Chaque slide possède 3 versions adaptées à chaque écran."
-        />
+      {/* ---- Zone 1 — les slides et leurs photos ---- */}
+      <EditorZone
+        tone="style"
+        title="Les slides du carrousel"
+        scope="Les visuels qui défilent, dans leur ordre d’apparition (↑/↓ pour réordonner). Chaque slide possède trois versions de la même photo, une par type d’écran."
+      >
 
         <div className="flex items-center gap-2">
           <HelpTip tip="Le slider permet de faire défiler plusieurs visuels. Par défaut, 3 slides d’exemple sont pré-chargées. Vous pouvez en ajouter ou en supprimer à tout moment." />
@@ -294,14 +282,14 @@ export function ModuleHeroSliderEditor({
             );
           })}
         </div>
-      </section>
+      </EditorZone>
 
-      {/* ============ Rubrique 2 — 📝 Textes & Boutons par Slide ============ */}
-      <section className="grid gap-3">
-        <RubricTitle
-          title="📝 Textes & Boutons par Slide"
-          description="Pour un affichage épuré lors du défilement, le bloc de texte est positionné en bas à gauche de chaque slide (centré sur mobile)."
-        />
+      {/* ---- Zone 2 — les textes et boutons de chaque slide ---- */}
+      <EditorZone
+        tone="content"
+        title="Textes et boutons des slides"
+        scope="Pour un affichage épuré, le bloc de texte se place en bas à gauche de chaque slide (centré sur téléphone). Dépliez une slide pour la modifier."
+      >
         {hero.slides.map((slide, slideIndex) => {
           const isOpen = openSlide === slideIndex;
           return (
@@ -374,7 +362,7 @@ export function ModuleHeroSliderEditor({
                     }
                     tip="« Clair » (blanc) est recommandé sur une photo."
                   />
-                  <div className="rounded-lg border border-border bg-background/60 p-3">
+                  <div className="rounded-md border border-dashed border-border bg-background/40 p-3">
                     <div className="flex items-center justify-between gap-3">
                       <label
                         htmlFor={`hero-slider-cta-${slide.id}`}
@@ -451,14 +439,14 @@ export function ModuleHeroSliderEditor({
             />
           ))}
         </div>
-      </section>
+      </EditorZone>
 
-      {/* ============ Rubrique 3 — ⚙️ Réglages du Slider ============ */}
-      <section className="grid gap-3">
-        <RubricTitle
-          title="⚙️ Réglages du Slider"
-          description="Personnalisez la vitesse et la manière dont vos images défilent à l’écran."
-        />
+      {/* ---- Zone 3 — le défilement du carrousel ---- */}
+      <EditorZone
+        tone="detail"
+        title="Défilement du carrousel"
+        scope="La vitesse et la manière dont les visuels défilent à l’écran, ainsi que les commandes laissées au visiteur (flèches, points)."
+      >
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background/60 p-3">
             <label
@@ -530,7 +518,7 @@ export function ModuleHeroSliderEditor({
             />
           </div>
         </div>
-      </section>
+      </EditorZone>
 
       {/* Bouton discret de réinitialisation aux valeurs de démonstration. */}
       <div className="flex justify-end border-t border-border pt-3">

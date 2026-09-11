@@ -30,10 +30,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Separator } from "@/components/ui/separator";
 import { moduleCatalog, type PageModule } from "@/lib/pages";
 import { cn } from "@/lib/utils";
 
+import { EditorZone } from "./modules/EditorZone";
 import { ModuleContentEditor } from "./modules/ModuleContentEditor";
 import { ModuleSettingsForm } from "./modules/ModuleSettingsForm";
 import { ModuleIcon } from "./ModuleIcon";
@@ -209,37 +209,33 @@ export function ModuleRow({
       {/* ---- Vue Dépliée (CRUD — formulaires contrôlés par le store) ---- */}
       <AccordionContent className="border-t border-border px-3 pb-4 pt-3">
         <div className="grid gap-4">
-          <section aria-labelledby={`module-settings-${module.id}`}>
-            <h4
-              id={`module-settings-${module.id}`}
-              className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
-            >
-              Réglages
-            </h4>
+          {/* Contenu du module — chaque éditeur porte désormais ses propres zones
+              titrées et pourvues d'une phrase de portée (Étape 11.17). */}
+          <ModuleContentEditor
+            content={module.content}
+            onChangeContent={(content) => onUpdateModule({ content })}
+            // Scalaire d'animation partagé — rubrique « Animations & Effets » du Héro (7.1).
+            moduleAnimation={module.animation}
+            onChangeModule={onUpdateModule}
+          />
+
+          {/* Réglages techniques — REPLIÉS et placés en fin de formulaire (11.17) :
+              ces trois champs ne concernent pas le contenu composé par le
+              photographe, ils n'ont donc pas à encombrer l'entrée du formulaire
+              (plans/ROADMAP-11.17-editor-zones-ux.md §3.1). */}
+          <EditorZone
+            id={`module-settings-${module.id}`}
+            tone="detail"
+            collapsible
+            title="Réglages avancés"
+            scope="Nom de la section dans le back-office, identifiant utilisé par les liens et animation d’apparition. Ces réglages ne modifient pas le contenu affiché sur le site."
+          >
             <ModuleSettingsForm
               module={module}
               duplicateAnchor={duplicateAnchor}
               onChange={onUpdateModule}
             />
-          </section>
-
-          <Separator />
-
-          <section aria-labelledby={`module-content-${module.id}`}>
-            <h4
-              id={`module-content-${module.id}`}
-              className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
-            >
-              Contenu
-            </h4>
-            <ModuleContentEditor
-              content={module.content}
-              onChangeContent={(content) => onUpdateModule({ content })}
-              // Scalaire d'animation partagé — rubrique « Animations & Effets » du Héro (7.1).
-              moduleAnimation={module.animation}
-              onChangeModule={onUpdateModule}
-            />
-          </section>
+          </EditorZone>
         </div>
       </AccordionContent>
 

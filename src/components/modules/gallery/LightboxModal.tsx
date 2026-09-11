@@ -45,7 +45,7 @@ type LightboxModalProps = {
   images: GalleryImage[];
   initialIndex: number;
   settings: GalleryLightboxSettings;
-  /** Titre affiché (ex. nom de la thématique). */
+  /** Titre affiché (ex. nom de l'album). */
   title?: string;
   exifByUrl?: Record<string, unknown>;
   /** Restaure le focus sur l'élément déclencheur (ouvertures clavier). */

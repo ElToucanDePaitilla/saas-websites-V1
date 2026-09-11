@@ -30,7 +30,7 @@ export type GalleryGridItem = {
   image: GalleryImage;
   /** Légende Polaroid éventuelle. */
   caption?: string;
-  /** Badge de thématique (Portfolio). */
+  /** Badge d'album (Portfolio). */
   badge?: React.ReactNode;
 };
 

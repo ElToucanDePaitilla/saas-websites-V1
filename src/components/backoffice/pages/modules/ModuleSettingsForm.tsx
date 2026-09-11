@@ -10,34 +10,41 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  galleryHoverAnimationLabels,
-  galleryHoverAnimationOrder,
   moduleAnimationLabels,
   moduleAnimationOrder,
-  resolveGalleryContent,
-  type GalleryHoverAnimation,
   type ModuleAnimation,
-  type ModuleContent,
   type PageModule,
 } from "@/lib/pages";
-import { cn } from "@/lib/utils";
 
 import { TextField } from "./form-fields";
 
 /**
  * ============================================================================
- * RÉGLAGES GÉNÉRAUX D'UN MODULE (Étape 3.4)
+ * RÉGLAGES TECHNIQUES D'UN MODULE (Étape 3.4 — révisé en 11.17)
  * ----------------------------------------------------------------------------
- * Formulaire contrôlé par le store (réactivité immédiate) éditant les champs
- * scalaires partagés d'un `PageModule` :
- *   1. Titre d'affichage (`title` — mis à jour en direct dans le bandeau 3.3) ;
- *   2. Ancre `#id` (`anchorId` — validation légère + alerte doublon) ;
- *   3. Animation d'entrée (`animation` — `Select`).
- * Chaque champ appelle `onChange(patch)` → l'action store `updateModule`.
+ * Édite les trois champs **scalaires techniques** d'un `PageModule` :
+ *   1. `title`     — nom de la section **dans le back-office** (vérifié en 11.17 :
+ *                    jamais rendu sur le site public, il n'alimente que le
+ *                    bandeau d'accordéon et les dialogues de suppression) ;
+ *   2. `anchorId`  — identifiant HTML utilisé par les liens internes ;
+ *   3. `animation` — animation d'apparition du bloc.
+ *
+ * Étape 11.17 : ce formulaire n'est plus affiché en tête de l'éditeur. Les trois
+ * champs sont regroupés dans une zone **« Réglages avancés » repliée**, en fin de
+ * formulaire : ils ne concernent pas le contenu que le photographe compose
+ * (principes P4/P5 de plans/ROADMAP-11.17-editor-zones-ux.md §1).
+ *
+ * Retirés en 11.17 :
+ *   - le réglage « Animation au survol de la photo », **dupliqué** avec celui de
+ *     `GalleryLayoutPanel` — deux contrôles écrivaient la même valeur
+ *     `layout.hoverAnimation` (plan 11.17 §0.4 et §3.2) ;
+ *   - le rappel « Module visible / masqué », redondant avec le Toggle Eye et le
+ *     badge « Masquée » du bandeau (`ModuleRow`).
  *
  * Aucun bouton d'enregistrement : chaque frappe persiste instantanément.
  *
- * Référence : plans/ROADMAP-3.4-crud-expanded.md §1.3.1
+ * Références : plans/ROADMAP-3.4-crud-expanded.md §1.3.1 —
+ *              plans/ROADMAP-11.17-editor-zones-ux.md §2 et §3.2
  * ============================================================================
  */
 
@@ -60,42 +67,20 @@ export function ModuleSettingsForm({
   const anchorInvalid =
     module.anchorId.length > 0 && !ANCHOR_PATTERN.test(module.anchorId);
 
-  /** Contenu gallery (réglages spécifiques au module Galerie). */
-  const galleryContent =
-    module.content.type === "gallery"
-      ? (module.content as Extract<ModuleContent, { type: "gallery" }>)
-      : null;
-  const galleryLayout = galleryContent
-    ? resolveGalleryContent(galleryContent).layout
-    : null;
-
-  /** Met à jour l'animation au survol des vignettes (module Galerie). */
-  function handleGalleryHover(value: GalleryHoverAnimation) {
-    if (!galleryContent || !galleryLayout) {
-      return;
-    }
-    onChange({
-      content: {
-        ...galleryContent,
-        layout: { ...galleryLayout, hoverAnimation: value },
-      },
-    });
-  }
-
   return (
     <div className="grid gap-4">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         <TextField
-          label="Titre d’affichage"
+          label="Nom de la section dans le back-office"
           value={module.title}
-          hint="Libellé visible dans le bandeau et le menu du site."
+          hint="N’apparaît pas sur le site public : sert à reconnaître la section dans la liste de l’éditeur."
           onChange={(title) => onChange({ title })}
         />
 
-        {/* Ancre #id */}
+        {/* Identifiant HTML — le mot « ancre » est conservé dans l'aide (P4). */}
         <div className="grid gap-1.5">
           <label className="text-xs font-medium text-foreground" htmlFor="module-anchor">
-            Ancre #id
+            Identifiant de la section pour les liens
           </label>
           <div className="flex items-center">
             <span
@@ -130,18 +115,20 @@ export function ModuleSettingsForm({
             </p>
           ) : (
             <p className="text-xs text-muted-foreground">
-              Identifiant HTML utilisé pour les liens internes.
+              Cet identifiant (appelé « ancre ») permet à un bouton ou à un lien
+              de menu de pointer directement vers cette section.
             </p>
           )}
         </div>
 
-        {/* Animation d'entrée — pour la famille Héro, elle se règle dans la
-            rubrique « Animations & Effets » du contenu (7.1, source unique). */}
+        {/* Animation d'apparition — pour la famille Héro statique, elle se règle
+            dans la rubrique « Animations & Effets » du contenu (7.1, source
+            unique du scalaire `module.animation`). */}
         {module.content.type === "hero" && module.content.variant === "static" ? (
           <div className="grid gap-1.5">
             <p className="text-xs text-muted-foreground">
-              L’animation d’entrée du Héro statique se règle dans la rubrique
-              « 🎬 Animations & Effets » de son contenu.
+              L’animation d’apparition de cette section se règle dans la rubrique
+              « Animations & Effets » de son contenu.
             </p>
           </div>
         ) : (
@@ -150,7 +137,7 @@ export function ModuleSettingsForm({
               className="text-xs font-medium text-foreground"
               htmlFor="module-animation"
             >
-              Animation d’entrée
+              Animation d’apparition du bloc
             </label>
             <Select
               value={module.animation}
@@ -170,55 +157,12 @@ export function ModuleSettingsForm({
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              Surcharge l’animation d’entrée du thème pour ce bloc.
+              Comment cette section apparaît lorsque le visiteur arrive sur la
+              page.
             </p>
           </div>
         )}
-
-        {/* Animation au survol (spécifique au module Galerie) */}
-        {galleryLayout ? (
-          <div className="grid gap-1.5">
-            <label
-              className="text-xs font-medium text-foreground"
-              htmlFor="gallery-hover-animation"
-            >
-              Animation au survol de la photo
-            </label>
-            <Select
-              value={galleryLayout.hoverAnimation}
-              onValueChange={(value) =>
-                handleGalleryHover(value as GalleryHoverAnimation)
-              }
-            >
-              <SelectTrigger id="gallery-hover-animation" className="w-full">
-                <SelectValue placeholder="Choisir une animation" />
-              </SelectTrigger>
-              <SelectContent>
-                {galleryHoverAnimationOrder.map((animation) => (
-                  <SelectItem key={animation} value={animation}>
-                    {galleryHoverAnimationLabels[animation]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              Surcharge l’animation au survol des vignettes de cette galerie.
-            </p>
-          </div>
-        ) : null}
       </div>
-
-      {/* Petit rappel visuel de l'état (non bloquant) */}
-      <p
-        className={cn(
-          "rounded-md border border-dashed border-border bg-background/50 px-3 py-2 text-xs text-muted-foreground",
-          module.hidden && "border-destructive/40 text-destructive"
-        )}
-      >
-        {module.hidden
-          ? "Module actuellement masqué sur le site public (Toggle Eye)."
-          : "Module visible sur le site public."}
-      </p>
     </div>
   );
 }

@@ -24,14 +24,11 @@ export function LightboxSettingsPanel({
   onChange,
 }: LightboxSettingsPanelProps) {
   return (
-    <div className="grid gap-3 rounded-md border border-border bg-background/50 p-3">
-      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-        Diaporama (Lightbox)
-      </p>
-
+    // Étape 11.17 : plus de boîte ni de titre propres — fournis par `EditorZone`.
+    <div className="grid gap-3">
       <SwitchField
-        label="Zoom HD et double-clic"
-        description="Double-clic : niveau 1, puis niveau 2, puis taille originale. Déplacement au clic maintenu."
+        label="Agrandir les photos au double-clic"
+        description="Un premier double-clic agrandit, un deuxième agrandit davantage, un troisième revient à la taille normale. Déplacement au clic maintenu."
         checked={lightbox.zoomEnabled}
         onChange={(zoomEnabled) => onChange({ zoomEnabled })}
       />
@@ -39,7 +36,7 @@ export function LightboxSettingsPanel({
       {lightbox.zoomEnabled ? (
         <div className="grid grid-cols-2 gap-3">
           <TextField
-            label="Zoom niveau 1"
+            label="Agrandissement au 1er double-clic"
             type="number"
             value={String(lightbox.zoomLevel1)}
             onChange={(value) => {
@@ -48,10 +45,10 @@ export function LightboxSettingsPanel({
                 onChange({ zoomLevel1: Math.min(Math.max(parsed, 1.1), 4) });
               }
             }}
-            hint="Facteur du 1er double-clic (défaut 1,5)."
+            hint="Facteur d’agrandissement (1,5 = une fois et demie ; défaut 1,5)."
           />
           <TextField
-            label="Zoom niveau 2"
+            label="Agrandissement au 2e double-clic"
             type="number"
             value={String(lightbox.zoomLevel2)}
             onChange={(value) => {
@@ -60,21 +57,21 @@ export function LightboxSettingsPanel({
                 onChange({ zoomLevel2: Math.min(Math.max(parsed, 1.1), 8) });
               }
             }}
-            hint="Facteur du 2e double-clic (défaut 2,5)."
+            hint="Facteur d’agrandissement (défaut 2,5)."
           />
         </div>
       ) : null}
 
       <SwitchField
-        label="Afficher les informations EXIF"
-        description="Focale, ouverture, vitesse et sensibilité si disponibles."
+        label="Afficher les réglages de l’appareil photo"
+        description="Focale, ouverture, vitesse et sensibilité — quand ces informations existent dans le fichier de la photo."
         checked={lightbox.showExif}
         onChange={(showExif) => onChange({ showExif })}
       />
 
       <SwitchField
-        label="Afficher la légende"
-        description="Titre et description de la photo dans le diaporama."
+        label="Afficher le titre et la description de la photo"
+        description="S’affichent sous la photo agrandie."
         checked={lightbox.showCaption}
         onChange={(showCaption) => onChange({ showCaption })}
       />

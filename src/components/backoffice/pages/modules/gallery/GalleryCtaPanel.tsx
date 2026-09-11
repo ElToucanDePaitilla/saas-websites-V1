@@ -10,6 +10,7 @@ import {
 } from "@/lib/pages";
 
 import { SelectField, TextField } from "../form-fields";
+import { LinkTargetField } from "../LinkTargetField";
 import { SwitchField } from "./fields";
 
 /**
@@ -38,11 +39,8 @@ export function GalleryCtaPanel({ cta, onChange }: GalleryCtaPanelProps) {
   }
 
   return (
-    <div className="grid gap-3 rounded-md border border-border bg-background/50 p-3">
-      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-        Bouton d’appel à l’action
-      </p>
-
+    // Étape 11.17 : plus de boîte ni de titre propres — fournis par `EditorZone`.
+    <div className="grid gap-3">
       <SwitchField
         label="Afficher un bouton en pied de galerie"
         description="Le bouton n'apparaît que si un libellé et un lien sont renseignés."
@@ -65,27 +63,28 @@ export function GalleryCtaPanel({ cta, onChange }: GalleryCtaPanelProps) {
       ) : null}
 
       {cta.show ? (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <TextField
-            label="Libellé du bouton"
-            value={cta.label}
-            placeholder="Ex. Me contacter"
-            onChange={(label) => onChange({ label })}
-          />
-          <TextField
-            label="Lien du bouton"
+        <div className="grid gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <TextField
+              label="Libellé du bouton"
+              value={cta.label}
+              placeholder="Ex. Me contacter"
+              onChange={(label) => onChange({ label })}
+            />
+            <SelectField<HeroCtaStyle>
+              label="Style du bouton"
+              value={cta.style}
+              options={heroCtaStyleOrder.map((value) => ({
+                value,
+                label: heroCtaStyleLabels[value],
+              }))}
+              onChange={(style) => onChange({ style })}
+            />
+          </div>
+          {/* Cible du bouton : deux menus (pages / sections) + lien libre. */}
+          <LinkTargetField
             value={cta.href}
-            placeholder="/contact ou https://…"
             onChange={(href) => onChange({ href })}
-          />
-          <SelectField<HeroCtaStyle>
-            label="Style du bouton"
-            value={cta.style}
-            options={heroCtaStyleOrder.map((value) => ({
-              value,
-              label: heroCtaStyleLabels[value],
-            }))}
-            onChange={(style) => onChange({ style })}
           />
         </div>
       ) : null}

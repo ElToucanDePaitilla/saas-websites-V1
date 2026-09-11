@@ -52,7 +52,7 @@ type GalleryItemProps = {
   masonryGap?: number;
   /** Légende de la carte Polaroid (facultative). */
   caption?: string;
-  /** Badge de thématique (Portfolio). */
+  /** Badge d'album (Portfolio). */
   badge?: React.ReactNode;
   /** Libellé d'action (aria-label du bouton interactif). */
   actionLabel: string;
@@ -143,7 +143,7 @@ export function GalleryItem({
           />
         ) : null}
 
-        {/* Badge de thématique (Portfolio). */}
+        {/* Badge d'album (Portfolio). */}
         {badge}
 
         {/* Indicateur d'agrandissement (vignette interactive survolée). */}

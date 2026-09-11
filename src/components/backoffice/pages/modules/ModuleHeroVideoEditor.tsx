@@ -20,6 +20,7 @@ import {
 import { cn } from "@/lib/utils";
 
 import { ArtSourceField } from "./ArtSourceField";
+import { EditorZone } from "./EditorZone";
 import {
   HelpTip,
   SelectField,
@@ -29,14 +30,18 @@ import {
 
 /**
  * ============================================================================
- * ÉDITEUR DE CONTENU — Module « Hero Vidéo » (Étape 7.3)
+ * ÉDITEUR DE CONTENU — Module « Hero Vidéo » (Étape 7.3, revu en 11.17)
  * ----------------------------------------------------------------------------
  * Les textes/CTA héritent 100 % de `BaseHero` (H1/H2/description, overlay,
- * graisses, tone, CTA). Seule la couche média vidéo est spécifique. Rubriques :
- *   1. 🎬 Média Vidéo & Fallback (video_url, loop, fallback mobile 9:16
- *      obligatoire, poster desktop 16:9 optionnel) ;
- *   2. 📝 Textes & Bouton (hérités — overlay, textes, tone, graisses, CTA) ;
- *   3. ⚙️ Réglages & Performance (muted / playsinline toujours actifs).
+ * graisses, tone, CTA). Seule la couche média vidéo est spécifique.
+ *
+ * Étape 11.17 — quatre `EditorZone` nomment chacune leur cible et leur portée
+ * (plans/ROADMAP-11.17-editor-zones-ux.md §5) :
+ *   1. 🎬 **Vidéo d'arrière-plan**      — video_url, boucle, photo mobile 9:16
+ *      obligatoire, poster desktop 16:9 optionnel ;
+ *   2. 📝 **Textes affichés sur la vidéo** — overlay, textes, tone, graisses ;
+ *   3. 🔗 **Bouton d'appel à l'action**  — libellé, style et destination ;
+ *   4. ⚙️ **Performance et affichage**   — muet / playsinline (non modifiables).
  * ============================================================================
  */
 
@@ -44,24 +49,6 @@ type ModuleHeroVideoEditorProps = {
   content: Extract<ModuleContent, { type: "hero" } & { variant: "video" }>;
   onChangeContent: (content: ModuleContent) => void;
 };
-
-/** Titre d'une rubrique (3 sections). */
-function RubricTitle({
-  title,
-  description,
-}: {
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="grid gap-1">
-      <h5 className="text-[13px] font-semibold text-foreground">{title}</h5>
-      <p className="text-xs leading-relaxed text-muted-foreground">
-        {description}
-      </p>
-    </div>
-  );
-}
 
 export function ModuleHeroVideoEditor({
   content,
@@ -97,12 +84,12 @@ export function ModuleHeroVideoEditor({
 
   return (
     <div className="grid gap-5">
-      {/* ============ Rubrique 1 — 🎬 Média Vidéo & Fallback ============ */}
-      <section className="grid gap-3">
-        <RubricTitle
-          title="🎬 Média Vidéo & Fallback"
-          description="La vidéo se joue en arrière-plan. Sur mobile, pour économiser la batterie et les données 4G/5G de vos visiteurs, une photo prend le relais automatiquement."
-        />
+      {/* ---- Zone 1 — la vidéo d'arrière-plan ---- */}
+      <EditorZone
+        tone="style"
+        title="Vidéo d’arrière-plan"
+        scope="La vidéo jouée en fond de section. Sur téléphone, une photo prend automatiquement le relais pour économiser la batterie et les données mobiles de vos visiteurs."
+      >
         <div className="grid gap-2">
           <span className="flex items-center gap-2 text-xs font-semibold text-foreground">
             Vidéo d’arrière-plan (MP4 / WebM)
@@ -151,20 +138,21 @@ export function ModuleHeroVideoEditor({
           onChange={(value) => setMediaSource("fallbackMobile", value)}
         />
         <ArtSourceField
-          label="Photo de secours — ordinateur (optionnelle)"
+          label="Image de repli — ordinateur (optionnelle)"
           ratio="16:9"
-          tip="S’affiche pendant le court instant où la vidéo se charge (poster)."
+          tip="Affichée uniquement si la vidéo ne peut pas être lue : fichier absent, format non pris en charge, ou visiteur ayant demandé à limiter les animations. Elle n’est jamais montrée pendant le chargement — c’est volontaire, pour éviter qu’une image n’apparaisse avant la vidéo."
           value={hero.media.posterDesktop}
           onChange={(value) => setMediaSource("posterDesktop", value)}
+          note="Pendant le chargement de la vidéo, le fond du Héro reste sombre : l’animation se révèle en fondu."
         />
-      </section>
+      </EditorZone>
 
-      {/* ============ Rubrique 2 — 📝 Textes & Bouton (hérité de BaseHero) ============ */}
-      <section className="grid gap-3">
-        <RubricTitle
-          title="📝 Textes & Bouton"
-          description="Hérité du Héro : le contenu affiché au centre, par-dessus la vidéo."
-        />
+      {/* ---- Zone 2 — les textes affichés sur la vidéo ---- */}
+      <EditorZone
+        tone="content"
+        title="Textes affichés sur la vidéo"
+        scope="Le titre, le sous-titre et le paragraphe présentés au centre de la section, par-dessus la vidéo."
+      >
         <SelectField
           label="Assombrissement de la vidéo"
           value={hero.overlayLevel}
@@ -220,7 +208,15 @@ export function ModuleHeroVideoEditor({
             />
           ))}
         </div>
-        <div className="rounded-lg border border-border bg-background/60 p-3">
+      </EditorZone>
+
+      {/* ---- Zone 3 — le bouton d'appel à l'action ---- */}
+      <EditorZone
+        tone="action"
+        title="Bouton d’appel à l’action"
+        scope="Le bouton affiché sous vos textes : son libellé, son style et la destination du visiteur qui clique."
+      >
+        <div className="rounded-md border border-dashed border-border bg-background/40 p-3">
           <div className="flex items-center justify-between gap-3">
             <label
               htmlFor="hero-video-cta-show"
@@ -261,14 +257,14 @@ export function ModuleHeroVideoEditor({
             </div>
           ) : null}
         </div>
-      </section>
+      </EditorZone>
 
-      {/* ============ Rubrique 3 — ⚙️ Réglages & Performance ============ */}
-      <section className="grid gap-3">
-        <RubricTitle
-          title="⚙️ Réglages & Performance"
-          description="Paramètres d’optimisation d’affichage de la vidéo."
-        />
+      {/* ---- Zone 4 — performance et affichage ---- */}
+      <EditorZone
+        tone="detail"
+        title="Performance et affichage"
+        scope="Réglages appliqués automatiquement par le site pour garantir une vidéo fluide et lisible. Ils ne sont pas modifiables."
+      >
         <div className="grid gap-2 rounded-lg border border-border bg-background/60 p-3 text-xs text-muted-foreground">
           <p className="flex items-center gap-2 font-medium text-foreground">
             Muet (muted)
@@ -289,7 +285,7 @@ export function ModuleHeroVideoEditor({
             remplacée par la photo mobile sur téléphone.
           </p>
         </div>
-      </section>
+      </EditorZone>
 
       {/* Bouton discret de réinitialisation. */}
       <div className="flex justify-end border-t border-border pt-3">

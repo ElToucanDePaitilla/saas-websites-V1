@@ -71,6 +71,18 @@
   /* ---- 4. Typographies (injectées par next/font dans <html>) ---- */
   --font-body: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
   --font-heading: "Cormorant Garamond", Georgia, "Times New Roman", serif;
+
+  /* ---- 5. Teintes des zones d'édition (Back-Office — Étape 11.17) ----
+     Une teinte par QUESTION utilisateur, jamais plus de quatre (principe P3 de
+     plans/ROADMAP-11.17-editor-zones-ux.md §1). Noms volontairement **génériques**
+     (et non liés à la galerie) : les mêmes quatre accents servent tous les
+     éditeurs de modules. Ils forment un **accent de bordure, de pastille et de
+     titre**, jamais un fond plein : le contraste texte/fond reste celui des
+     surfaces du thème. */
+  --zone-content: #a8bdd4;      /* Bleu glacier — le contenu que le visiteur parcourt */
+  --zone-style: #c9b48f;        /* Sable — l'apparence et les finitions */
+  --zone-detail: #96b8ab;       /* Vert d'eau — les réglages de détail / avancés */
+  --zone-action: #cfa9b4;       /* Rosé nacré — les boutons d'appel à l'action */
 }
 
 /* Mode sombre de secours (cohérent, pour les futurs espaces Back-Office). */
@@ -105,6 +117,12 @@
 
   --glass-bg: rgba(22, 19, 19, 0.6);
   --glass-border: rgba(244, 240, 239, 0.14);
+
+  /* Teintes des zones d'édition — dégradées pour rester lisibles sur fond sombre. */
+  --zone-content: #7f97b0;
+  --zone-style: #a08f6e;
+  --zone-detail: #6f8f83;
+  --zone-action: #a8828e;
 }
 
 /* ==========================================================================
@@ -194,6 +212,37 @@
   -webkit-backdrop-filter: blur(var(--glass-blur));
   backdrop-filter: blur(var(--glass-blur));
   border: 1px solid var(--glass-border);
+}
+
+/* ==========================================================================
+   Texte de couverture « au survol » — Galerie Portfolio
+   --------------------------------------------------------------------------
+   Volontairement HORS @layer : ces règles doivent primer sur les utilitaires
+   Tailwind d'opacité (une règle non calquée l'emporte sur les calques).
+   .group\/media est le conteneur survolable de la vignette (GalleryItem).
+   Sur un appareil sans survol réel (tactile), le texte reste VISIBLE : sans ce
+   repli, le doigt ne pourrait jamais révéler le nom de l'album.
+   ========================================================================== */
+.cover-text-hover {
+  opacity: 1;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .cover-text-hover {
+    opacity: 0;
+    transition: opacity 300ms ease;
+  }
+
+  .group\/media:hover .cover-text-hover,
+  .group\/media:focus-within .cover-text-hover {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cover-text-hover {
+    transition: none;
+  }
 }
 
 /* ==========================================================================

@@ -22,17 +22,22 @@ import {
 import { cn } from "@/lib/utils";
 
 import { ArtSourceField } from "./ArtSourceField";
+import { EditorZone } from "./EditorZone";
 import { HelpTip, SelectField, TextAreaField, TextField } from "./form-fields";
 
 /**
  * ============================================================================
- * ÉDITEUR DE CONTENU — Module « Hero Parallaxe » (Étape 7.4)
+ * ÉDITEUR DE CONTENU — Module « Hero Parallaxe » (Étape 7.4, revu en 11.17)
  * ----------------------------------------------------------------------------
- * Textes/CTA hérités de `BaseHero`. Rubriques :
- *   1. 🖼️ Image Parallaxe & Fallback (desktop 16:9 HD requis, mobile 9:16
- *      fixe obligatoire, tablette 4:3 optionnelle) ;
- *   2. 📝 Textes & Bouton (hérités) ;
- *   3. ⚙️ Réglages & Intensité (parallax_speed ; mobile désactivé verrouillé).
+ * Textes/CTA hérités de `BaseHero`.
+ *
+ * Étape 11.17 — quatre `EditorZone` nomment chacune leur cible et leur portée
+ * (plans/ROADMAP-11.17-editor-zones-ux.md §5) :
+ *   1. 🖼️ **Image et effet parallaxe** — desktop 16:9 HD, mobile 9:16 fixe
+ *      obligatoire, tablette 4:3 optionnelle ;
+ *   2. 📝 **Textes affichés sur l'image** — overlay, textes, tone, graisses ;
+ *   3. 🔗 **Bouton d'appel à l'action**  — libellé, style et destination ;
+ *   4. ⚙️ **Force de l'effet parallaxe** — `parallaxSpeed` (mobile verrouillé).
  * ============================================================================
  */
 
@@ -40,23 +45,6 @@ type ModuleHeroParallaxEditorProps = {
   content: Extract<ModuleContent, { type: "hero" } & { variant: "parallax" }>;
   onChangeContent: (content: ModuleContent) => void;
 };
-
-function RubricTitle({
-  title,
-  description,
-}: {
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="grid gap-1">
-      <h5 className="text-[13px] font-semibold text-foreground">{title}</h5>
-      <p className="text-xs leading-relaxed text-muted-foreground">
-        {description}
-      </p>
-    </div>
-  );
-}
 
 export function ModuleHeroParallaxEditor({
   content,
@@ -91,12 +79,12 @@ export function ModuleHeroParallaxEditor({
 
   return (
     <div className="grid gap-5">
-      {/* ============ Rubrique 1 — 🖼️ Image Parallaxe & Fallback ============ */}
-      <section className="grid gap-3">
-        <RubricTitle
-          title="🖼️ Image Parallaxe & Fallback"
-          description="L’effet parallaxe crée une impression de profondeur au défilement. Sur téléphone, l’effet est automatiquement désactivé au profit d’une photo fixe optimisée."
-        />
+      {/* ---- Zone 1 — l'image et l'effet parallaxe ---- */}
+      <EditorZone
+        tone="style"
+        title="Image et effet parallaxe"
+        scope="L’effet parallaxe crée une impression de profondeur au défilement. Sur téléphone, l’effet est automatiquement remplacé par une photo fixe optimisée."
+      >
         <ArtSourceField
           label="Image ordinateur — effet parallaxe (16:9)"
           ratio="16:9"
@@ -118,14 +106,14 @@ export function ModuleHeroParallaxEditor({
           value={hero.media.tablet ?? { url: "", alt: "" }}
           onChange={(value) => setMedia("tablet", value)}
         />
-      </section>
+      </EditorZone>
 
-      {/* ============ Rubrique 2 — 📝 Textes & Bouton ============ */}
-      <section className="grid gap-3">
-        <RubricTitle
-          title="📝 Textes & Bouton"
-          description="Hérité du Héro : contenu affiché au centre, par-dessus l’image."
-        />
+      {/* ---- Zone 2 — les textes affichés sur l'image ---- */}
+      <EditorZone
+        tone="content"
+        title="Textes affichés sur l’image"
+        scope="Le titre, le sous-titre et le paragraphe présentés au centre de la section, par-dessus l’image."
+      >
         <SelectField
           label="Assombrissement de l’image"
           value={hero.overlayLevel}
@@ -181,7 +169,15 @@ export function ModuleHeroParallaxEditor({
             />
           ))}
         </div>
-        <div className="rounded-lg border border-border bg-background/60 p-3">
+      </EditorZone>
+
+      {/* ---- Zone 3 — le bouton d'appel à l'action ---- */}
+      <EditorZone
+        tone="action"
+        title="Bouton d’appel à l’action"
+        scope="Le bouton affiché sous vos textes : son libellé, son style et la destination du visiteur qui clique."
+      >
+        <div className="rounded-md border border-dashed border-border bg-background/40 p-3">
           <div className="flex items-center justify-between gap-3">
             <label
               htmlFor="hero-parallax-cta-show"
@@ -222,14 +218,14 @@ export function ModuleHeroParallaxEditor({
             </div>
           ) : null}
         </div>
-      </section>
+      </EditorZone>
 
-      {/* ============ Rubrique 3 — ⚙️ Réglages & Intensité ============ */}
-      <section className="grid gap-3">
-        <RubricTitle
-          title="⚙️ Réglages & Intensité Parallaxe"
-          description="Ajustez la force du mouvement de l’arrière-plan, de « Très léger » à « Extrême »."
-        />
+      {/* ---- Zone 4 — la force de l'effet ---- */}
+      <EditorZone
+        tone="detail"
+        title="Force de l’effet parallaxe"
+        scope="L’ampleur du mouvement de l’arrière-plan au défilement, de « Très léger » à « Extrême »."
+      >
         <SelectField
           label="Intensité de l’effet parallaxe"
           tip="7 niveaux de force : plus l’intensité est élevée, plus l’image « voyage » (se décale) au défilement. « Modéré » est le réglage classique."
@@ -246,7 +242,7 @@ export function ModuleHeroParallaxEditor({
           <HelpTip tip="Sur téléphone (< 1024 px), l’effet parallaxe est toujours désactivé : une photo fixe est affichée pour préserver la performance (60 FPS) et la batterie." />
           Mobile : effet parallaxe désactivé (verrouillé) — photo fixe affichée.
         </p>
-      </section>
+      </EditorZone>
 
       {/* Bouton discret de réinitialisation. */}
       <div className="flex justify-end border-t border-border pt-3">

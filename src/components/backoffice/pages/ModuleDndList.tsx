@@ -12,6 +12,7 @@ import { usePagesStore } from "@/components/backoffice/PagesStoreProvider";
 import { Accordion } from "@/components/ui/accordion";
 import type { PageModule } from "@/lib/pages";
 
+import { CurrentPageProvider } from "./CurrentPageContext";
 import { ModuleRow } from "./ModuleRow";
 
 /**
@@ -89,38 +90,43 @@ export function ModuleDndList({ pageId, modules }: ModuleDndListProps) {
   }
 
   return (
-    <DragDropContext onDragEnd={handleDragEnd}>
-      <Droppable droppableId={`modules-${pageId}`}>
-        {(dropProvided) => (
-          <div ref={dropProvided.innerRef} {...dropProvided.droppableProps}>
-            <Accordion
-              type="single"
-              collapsible
-              value={openModuleId}
-              onValueChange={setOpenModuleId}
-              className="space-y-3"
-            >
-              {modules.map((module, index) => (
-                <Draggable key={module.id} draggableId={module.id} index={index}>
-                  {(dragProvided, snapshot) => (
-                    <ModuleRow
-                      module={module}
-                      index={index}
-                      provided={dragProvided}
-                      snapshot={snapshot}
-                      onToggleHidden={handleToggleHidden}
-                      onRemove={handleRemove}
-                      onUpdateModule={(patch) => handleUpdateModule(module.id, patch)}
-                      duplicateAnchor={hasDuplicateAnchor(module)}
-                    />
-                  )}
-                </Draggable>
-              ))}
-              {dropProvided.placeholder}
-            </Accordion>
-          </div>
-        )}
-      </Droppable>
-    </DragDropContext>
+    // Page en cours d'édition exposée aux éditeurs de modules (Étape 11.2) :
+    // le sélecteur de lien du CTA distingue `#ancre` (cette page) de
+    // `/slug#ancre` (autre page) sans prop drilling sur 4 niveaux.
+    <CurrentPageProvider pageId={pageId}>
+      <DragDropContext onDragEnd={handleDragEnd}>
+        <Droppable droppableId={`modules-${pageId}`}>
+          {(dropProvided) => (
+            <div ref={dropProvided.innerRef} {...dropProvided.droppableProps}>
+              <Accordion
+                type="single"
+                collapsible
+                value={openModuleId}
+                onValueChange={setOpenModuleId}
+                className="space-y-3"
+              >
+                {modules.map((module, index) => (
+                  <Draggable key={module.id} draggableId={module.id} index={index}>
+                    {(dragProvided, snapshot) => (
+                      <ModuleRow
+                        module={module}
+                        index={index}
+                        provided={dragProvided}
+                        snapshot={snapshot}
+                        onToggleHidden={handleToggleHidden}
+                        onRemove={handleRemove}
+                        onUpdateModule={(patch) => handleUpdateModule(module.id, patch)}
+                        duplicateAnchor={hasDuplicateAnchor(module)}
+                      />
+                    )}
+                  </Draggable>
+                ))}
+                {dropProvided.placeholder}
+              </Accordion>
+            </div>
+          )}
+        </Droppable>
+      </DragDropContext>
+    </CurrentPageProvider>
   );
 }

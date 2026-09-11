@@ -5,17 +5,20 @@ import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   createGalleryAlbum,
+  galleryBadgeDisplayLabels,
+  galleryBadgeDisplayOrder,
   galleryBadgePositionLabels,
   galleryBadgePositionOrder,
   galleryBadgeStyleLabels,
   galleryBadgeStyleOrder,
   type GalleryAlbum,
+  type GalleryBadgeDisplay,
   type GalleryBadgePosition,
   type GalleryBadgeSettings,
   type GalleryBadgeStyle,
 } from "@/lib/pages";
 
-import { SelectField, TextAreaField, TextField } from "../form-fields";
+import { HelpTip, SelectField, TextAreaField, TextField } from "../form-fields";
 import { SwitchField } from "./fields";
 import { GalleryImagesPanel } from "./GalleryImagesPanel";
 
@@ -23,10 +26,10 @@ import { GalleryImagesPanel } from "./GalleryImagesPanel";
  * ============================================================================
  * GESTIONNAIRE D'ALBUMS — variante PORTFOLIO (Phase 11)
  * ----------------------------------------------------------------------------
- * Thématiques (Mariage, Portrait, Corporate, Paysage…) : création, renommage,
+ * Albums (Mariage, Portrait, Corporate, Paysage…) : création, renommage,
  * description, choix de la couverture, réordonnancement, suppression et
  * édition des photos de chaque album (via `GalleryImagesPanel`).
- * Inclut le paramétrage du **badge de thématique** (visibilité, style, position).
+ * Inclut le paramétrage du **badge de l'album** (visibilité, style, position).
  * ============================================================================
  */
 
@@ -71,64 +74,109 @@ export function AlbumManagerPanel({
   }
 
   function addAlbum() {
-    onChange([...albums, createGalleryAlbum("Nouvelle thématique")]);
+    onChange([...albums, createGalleryAlbum("Nouvel album")]);
   }
 
   return (
     <div className="grid gap-3">
       <div className="flex items-center justify-between">
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Thématiques ({albums.length})
+          {albums.length} album{albums.length > 1 ? "s" : ""}
         </p>
         <Button type="button" variant="outline" size="sm" onClick={addAlbum}>
           <Plus />
-          Ajouter une thématique
+          Ajouter un album
         </Button>
       </div>
 
-      {/* Paramétrage du badge de thématique (surimpression). */}
-      <div className="grid gap-3 rounded-md border border-border bg-background/50 p-3">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Badge de thématique
-        </p>
-        <div className="grid gap-2">
-          <SwitchField
-            label="Afficher le nom du thème"
-            checked={badge.showLabel}
-            onChange={(showLabel) => onChangeBadge({ showLabel })}
-          />
-          <SwitchField
-            label="Afficher le nombre de photos"
-            checked={badge.showCount}
-            onChange={(showCount) => onChangeBadge({ showCount })}
-          />
+      {/* Phrase de cadrage : explique ce qu'est un album à un non-technicien. */}
+      <p className="text-xs text-muted-foreground">
+        Un album regroupe des photos autour d’un thème : mariage, portrait,
+        corporate… Un dossier importé devient un album.
+      </p>
+
+      {/* Affichage sur les couvertures — réglage GLOBAL aux albums de la galerie.
+          Bordure en pointillés = bloc IMBRIQUÉ dans une zone d'édition (11.17),
+          par opposition au cadre plein d'une `EditorZone`. */}
+      <div className="grid gap-3 rounded-md border border-dashed border-border bg-background/40 p-3">
+        <div className="flex items-center gap-1.5">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Affichage sur les couvertures
+          </p>
+          <HelpTip tip="Nom et nombre de photos affichés par-dessus la photo de couverture. Ces réglages s’appliquent à toutes les couvertures d’albums, pas à un album en particulier." />
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <SelectField<GalleryBadgePosition>
-            label="Position"
-            value={badge.position}
-            options={galleryBadgePositionOrder.map((value) => ({
-              value,
-              label: galleryBadgePositionLabels[value],
-            }))}
-            onChange={(position) => onChangeBadge({ position })}
-          />
-          <SelectField<GalleryBadgeStyle>
-            label="Style"
-            value={badge.style}
-            options={galleryBadgeStyleOrder.map((value) => ({
-              value,
-              label: galleryBadgeStyleLabels[value],
-            }))}
-            onChange={(style) => onChangeBadge({ style })}
-          />
-        </div>
+
+        {/* 1. QUAND afficher (aucun / permanent / au survol). */}
+        <SelectField<GalleryBadgeDisplay>
+          label="Quand afficher ces informations ?"
+          value={badge.display}
+          options={galleryBadgeDisplayOrder.map((value) => ({
+            value,
+            label: galleryBadgeDisplayLabels[value],
+          }))}
+          onChange={(display) => onChangeBadge({ display })}
+        />
+
+        {badge.display === "hover" ? (
+          <p className="text-xs text-muted-foreground">
+            Au survol de la souris — et toujours visible sur téléphone et
+            tablette, où le doigt ne peut pas survoler la photo.
+          </p>
+        ) : null}
+
+        {badge.display === "none" ? (
+          <p className="rounded-md border border-dashed border-border bg-background/50 px-3 py-2 text-xs text-muted-foreground">
+            Aucune information ne sera affichée sur les couvertures : les
+            réglages de contenu, de position et de style sont sans objet.
+          </p>
+        ) : (
+          <>
+            {/* 2. QUOI afficher. */}
+            <div className="grid gap-2">
+              <p className="text-xs font-medium text-foreground">
+                Que faut-il afficher ?
+              </p>
+              <SwitchField
+                label="Le nom de l’album"
+                checked={badge.showLabel}
+                onChange={(showLabel) => onChangeBadge({ showLabel })}
+              />
+              <SwitchField
+                label="Le nombre de photos"
+                checked={badge.showCount}
+                onChange={(showCount) => onChangeBadge({ showCount })}
+              />
+            </div>
+
+            {/* 3. COMMENT l'afficher (position + style). */}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <SelectField<GalleryBadgePosition>
+                label="Position"
+                value={badge.position}
+                options={galleryBadgePositionOrder.map((value) => ({
+                  value,
+                  label: galleryBadgePositionLabels[value],
+                }))}
+                onChange={(position) => onChangeBadge({ position })}
+              />
+              <SelectField<GalleryBadgeStyle>
+                label="Style"
+                value={badge.style}
+                options={galleryBadgeStyleOrder.map((value) => ({
+                  value,
+                  label: galleryBadgeStyleLabels[value],
+                }))}
+                onChange={(style) => onChangeBadge({ style })}
+              />
+            </div>
+          </>
+        )}
       </div>
 
       {albums.length === 0 ? (
         <p className="rounded-md border border-dashed border-border bg-background/50 px-3 py-4 text-center text-xs text-muted-foreground">
-          Aucune thématique. Cliquez sur « Ajouter une thématique » puis importez
-          les photos de l’album (un dossier complet crée idéalement un album).
+          Aucun album. Cliquez sur « Ajouter un album », puis importez ses photos
+          (un dossier complet crée idéalement un album).
         </p>
       ) : (
         <ul className="grid gap-4">
@@ -136,6 +184,11 @@ export function AlbumManagerPanel({
             const visibleImages = album.images.filter(
               (image) => image.url !== ""
             );
+            // Repère lisible : numéro d'ordre + nom réel de l'album (Étape 11.17).
+            const albumName = album.label.trim();
+            const albumHeading = `Album ${albumIndex + 1} — ${
+              albumName !== "" ? albumName : "à nommer"
+            }`;
             return (
               <li
                 key={album.id}
@@ -143,7 +196,7 @@ export function AlbumManagerPanel({
               >
                 <div className="flex items-start justify-between gap-2">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Thématique {albumIndex + 1}
+                    {albumHeading}
                   </p>
                   <div className="flex items-center gap-1">
                     <Button
@@ -153,7 +206,7 @@ export function AlbumManagerPanel({
                       className="size-7"
                       disabled={albumIndex === 0}
                       onClick={() => moveAlbum(albumIndex, albumIndex - 1)}
-                      aria-label="Monter la thématique"
+                      aria-label="Monter l’album"
                     >
                       <ArrowUp className="size-3.5" />
                     </Button>
@@ -164,7 +217,7 @@ export function AlbumManagerPanel({
                       className="size-7"
                       disabled={albumIndex === albums.length - 1}
                       onClick={() => moveAlbum(albumIndex, albumIndex + 1)}
-                      aria-label="Descendre la thématique"
+                      aria-label="Descendre l’album"
                     >
                       <ArrowDown className="size-3.5" />
                     </Button>
@@ -174,7 +227,7 @@ export function AlbumManagerPanel({
                       size="icon"
                       className="size-7 text-destructive hover:text-destructive"
                       onClick={() => removeAlbum(album.id)}
-                      aria-label="Supprimer la thématique"
+                      aria-label="Supprimer l’album"
                     >
                       <Trash2 className="size-3.5" />
                     </Button>
@@ -183,7 +236,7 @@ export function AlbumManagerPanel({
 
                 <div className="grid gap-3 sm:grid-cols-2">
                   <TextField
-                    label="Nom du thème"
+                    label="Nom de l’album"
                     value={album.label}
                     placeholder="Ex. Mariage"
                     onChange={(label) => updateAlbum(album.id, { label })}
@@ -213,7 +266,7 @@ export function AlbumManagerPanel({
                 </div>
 
                 <TextAreaField
-                  label="Description du thème"
+                  label="Description de l’album"
                   value={album.description}
                   placeholder="Ex. Cérémonies, préparatifs et portraits de mariés…"
                   onChange={(description) =>
@@ -222,7 +275,7 @@ export function AlbumManagerPanel({
                 />
 
                 <GalleryImagesPanel
-                  title={`Photos de la thématique (${album.images.length})`}
+                  title={`Photos de l’album (${album.images.length})`}
                   images={album.images}
                   onChange={(images) => updateAlbum(album.id, { images })}
                   emptyHint="Aucune photo dans cet album. Importez un dossier complet ou plusieurs photos."

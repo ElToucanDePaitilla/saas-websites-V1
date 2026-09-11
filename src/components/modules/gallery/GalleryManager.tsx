@@ -23,8 +23,8 @@ import { LightboxModal } from "./LightboxModal";
  *   - **static**    : grille figée, aucun déclencheur (`trigger: "none"`) ;
  *   - **dynamic**   : double-clic → Lightbox de **toutes** les images de la
  *                     galerie, ouverte sur l'image cliquée ;
- *   - **portfolio** : couvertures d'albums (badge thème + nombre), clic simple
- *                     → Lightbox **exclusive à l'album** de la thématique.
+ *   - **portfolio** : couvertures d'albums (badge album + nombre), clic simple
+ *                     → Lightbox **exclusive à l'album**.
  *
  * La `LightboxModal` est **montée à l'ouverture** (état local) : son index
  * initial est ainsi fixé sans synchronisation d'effet.

@@ -218,8 +218,13 @@ const galleryLightboxSchema = z.object({
   showCaption: z.boolean(),
 });
 
-/** Badge / titre de thématique (Portfolio). */
+/**
+ * Affichage sur les couvertures d'albums (Portfolio).
+ * `display` est **optionnel** : un contenu enregistré avant l'ajout du réglage
+ * reste valide (`resolveGalleryBadge` applique alors « always »).
+ */
 const galleryBadgeSchema = z.object({
+  display: z.enum(["none", "always", "hover"]).optional(),
   showLabel: z.boolean(),
   showCount: z.boolean(),
   position: z.enum([
@@ -266,7 +271,7 @@ const galleryDynamicContentSchema = gallerySharedSchema.extend({
   images: z.array(galleryImageSchema),
 });
 
-/** Album thématique (GalleryAlbum). */
+/** Album de galerie (GalleryAlbum). */
 const galleryAlbumSchema = z.object({
   id: z.string().min(1),
   label: z.string(),

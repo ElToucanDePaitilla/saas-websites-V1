@@ -1214,8 +1214,8 @@ export type GalleryHoverAnimation = "active" | "none";
 
 /** Libellés français (Select, cf. design « Animation d’entrée »). */
 export const galleryHoverAnimationLabels: Record<GalleryHoverAnimation, string> = {
-  active: "Animation active",
-  none: "Aucune animation",
+  active: "Zoom et élévation douce",
+  none: "Aucun effet",
 };
 
 /** Ordre d'affichage dans le sélecteur. */
@@ -1231,7 +1231,7 @@ export const galleryHoverAnimationOrder: GalleryHoverAnimation[] = [
    `variant` (comme la rubrique Héro) :
      - static    : décor / mosaïque fixe, aucune interactivité de clic ;
      - dynamic   : grille interactive, double-clic → diaporama complet ;
-     - portfolio : couvertures thématiques, clic simple → album exclusif.
+     - portfolio : couvertures d'albums, clic simple → album exclusif.
    Socle commun : mise en page, effet de finition (exclusif), ombre, bordure,
    CTA de pied de galerie et réglages de Lightbox. Zéro `any`.
 
@@ -1283,7 +1283,7 @@ export interface GalleryLightboxSettings {
   showCaption: boolean;
 }
 
-/** Position du badge de thématique sur la couverture (Portfolio). */
+/** Position du badge de l'album sur la couverture (Portfolio). */
 export type GalleryBadgePosition =
   | "top-left"
   | "top-right"
@@ -1291,11 +1291,27 @@ export type GalleryBadgePosition =
   | "bottom-right"
   | "center";
 
-/** Style visuel du badge de thématique. */
+/** Style visuel du badge d'album. */
 export type GalleryBadgeStyle = "solid" | "glass" | "outline";
 
-/** Badge / titre de thématique en surimpression (Portfolio). */
+/**
+ * Moment d'affichage du texte de couverture (Portfolio) :
+ *   - `always` : toujours visible (défaut — comportement historique) ;
+ *   - `hover`  : révélé au survol de la couverture **et** au focus clavier ;
+ *   - `none`   : aucun texte sur les couvertures.
+ */
+export type GalleryBadgeDisplay = "none" | "always" | "hover";
+
+/**
+ * Affichage sur les couvertures d'albums (Portfolio).
+ *
+ * Distinction volontaire entre **quoi** afficher (`showLabel` / `showCount`) et
+ * **quand** l'afficher (`display`) : les deux réglages sont indépendants, ce qui
+ * évite d'avoir à reconfigurer le contenu quand on change seulement le moment.
+ */
 export interface GalleryBadgeSettings {
+  /** Moment d'affichage (voir `GalleryBadgeDisplay`). */
+  display: GalleryBadgeDisplay;
   showLabel: boolean;
   showCount: boolean;
   position: GalleryBadgePosition;
@@ -1353,7 +1369,7 @@ export interface GalleryBaseShared {
   cta: GalleryCtaSettings;
   /** Réglages du diaporama (zoom, EXIF, légendes). */
   lightbox: GalleryLightboxSettings;
-  /** Badge de thématique (exploité par la variante portfolio). */
+  /** Badge d'album (exploité par la variante portfolio). */
   badge: GalleryBadgeSettings;
 }
 
@@ -1369,10 +1385,10 @@ export interface GalleryDynamicContent extends GalleryBaseShared {
   images: GalleryImage[];
 }
 
-/** Album thématique de la galerie PORTFOLIO. */
+/** Album de la galerie PORTFOLIO. */
 export interface GalleryAlbum {
   id: string;
-  /** Nom du thème (ex. « Mariage », « Portrait »). */
+  /** Nom de l'album (ex. « Mariage », « Portrait »). */
   label: string;
   description: string;
   /** Id de l'image de couverture (dans `images`) ; null ⇒ première image. */
@@ -1380,7 +1396,7 @@ export interface GalleryAlbum {
   images: GalleryImage[];
 }
 
-/** Galerie PORTFOLIO — couvertures thématiques, clic simple → album. */
+/** Galerie PORTFOLIO — couvertures d'albums, clic simple → album. */
 export interface GalleryPortfolioContent extends GalleryBaseShared {
   variant: "portfolio";
   albums: GalleryAlbum[];
@@ -1397,15 +1413,15 @@ export type ModuleVariant = HeroVariant | GalleryModuleVariant;
 
 /** Libellés français des variantes de galerie (catalogue / éditeur). */
 export const galleryVariantLabels: Record<GalleryModuleVariant, string> = {
-  static: "Gallery Static",
-  dynamic: "Gallery Dynamic",
-  portfolio: "Gallery Portfolio",
+  static: "Galerie fixe",
+  dynamic: "Galerie interactive",
+  portfolio: "Galerie portfolio",
 };
 
 /** Libellés français des modes d'affichage de la grille. */
 export const galleryDisplayLabels: Record<GalleryDisplayMode, string> = {
-  uniform: "Uniforme",
-  masonry: "Masonry",
+  uniform: "Grille régulière",
+  masonry: "Mosaïque (hauteurs libres)",
 };
 
 /** Ordre d'affichage des modes d'affichage (Select éditeur). */
@@ -1439,9 +1455,9 @@ export const galleryEffectIntensityLabels: Record<
   GalleryEffectIntensity,
   string
 > = {
-  light: "Light",
-  normal: "Normal",
-  strong: "Strong",
+  light: "Légère",
+  normal: "Normale",
+  strong: "Marquée",
 };
 
 /** Ordre d'affichage des niveaux d'ombre. */
@@ -1456,10 +1472,10 @@ export const galleryShadowOrder: GalleryShadowLevel[] = [
 /** Libellés français des niveaux d'ombre. */
 export const galleryShadowLabels: Record<GalleryShadowLevel, string> = {
   none: "Aucune",
-  light: "Light",
-  medium: "Medium",
-  normal: "Normal",
-  strong: "Strong",
+  light: "Très discrète",
+  medium: "Discrète",
+  normal: "Normale",
+  strong: "Forte",
 };
 
 /** Ordre d'affichage des positions de badge. */
@@ -1492,6 +1508,20 @@ export const galleryBadgeStyleLabels: Record<GalleryBadgeStyle, string> = {
   solid: "Plein (foncé)",
   glass: "Sous-verre",
   outline: "Contour clair",
+};
+
+/** Ordre d'affichage des moments d'affichage du texte de couverture. */
+export const galleryBadgeDisplayOrder: GalleryBadgeDisplay[] = [
+  "always",
+  "hover",
+  "none",
+];
+
+/** Libellés français des moments d'affichage (formulés pour un non-technicien). */
+export const galleryBadgeDisplayLabels: Record<GalleryBadgeDisplay, string> = {
+  always: "Affiché en permanence",
+  hover: "Affiché au survol de la photo",
+  none: "Aucun affichage",
 };
 
 /** Valeurs par défaut de la mise en page (toutes variantes). */
@@ -1536,8 +1566,11 @@ export const DEFAULT_GALLERY_LIGHTBOX: GalleryLightboxSettings = {
   showCaption: true,
 };
 
-/** Valeurs par défaut du badge de thématique (Portfolio). */
+/** Valeurs par défaut du badge d'album (Portfolio). */
 export const DEFAULT_GALLERY_BADGE: GalleryBadgeSettings = {
+  // « always » préserve le rendu des contenus enregistrés avant l'ajout du
+  // réglage (aucun champ `display` persisté) : aucune migration nécessaire.
+  display: "always",
   showLabel: true,
   showCount: true,
   position: "bottom-left",
@@ -1730,10 +1763,15 @@ export function resolveGalleryLightbox(raw: unknown): GalleryLightboxSettings {
   };
 }
 
-/** Normalise le badge de thématique (visibilité / style / position). */
+/** Normalise le badge d'album (moment, visibilité, style, position). */
 export function resolveGalleryBadge(raw: unknown): GalleryBadgeSettings {
   const record = isRecord(raw) ? raw : {};
   return {
+    display: galleryBadgeDisplayOrder.includes(
+      record.display as GalleryBadgeDisplay
+    )
+      ? (record.display as GalleryBadgeDisplay)
+      : DEFAULT_GALLERY_BADGE.display,
     showLabel:
       typeof record.showLabel === "boolean"
         ? record.showLabel
@@ -1797,7 +1835,7 @@ function resolveGalleryAlbums(raw: unknown): GalleryAlbum[] {
         : (images[0]?.id ?? null);
     return {
       id: readString(record.id, crypto.randomUUID()),
-      label: readString(record.label, "Thématique"),
+      label: readString(record.label, "Album"),
       description: readString(record.description, ""),
       coverImageId,
       images,
@@ -1847,7 +1885,7 @@ export function createGalleryDynamicContent(): GalleryDynamicContent {
   };
 }
 
-/** Fabrique un album thématique vide. */
+/** Fabrique un album vide. */
 export function createGalleryAlbum(label: string): GalleryAlbum {
   return {
     id: crypto.randomUUID(),
@@ -1858,7 +1896,7 @@ export function createGalleryAlbum(label: string): GalleryAlbum {
   };
 }
 
-/** Fabrique une galerie portfolio (défauts : 2 thématiques d'exemple). */
+/** Fabrique une galerie portfolio (aucun album pré-créé). */
 export function createGalleryPortfolioContent(): GalleryPortfolioContent {
   return {
     variant: "portfolio",
@@ -1874,8 +1912,8 @@ export function createGalleryPortfolioContent(): GalleryPortfolioContent {
     cta: { ...DEFAULT_GALLERY_CTA },
     lightbox: { ...DEFAULT_GALLERY_LIGHTBOX, zoomEnabled: true },
     badge: { ...DEFAULT_GALLERY_BADGE },
-    // Aucun album pré-créé : les thématiques sont ajoutées dynamiquement
-    // (autant que souhaité) depuis l'éditeur, chacune avec ses propres photos.
+    // Aucun album pré-créé : les albums sont ajoutés dynamiquement
+    // (autant que souhaité) depuis l'éditeur, chacun avec ses propres photos.
     albums: [],
   };
 }
@@ -2126,7 +2164,7 @@ export const moduleCatalog: ModuleCatalogEntry[] = [
     label: "Gallery Portfolio",
     category: "Galeries & Portfolio",
     description:
-      "Couvertures thématiques en albums : chaque thème ouvre son propre diaporama.",
+      "Couvertures d'albums : chaque album ouvre son propre diaporama.",
   },
   {
     id: "cta-banner",

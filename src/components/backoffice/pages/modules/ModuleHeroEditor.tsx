@@ -25,20 +25,23 @@ import {
 import { cn } from "@/lib/utils";
 
 import { ArtSourceField } from "./ArtSourceField";
+import { EditorZone } from "./EditorZone";
 import { SelectField, TextAreaField, TextField } from "./form-fields";
 
 /**
  * ============================================================================
- * ÉDITEUR DE CONTENU — Module « Hero » (Étape 7.1 — HeroStatic)
+ * ÉDITEUR DE CONTENU — Module « Hero » (Étape 7.1 — HeroStatic, revu en 11.17)
  * ----------------------------------------------------------------------------
- * Formulaire contrôlé par le store (réactivité immédiate). Organisé en **3
- * rubriques** pour les utilisateurs non-techniques :
- *   1. 🖼️ Images de fond    — art-direction responsive `<picture>` (desktop
- *      16:9 / tablette 4:3 optionnelle / mobile 9:16) + vignettes + alt SEO ;
- *   2. 📝 Textes & Bouton   — overlay, textes (H1/H2/paragraphe), couleur,
- *      graisses de police et CTA optionnel ;
- *   3. 🎬 Animations & Effets — animation d'entrée (source unique : le scalaire
- *      `module.animation` partagé — cf. plans/ROADMAP-7.1 D-3).
+ * Formulaire contrôlé par le store (réactivité immédiate). Organisé en **zones**
+ * portant chacune un titre qui nomme sa cible et une phrase qui dit sa portée
+ * (Étape 11.17, plans/ROADMAP-11.17-editor-zones-ux.md §5) :
+ *   1. 🖼️ **Image de fond**              — art-direction responsive `<picture>`
+ *      (desktop 16:9 / tablette 4:3 optionnelle / mobile 9:16) + alt SEO ;
+ *   2. 📝 **Textes affichés sur la photo** — overlay, H1/H2/paragraphe, couleur,
+ *      graisses de police ;
+ *   3. 🔗 **Bouton d'appel à l'action**   — libellé, style et destination ;
+ *   4. 🎬 **Animation d'apparition**      — source unique : le scalaire
+ *      `module.animation` partagé (cf. plans/ROADMAP-7.1 D-3).
  * Le contenu est normalisé à la lecture (`resolveHeroContent`) puis chaque
  * changement commite un contenu complet en bloc vers le store.
  * ============================================================================
@@ -66,26 +69,6 @@ const OVERLAY_OPTIONS = toOptions(heroOverlayOrder, heroOverlayLabels);
 const CTA_STYLE_OPTIONS = toOptions(heroCtaStyleOrder, heroCtaStyleLabels);
 const TEXT_TONE_OPTIONS = toOptions(heroTextToneOrder, heroTextToneLabels);
 const ANIMATION_OPTIONS = toOptions(moduleAnimationOrder, moduleAnimationLabels);
-
-/** Titre d'une rubrique (3 sections de la fiche HeroStatic). */
-function RubricTitle({
-  title,
-  description,
-}: {
-  title: string;
-  description?: string;
-}) {
-  return (
-    <div className="grid gap-1">
-      <h5 className="text-[13px] font-semibold text-foreground">{title}</h5>
-      {description ? (
-        <p className="text-xs leading-relaxed text-muted-foreground">
-          {description}
-        </p>
-      ) : null}
-    </div>
-  );
-}
 
 export function ModuleHeroEditor({
   content,
@@ -134,12 +117,12 @@ export function ModuleHeroEditor({
 
   return (
     <div className="grid gap-5">
-      {/* ============ Rubrique 1 — 🖼️ Images de fond ============ */}
-      <section className="grid gap-3">
-        <RubricTitle
-          title="🖼️ Images de fond"
-          description="Trois versions de la même photo pour chaque écran (ordinateur, tablette, mobile). Le site choisit automatiquement la bonne — pas besoin d’y penser."
-        />
+      {/* ---- Zone 1 — l'image de fond ---- */}
+      <EditorZone
+        tone="style"
+        title="Image de fond"
+        scope="Trois versions de la même photo, une par type d’écran : ordinateur, tablette et mobile. Le site choisit automatiquement la bonne — vous n’avez rien à régler."
+      >
         <ArtSourceField
           label="Image ordinateur (paysage 16:9)"
           ratio="16:9"
@@ -162,14 +145,14 @@ export function ModuleHeroEditor({
           onChange={(value) => setMediaSource("tablet", value)}
           note="Optionnel : si vous la laissez vide, l’image « ordinateur » est affichée automatiquement sur tablette."
         />
-      </section>
+      </EditorZone>
 
-      {/* ============ Rubrique 2 — 📝 Textes & Bouton ============ */}
-      <section className="grid gap-3">
-        <RubricTitle
-          title="📝 Textes & Bouton"
-          description="Le contenu affiché au centre du Héro : titre, sous-titre, description et bouton d’action."
-        />
+      {/* ---- Zone 2 — les textes affichés sur la photo ---- */}
+      <EditorZone
+        tone="content"
+        title="Textes affichés sur la photo"
+        scope="Le titre, le sous-titre et le paragraphe présentés au centre de la section, par-dessus l’image."
+      >
 
         <SelectField
           label="Assombrissement de la photo"
@@ -231,9 +214,15 @@ export function ModuleHeroEditor({
             tip="Épaisseur du trait du paragraphe de description."
           />
         </div>
+      </EditorZone>
 
-        {/* Bouton CTA optionnel */}
-        <div className="rounded-lg border border-border bg-background/60 p-3">
+      {/* ---- Zone 3 — le bouton d'appel à l'action ---- */}
+      <EditorZone
+        tone="action"
+        title="Bouton d’appel à l’action"
+        scope="Le bouton affiché sous vos textes : son libellé, son style et la destination du visiteur qui clique."
+      >
+        <div className="rounded-md border border-dashed border-border bg-background/40 p-3">
           <div className="flex items-center justify-between gap-3">
             <label
               htmlFor="hero-cta-show"
@@ -280,14 +269,14 @@ export function ModuleHeroEditor({
             </div>
           ) : null}
         </div>
-      </section>
+      </EditorZone>
 
-      {/* ============ Rubrique 3 — 🎬 Animations & Effets ============ */}
-      <section className="grid gap-3">
-        <RubricTitle
-          title="🎬 Animations & Effets"
-          description="L’animation d’apparition du bloc lorsque le visiteur arrive sur la page. Effet fluide (transparence et déplacement) et désactivé automatiquement si l’on préfère réduire les mouvements."
-        />
+      {/* ---- Zone 4 — l'animation d'apparition ---- */}
+      <EditorZone
+        tone="detail"
+        title="Animation d’apparition"
+        scope="Comment la section apparaît lorsque le visiteur arrive sur la page. L’effet est automatiquement désactivé si l’internaute préfère limiter les mouvements."
+      >
         <SelectField
           label="Animation d’entrée"
           value={moduleAnimation}
@@ -298,10 +287,10 @@ export function ModuleHeroEditor({
         />
         {!onChangeModule ? (
           <p className="text-xs text-muted-foreground">
-            Réglage d’animation disponible dans « Réglages » du module.
+            Réglage d’animation disponible dans « Réglages avancés » du module.
           </p>
         ) : null}
-      </section>
+      </EditorZone>
 
       {/* Bouton discret de réinitialisation aux valeurs de démonstration. */}
       <div className="flex justify-end border-t border-border pt-3">

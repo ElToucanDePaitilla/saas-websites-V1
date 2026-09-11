@@ -5,18 +5,26 @@ import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ModuleContent, ServiceItem } from "@/lib/pages";
 
+import { EditorZone } from "./EditorZone";
 import { TextAreaField, TextField } from "./form-fields";
 
 /**
  * ============================================================================
- * ÉDITEUR DE CONTENU — Module « Services / Tarifs » (Étape 3.4)
+ * ÉDITEUR DE CONTENU — Module « Services / Tarifs » (Étape 3.4 / 11.17)
  * ----------------------------------------------------------------------------
- * Formule le contenu des cartes de prestations : titre de section, introduction
- * et liste d'items (titre, description, prix) avec ajout / suppression.
- * Contrôlé par le store : chaque changement reconstruit le tableau `items`
- * (immuable) puis commit le `content` complet en bloc.
+ * Formulaire des cartes de prestations : titre de section, introduction et liste
+ * d'items (titre, description, prix) avec ajout / suppression. Contrôlé par le
+ * store : chaque changement reconstruit le tableau `items` (immuable) puis
+ * commit le `content` complet en bloc.
  *
- * Référence : plans/ROADMAP-3.4-crud-expanded.md §1.3.3
+ * Étape 11.17 : deux `EditorZone` séparent **l'en-tête de la section** de **la
+ * liste des prestations**, et chacune énonce sa portée — au lieu de champs à
+ * plat sans repère (plans/ROADMAP-11.17-editor-zones-ux.md §0.1). Les cartes de
+ * prestations sont passées en bordure **pointillée**, convention des blocs
+ * imbriqués dans une zone.
+ *
+ * Références : plans/ROADMAP-3.4-crud-expanded.md §1.3.3 —
+ *              plans/ROADMAP-11.17-editor-zones-ux.md §5
  * ============================================================================
  */
 
@@ -64,38 +72,49 @@ export function ModuleServicesEditor({
 
   return (
     <div className="grid gap-4">
-      <TextField
-        label="Titre de la section"
-        value={content.heading}
-        onChange={(heading) => onChangeContent({ ...content, heading })}
-      />
-      <TextAreaField
-        label="Introduction"
-        value={content.intro}
-        rows={2}
-        hint="Phrase d’accroche au-dessus des cartes de prestations."
-        onChange={(intro) => onChangeContent({ ...content, intro })}
-      />
+      <EditorZone
+        tone="content"
+        title="En-tête de la section"
+        scope="Le titre et la phrase d’introduction affichés au-dessus des cartes de prestations, sur le site public."
+      >
+        <TextField
+          label="Titre affiché sur le site"
+          value={content.heading}
+          onChange={(heading) => onChangeContent({ ...content, heading })}
+          hint="Titre visible au-dessus des prestations."
+        />
+        <TextAreaField
+          label="Phrase d’introduction"
+          value={content.intro}
+          rows={2}
+          hint="Quelques mots d’accroche au-dessus des cartes."
+          onChange={(intro) => onChangeContent({ ...content, intro })}
+        />
+      </EditorZone>
 
-      <div className="grid gap-3">
+      <EditorZone
+        tone="style"
+        title="Prestations et tarifs"
+        scope="Chaque carte présentée au visiteur : son intitulé, sa description et son prix. Leur ordre est celui de la liste ci-dessous."
+      >
         <div className="flex items-center justify-between">
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Prestations ({content.items.length})
           </p>
           <Button type="button" variant="outline" size="sm" onClick={addItem}>
             <Plus />
-            Ajouter
+            Ajouter une prestation
           </Button>
         </div>
 
         {content.items.map((item, itemIndex) => (
           <div
             key={item.id}
-            className="grid gap-3 rounded-md border border-border bg-background/50 p-3"
+            className="grid gap-3 rounded-md border border-dashed border-border bg-background/40 p-3"
           >
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs font-semibold text-muted-foreground">
-                Item {itemIndex + 1}
+                Prestation {itemIndex + 1}
               </p>
               <Button
                 type="button"
@@ -110,7 +129,7 @@ export function ModuleServicesEditor({
               </Button>
             </div>
             <TextField
-              label="Titre"
+              label="Intitulé"
               value={item.title}
               placeholder="Ex. Séance portrait"
               onChange={(title) => updateItem(item.id, { title })}
@@ -132,10 +151,11 @@ export function ModuleServicesEditor({
 
         {content.items.length === 0 ? (
           <p className="rounded-md border border-dashed border-border bg-background/50 px-3 py-4 text-center text-xs text-muted-foreground">
-            Aucune prestation. Cliquez sur « Ajouter » pour créer la première.
+            Aucune prestation. Cliquez sur « Ajouter une prestation » pour créer la
+            première.
           </p>
         ) : null}
-      </div>
+      </EditorZone>
     </div>
   );
 }

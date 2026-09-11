@@ -3,11 +3,19 @@ import { cn } from "@/lib/utils";
 
 /**
  * ============================================================================
- * BADGE DE THÉMATIQUE — surimpression album (Phase 11, Portfolio)
+ * TEXTE DE COUVERTURE D'ALBUM — surimpression Portfolio (Phase 11 / 11.16)
  * ----------------------------------------------------------------------------
- * Affiche le nom du thème de l'album et/ou le nombre de photos contenues,
- * en surimpression de la couverture. Visibilité, style et position sont
- * entièrement pilotés par `GalleryBadgeSettings` (paramétrable en éditeur).
+ * Affiche le nom de l'album et/ou le nombre de photos contenues, en
+ * surimpression de la photo de couverture. Trois réglages indépendants :
+ *   - QUAND   : `display` = `none` (rien) / `always` (permanent) / `hover` ;
+ *   - QUOI    : `showLabel` (nom) et `showCount` (nombre de photos) ;
+ *   - COMMENT : `style` et `position`.
+ *
+ * Mode « au survol » : l'opacité est pilotée par l'utilitaire CSS
+ * `cover-text-hover` (voir `globals.css`), qui repasse AUTOMATIQUEMENT en
+ * affichage permanent sur les appareils sans survol réel (tactile) — sinon le
+ * nom de l'album serait invisible au doigt. Le focus clavier le révèle aussi.
+ *
  * Typographie fluide (`clamp()`) pour rester lisible de < 350 px à 4K.
  * ============================================================================
  */
@@ -39,6 +47,11 @@ export function GalleryAlbumBadge({
   label,
   count,
 }: GalleryAlbumBadgeProps) {
+  // « Aucun affichage » : rien du tout, indépendamment de la sélection de contenu.
+  if (settings.display === "none") {
+    return null;
+  }
+  // Rien à montrer (nom et nombre désactivés) : aucun cadre vide n'est rendu.
   if (!settings.showLabel && !settings.showCount) {
     return null;
   }
@@ -47,6 +60,8 @@ export function GalleryAlbumBadge({
     <span
       className={cn(
         "pointer-events-none absolute z-10 flex max-w-[85%] items-center gap-2 rounded-full px-3 py-1 shadow-sm",
+        // `display` absent (contenu antérieur) → aucune classe : rendu permanent.
+        settings.display === "hover" && "cover-text-hover",
         STYLE_CLASSES[settings.style],
         POSITION_CLASSES[settings.position]
       )}
