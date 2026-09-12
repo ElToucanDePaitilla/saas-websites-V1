@@ -129,7 +129,7 @@ export function GalleryImagesPanel({
   return (
     <div className="grid gap-3">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <p className="text-[13px] font-semibold leading-snug text-foreground">
           {title} ({images.length})
         </p>
         <Button type="button" variant="outline" size="sm" onClick={addImage}>

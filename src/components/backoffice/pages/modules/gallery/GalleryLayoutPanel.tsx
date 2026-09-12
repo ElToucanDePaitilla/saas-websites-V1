@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  galleryDisplayDescriptions,
   galleryDisplayLabels,
   galleryDisplayOrder,
   type GalleryDisplayMode,
@@ -11,21 +12,25 @@ import { SelectField, TextField } from "../form-fields";
 
 /**
  * ============================================================================
- * BLOC « DISPOSITION DE LA GRILLE » — Galeries (Phase 11 / révisé en 11.17)
+ * PANNEAU « DISPOSITION DES VIGNETTES » — Galerie (Phase 11, réorganisé 11.20.c)
  * ----------------------------------------------------------------------------
- * Type de grille, colonnes, écarts et arrondi — réglages communs aux trois
- * variantes.
+ * Uniquement **l'agencement** : combien de vignettes par ligne, avec quel
+ * espacement, et sous quel format (toutes identiques / chacune le sien).
  *
- * Étape 11.17 :
- *   - le bloc n'a **plus sa propre boîte ni son titre** : ils sont fournis par
- *     `EditorZone`, qui porte le titre (« Disposition des photos ») et la phrase
- *     de portée. Le panneau ne rend plus que les champs.
- *   - les **réglages de survol** (effet de survol, voile dégradé) sont partis
- *     dans `GalleryHoverPanel` : ils étaient auparavant éclatés entre ce panneau
- *     et `ModuleSettingsForm`, deux contrôles écrivant la même valeur
- *     (plans/ROADMAP-11.17-editor-zones-ux.md §0.4 et §3.2).
+ * **L'arrondi n'est plus ici** : il est passé dans le bloc « Format des
+ * couvertures » (`EffectSettingsPanel`), aux côtés de l'encadrement et de
+ * l'ombre portée — c'est là qu'on décide de l'aspect d'une vignette, et c'est
+ * cette proximité qui manquait (constat de recette : l'arrondi *paraissait*
+ * incompatible avec l'encadrement, faute d'être réglé au même endroit).
  *
- * Référence : plans/ROADMAP-11.17-editor-zones-ux.md §4.3
+ * Ordre des champs : du plus structurant (le nombre de colonnes) au plus
+ * qualitatif (le format d'affichage), pour qu'un non-technicien descende la
+ * logique au lieu de rencontrer un choix de style avant de savoir combien de
+ * colonnes il aura.
+ *
+ * Les libellés restent **neutres** (« vignettes », « format ») : cette zone est
+ * partagée par les trois variantes, c'est la **sous-zone parente** qui nomme
+ * l'objet (couvertures d'albums ou photos).
  * ============================================================================
  */
 
@@ -49,20 +54,9 @@ export function GalleryLayoutPanel({
 }: GalleryLayoutPanelProps) {
   return (
     <div className="grid gap-3">
-      <SelectField<GalleryDisplayMode>
-        label="Type de grille"
-        value={layout.display}
-        options={galleryDisplayOrder.map((value) => ({
-          value,
-          label: galleryDisplayLabels[value],
-        }))}
-        onChange={(display) => onChange({ display })}
-        hint="Grille régulière : toutes les photos ont la même hauteur. Mosaïque : les colonnes gardent des hauteurs libres."
-      />
-
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <TextField
-          label="Colonnes"
+          label="Nombre de colonnes"
           type="number"
           value={String(layout.columns)}
           onChange={(value) => {
@@ -71,7 +65,7 @@ export function GalleryLayoutPanel({
               onChange({ columns: parsed });
             }
           }}
-          hint="Photos par ligne (1 à 6). Réduit automatiquement sur mobile."
+          hint="Vignettes par ligne (1 à 6). Réduit automatiquement sur mobile."
         />
         <TextField
           label="Écart horizontal"
@@ -83,7 +77,7 @@ export function GalleryLayoutPanel({
               onChange({ gapHorizontal: parsed });
             }
           }}
-          hint="Espace entre deux photos (px)."
+          hint="Espace entre deux vignettes (px)."
         />
         <TextField
           label="Écart vertical"
@@ -97,19 +91,21 @@ export function GalleryLayoutPanel({
           }}
           hint="Espace entre deux lignes (px)."
         />
-        <TextField
-          label="Arrondi des coins"
-          type="number"
-          value={String(layout.radius)}
-          onChange={(value) => {
-            const parsed = parseBounded(value, 0, 200);
-            if (parsed !== null) {
-              onChange({ radius: parsed });
-            }
-          }}
-          hint="Courbure des coins (px)."
-        />
       </div>
+
+      {/* Chaque option porte **sa propre explication** dans la liste déroulante :
+          aucune phrase d'aide sous le champ, qui ne ferait que la redire. */}
+      <SelectField<GalleryDisplayMode>
+        label="Format d’affichage"
+        value={layout.display}
+        options={galleryDisplayOrder.map((value) => ({
+          value,
+          label: galleryDisplayLabels[value],
+          description: galleryDisplayDescriptions[value],
+        }))}
+        onChange={(display) => onChange({ display })}
+        tip="Comment les vignettes se présentent les unes par rapport aux autres. Cela ne change que la forme des cases, jamais les images."
+      />
     </div>
   );
 }

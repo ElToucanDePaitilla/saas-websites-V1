@@ -1,291 +1,105 @@
 "use client";
 
-import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
+import type { GalleryAlbum } from "@/lib/pages";
 
-import { Button } from "@/components/ui/button";
-import {
-  createGalleryAlbum,
-  galleryBadgeDisplayLabels,
-  galleryBadgeDisplayOrder,
-  galleryBadgePositionLabels,
-  galleryBadgePositionOrder,
-  galleryBadgeStyleLabels,
-  galleryBadgeStyleOrder,
-  type GalleryAlbum,
-  type GalleryBadgeDisplay,
-  type GalleryBadgePosition,
-  type GalleryBadgeSettings,
-  type GalleryBadgeStyle,
-} from "@/lib/pages";
-
-import { HelpTip, SelectField, TextAreaField, TextField } from "../form-fields";
-import { SwitchField } from "./fields";
-import { GalleryImagesPanel } from "./GalleryImagesPanel";
+import { EDITOR_TYPE } from "../editor-type";
+import { AlbumGrid } from "./AlbumGrid";
 
 /**
  * ============================================================================
- * GESTIONNAIRE D'ALBUMS — variante PORTFOLIO (Phase 11)
+ * GESTIONNAIRE D'ALBUMS — variante PORTFOLIO (Phase 11, refonte 11.20)
  * ----------------------------------------------------------------------------
- * Albums (Mariage, Portrait, Corporate, Paysage…) : création, renommage,
- * description, choix de la couverture, réordonnancement, suppression et
- * édition des photos de chaque album (via `GalleryImagesPanel`).
- * Inclut le paramétrage du **badge de l'album** (visibilité, style, position).
+ * Le panneau ne conserve que la **composition** (§3.4 du plan 11.20) :
+ *   1. **compteur d'albums** en phrase complète — « Nombre d'Albums actuellement
+ *      créés : N » — pour qu'un non-technicien n'ait pas à interpréter un
+ *      « N albums » télégraphique (11.23) ;
+ *   2. phrase de cadrage (ce qu'est un album, pour un non-technicien) ;
+ *   3. **grille de vignettes** (`AlbumGrid`) : création, masquage et
+ *      réordonnancement.
+ *
+ * **11.23 — le bloc « Importer un dossier d'albums » a été retiré.** La création
+ * d'albums passe désormais par **un seul parcours**, la tuile « + Nouvel album »
+ * de la grille : le bloc encadré et son bouton « Choisir un dossier d'albums »
+ * ouvraient une **seconde porte d'entrée** vers la même intention, avec un
+ * paragraphe d'explication de surcroît (constat de recette). Le composant
+ * `AlbumFolderImportPanel` a été **supprimé du projet**, ainsi que la phrase de
+ * cadrage qui y renvoyait (« Un dossier importé devient un album ») : aucun
+ * élément, style ni gestionnaire d'événement résiduel.
+ *
+ * **11.20.c — le bloc « Affichage sur les couvertures » a déménagé** dans la
+ * zone « Format des couvertures des albums » ([`AlbumCoverBadgePanel`]) : il
+ * décrit l'**aspect** d'une couverture, non le contenu de la galerie. Cette
+ * zone-ci ne contient donc plus que le **contenu** — les albums — et leur
+ * import ; tout ce qui habille une vignette vit désormais dans la zone
+ * « Apparence », sous « Format des couvertures ».
+ *
+ * La liste d'albums dépliés en permanence a été retirée : sa hauteur croissait
+ * en *albums × photos*, ce qui rendait la création de plusieurs dizaines
+ * d'albums impraticable.
+ *
+ * **Séparation de la vue d'album (11.20.a).** Ce panneau ne rend **plus** le
+ * formulaire d'album : il ne contient que les réglages de la **galerie entière**.
+ * La vue d'album est rendue par l'éditeur de galerie, dans une `EditorZone`
+ * **sœur** dotée d'une **autre couleur d'accent** — c'est ce qui fait changer la
+ * barre verticale au-dessus du bouton de retour. Tant que le formulaire d'album
+ * était rendu ici, *dans* la zone « Les albums », il héritait de la même barre et
+ * semblait partager sa portée (constat de recette). Pendant l'édition, la grille
+ * cède la place : `editingAlbumId !== null` la masque.
  * ============================================================================
  */
 
 type AlbumManagerPanelProps = {
   albums: GalleryAlbum[];
   onChange: (albums: GalleryAlbum[]) => void;
-  badge: GalleryBadgeSettings;
-  onChangeBadge: (patch: Partial<GalleryBadgeSettings>) => void;
-  demo?: boolean;
+  /**
+   * Album ouvert dans la vue d'édition, ou `null`. La grille est **masquée**
+   * pendant l'édition : la vue d'album est rendue ailleurs, dans sa propre zone
+   * d'accent (11.20.a).
+   */
+  editingAlbumId: string | null;
+  /** Ouvre la vue d'édition d'un album (état porté par l'éditeur de galerie). */
+  onOpenAlbum: (albumId: string) => void;
 };
 
 export function AlbumManagerPanel({
   albums,
   onChange,
-  badge,
-  onChangeBadge,
-  demo,
+  editingAlbumId,
+  onOpenAlbum,
 }: AlbumManagerPanelProps) {
-  function updateAlbum(albumId: string, patch: Partial<GalleryAlbum>) {
-    onChange(
-      albums.map((album) =>
-        album.id === albumId ? { ...album, ...patch } : album
-      )
-    );
-  }
-
-  function removeAlbum(albumId: string) {
-    onChange(albums.filter((album) => album.id !== albumId));
-  }
-
-  function moveAlbum(from: number, to: number) {
-    if (to < 0 || to >= albums.length) {
-      return;
-    }
-    const next = Array.from(albums);
-    const [moved] = next.splice(from, 1);
-    if (moved === undefined) {
-      return;
-    }
-    next.splice(to, 0, moved);
-    onChange(next);
-  }
-
-  function addAlbum() {
-    onChange([...albums, createGalleryAlbum("Nouvel album")]);
-  }
-
   return (
     <div className="grid gap-3">
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          {albums.length} album{albums.length > 1 ? "s" : ""}
-        </p>
-        <Button type="button" variant="outline" size="sm" onClick={addAlbum}>
-          <Plus />
-          Ajouter un album
-        </Button>
-      </div>
-
-      {/* Phrase de cadrage : explique ce qu'est un album à un non-technicien. */}
-      <p className="text-xs text-muted-foreground">
-        Un album regroupe des photos autour d’un thème : mariage, portrait,
-        corporate… Un dossier importé devient un album.
+      {/* Compteur en **phrase** (niveau ML-b de l'échelle des éditeurs) : c'est
+          une annotation, non un niveau de structure — les capitales du
+          micro-libellé ML conviendraient mal à une phrase complète. */}
+      <p className={EDITOR_TYPE.annotation}>
+        Nombre d’Albums actuellement créés : {albums.length}
       </p>
 
-      {/* Affichage sur les couvertures — réglage GLOBAL aux albums de la galerie.
-          Bordure en pointillés = bloc IMBRIQUÉ dans une zone d'édition (11.17),
-          par opposition au cadre plein d'une `EditorZone`. */}
-      <div className="grid gap-3 rounded-md border border-dashed border-border bg-background/40 p-3">
-        <div className="flex items-center gap-1.5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Affichage sur les couvertures
-          </p>
-          <HelpTip tip="Nom et nombre de photos affichés par-dessus la photo de couverture. Ces réglages s’appliquent à toutes les couvertures d’albums, pas à un album en particulier." />
-        </div>
+      {/* Phrase de cadrage : explique ce qu'est un album à un non-technicien.
+          La mention « Un dossier importé devient un album » a disparu en 11.23,
+          avec le parcours d'import groupé qu'elle décrivait. */}
+      <p className="text-xs text-muted-foreground">
+        Un album regroupe des photos autour d’un thème : mariage, portrait,
+        corporate… Cliquez sur « Nouvel album » pour en créer un, puis nommez-le
+        et ajoutez-y ses photos.
+      </p>
 
-        {/* 1. QUAND afficher (aucun / permanent / au survol). */}
-        <SelectField<GalleryBadgeDisplay>
-          label="Quand afficher ces informations ?"
-          value={badge.display}
-          options={galleryBadgeDisplayOrder.map((value) => ({
-            value,
-            label: galleryBadgeDisplayLabels[value],
-          }))}
-          onChange={(display) => onChangeBadge({ display })}
+      {/* Grille de vignettes (lot B). Pendant l'édition d'un album, elle cède
+          la place : la vue d'album est rendue par l'éditeur de galerie, dans sa
+          propre zone d'accent (11.20.a) — c'est ce qui fait changer la couleur
+          de la barre verticale au-dessus du bouton de retour. */}
+      {editingAlbumId === null ? (
+        <AlbumGrid
+          albums={albums}
+          onChange={onChange}
+          onOpenAlbum={onOpenAlbum}
         />
-
-        {badge.display === "hover" ? (
-          <p className="text-xs text-muted-foreground">
-            Au survol de la souris — et toujours visible sur téléphone et
-            tablette, où le doigt ne peut pas survoler la photo.
-          </p>
-        ) : null}
-
-        {badge.display === "none" ? (
-          <p className="rounded-md border border-dashed border-border bg-background/50 px-3 py-2 text-xs text-muted-foreground">
-            Aucune information ne sera affichée sur les couvertures : les
-            réglages de contenu, de position et de style sont sans objet.
-          </p>
-        ) : (
-          <>
-            {/* 2. QUOI afficher. */}
-            <div className="grid gap-2">
-              <p className="text-xs font-medium text-foreground">
-                Que faut-il afficher ?
-              </p>
-              <SwitchField
-                label="Le nom de l’album"
-                checked={badge.showLabel}
-                onChange={(showLabel) => onChangeBadge({ showLabel })}
-              />
-              <SwitchField
-                label="Le nombre de photos"
-                checked={badge.showCount}
-                onChange={(showCount) => onChangeBadge({ showCount })}
-              />
-            </div>
-
-            {/* 3. COMMENT l'afficher (position + style). */}
-            <div className="grid gap-3 sm:grid-cols-2">
-              <SelectField<GalleryBadgePosition>
-                label="Position"
-                value={badge.position}
-                options={galleryBadgePositionOrder.map((value) => ({
-                  value,
-                  label: galleryBadgePositionLabels[value],
-                }))}
-                onChange={(position) => onChangeBadge({ position })}
-              />
-              <SelectField<GalleryBadgeStyle>
-                label="Style"
-                value={badge.style}
-                options={galleryBadgeStyleOrder.map((value) => ({
-                  value,
-                  label: galleryBadgeStyleLabels[value],
-                }))}
-                onChange={(style) => onChangeBadge({ style })}
-              />
-            </div>
-          </>
-        )}
-      </div>
-
-      {albums.length === 0 ? (
-        <p className="rounded-md border border-dashed border-border bg-background/50 px-3 py-4 text-center text-xs text-muted-foreground">
-          Aucun album. Cliquez sur « Ajouter un album », puis importez ses photos
-          (un dossier complet crée idéalement un album).
-        </p>
       ) : (
-        <ul className="grid gap-4">
-          {albums.map((album, albumIndex) => {
-            const visibleImages = album.images.filter(
-              (image) => image.url !== ""
-            );
-            // Repère lisible : numéro d'ordre + nom réel de l'album (Étape 11.17).
-            const albumName = album.label.trim();
-            const albumHeading = `Album ${albumIndex + 1} — ${
-              albumName !== "" ? albumName : "à nommer"
-            }`;
-            return (
-              <li
-                key={album.id}
-                className="grid gap-3 rounded-md border border-border bg-card p-3"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    {albumHeading}
-                  </p>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="size-7"
-                      disabled={albumIndex === 0}
-                      onClick={() => moveAlbum(albumIndex, albumIndex - 1)}
-                      aria-label="Monter l’album"
-                    >
-                      <ArrowUp className="size-3.5" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="size-7"
-                      disabled={albumIndex === albums.length - 1}
-                      onClick={() => moveAlbum(albumIndex, albumIndex + 1)}
-                      aria-label="Descendre l’album"
-                    >
-                      <ArrowDown className="size-3.5" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="size-7 text-destructive hover:text-destructive"
-                      onClick={() => removeAlbum(album.id)}
-                      aria-label="Supprimer l’album"
-                    >
-                      <Trash2 className="size-3.5" />
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <TextField
-                    label="Nom de l’album"
-                    value={album.label}
-                    placeholder="Ex. Mariage"
-                    onChange={(label) => updateAlbum(album.id, { label })}
-                  />
-                  <SelectField
-                    label="Photo de couverture"
-                    value={album.coverImageId ?? ""}
-                    options={[
-                      { value: "", label: "Première photo" },
-                      ...visibleImages.map((image, imageIndex) => ({
-                        value: image.id,
-                        label:
-                          image.title && image.title.trim() !== ""
-                            ? `Photo ${imageIndex + 1} — ${image.title}`
-                            : `Photo ${imageIndex + 1}`,
-                      })),
-                    ]}
-                    onChange={(coverImageId) =>
-                      updateAlbum(album.id, {
-                        coverImageId:
-                          coverImageId === "" ? null : coverImageId,
-                      })
-                    }
-                    disabled={visibleImages.length === 0}
-                    hint="Image affichée en couverture sur la page publique."
-                  />
-                </div>
-
-                <TextAreaField
-                  label="Description de l’album"
-                  value={album.description}
-                  placeholder="Ex. Cérémonies, préparatifs et portraits de mariés…"
-                  onChange={(description) =>
-                    updateAlbum(album.id, { description })
-                  }
-                />
-
-                <GalleryImagesPanel
-                  title={`Photos de l’album (${album.images.length})`}
-                  images={album.images}
-                  onChange={(images) => updateAlbum(album.id, { images })}
-                  emptyHint="Aucune photo dans cet album. Importez un dossier complet ou plusieurs photos."
-                  folderLabel="Importer un dossier (album)"
-                  demo={demo}
-                />
-              </li>
-            );
-          })}
-        </ul>
+        <p className="rounded-md border border-dashed border-border bg-background/50 px-3 py-2 text-xs text-muted-foreground">
+          La liste des albums est masquée pendant l’édition de l’un d’eux. Les
+          réglages ci-dessus portent sur la galerie entière.
+        </p>
       )}
     </div>
   );

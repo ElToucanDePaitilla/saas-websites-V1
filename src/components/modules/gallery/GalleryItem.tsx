@@ -4,6 +4,7 @@ import { Expand } from "lucide-react";
 import { MediaImage } from "@/components/common/MediaImage";
 import {
   galleryBorderStyle,
+  galleryConcentricRadius,
   galleryEffectCaptionStyle,
   galleryEffectFrameStyle,
   galleryEffectGlossStyle,
@@ -78,6 +79,11 @@ export function GalleryItem({
   const hoverActive = layout.hoverAnimation === "active";
   const interactive = trigger !== "none";
   const label = image.alt || alt;
+  // Les effets de survol (Étape 11.23) ne sont **posés** que si l'interrupteur
+  // général est actif et que la vignette réagit : leurs règles vivent derrière
+  // `:hover` sur `.group/media`, mais autant ne pas monter de couches inutiles
+  // dans le DOM pour un effet qui ne se déclenchera jamais.
+  const hoverEffects = hoverActive && interactive;
 
   const frameStyle: React.CSSProperties = {
     ...galleryEffectFrameStyle(effect),
@@ -86,9 +92,20 @@ export function GalleryItem({
     borderRadius: layout.radius,
   };
 
+  // Rayons **concentriques** (11.20.c) : l'image est enchâssée de l'épaisseur
+  // de l'encadrement **et** de la marge de l'effet. En donnant le même rayon
+  // aux deux, chaque coin montrait deux arcs décalés et la couleur de fond
+  // affleurait entre eux : l'arrondi semblait alors cassé, voire incompatible
+  // avec l'encadrement (constat de recette).
+  const innerRadius = galleryConcentricRadius(
+    layout.radius,
+    layout.border,
+    effect
+  );
+
   const mediaStyle: React.CSSProperties = {
     ...galleryEffectMediaStyle(effect),
-    borderRadius: layout.radius,
+    borderRadius: innerRadius,
   };
 
   const glossStyle = galleryEffectGlossStyle(effect);
@@ -99,28 +116,20 @@ export function GalleryItem({
     caption.trim() !== "";
 
   const visual = (
-    <div
-      className={cn(
-        "w-full transition-transform duration-300 ease-out",
-        hoverActive && interactive && "group-hover/media:-translate-y-1"
-      )}
-      style={frameStyle}
-    >
+    // `hv-frame` / `hv-media` : transitions ET transformations vivent dans
+    // `globals.css` (§ Effets de survol), pilotées par des variables CSS. Motif :
+    // un style en ligne ne peut pas décrire un état `:hover`, et la neutralisation
+    // sous `prefers-reduced-motion` se fait ainsi en un seul endroit.
+    <div className="hv-frame w-full" style={frameStyle}>
       <div
         className={cn(
           "relative overflow-hidden bg-[var(--surface-color)]",
           !interactive && "pointer-events-none"
         )}
-        style={{ aspectRatio: ratio, borderRadius: layout.radius }}
+        style={{ aspectRatio: ratio, borderRadius: innerRadius }}
       >
         {/* Image (lazy) — le filtre/biseau de l'effet s'applique au conteneur. */}
-        <div
-          className={cn(
-            "absolute inset-0 transition-transform duration-500 ease-silk",
-            hoverActive && interactive && "group-hover/media:scale-105"
-          )}
-          style={mediaStyle}
-        >
+        <div className="hv-media absolute inset-0" style={mediaStyle}>
           <MediaImage
             src={image.url}
             alt={label}
@@ -135,11 +144,21 @@ export function GalleryItem({
         {/* Reflet du papier glacé (Polaroid). */}
         {glossStyle ? <span aria-hidden="true" style={glossStyle} /> : null}
 
-        {/* Voile dégradé sombre au survol (optionnel, désactivé par défaut). */}
-        {layout.hoverOverlay && hoverActive && interactive ? (
+        {/* Brillance discrète (11.23) : reflet diagonal qui traverse la vignette.
+            Clippé par l'`overflow-hidden` du conteneur. */}
+        {hoverEffects && layout.hoverEffects.shine ? (
+          <span aria-hidden="true" className="hv-shine" />
+        ) : null}
+
+        {/* « Accentuation de la lisibilité » (11.23 — ex-« voile dégradé ») :
+            au survol, assombrit l'image **depuis le bas vers le haut** pour que
+            le texte posé sur la couverture reste lisible. Volontairement
+            **découplée** de `hoverAnimation` : elle se cumule avec les autres
+            effets et peut aussi être utilisée seule. */}
+        {layout.hoverOverlay && interactive ? (
           <span
             aria-hidden="true"
-            className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent opacity-0 transition-opacity duration-300 group-hover/media:opacity-100"
+            className="hv-overlay pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent"
           />
         ) : null}
 

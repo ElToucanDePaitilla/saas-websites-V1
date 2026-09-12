@@ -19,12 +19,9 @@ export default function AdminLoginPage() {
   return (
     <div className="mx-auto flex w-full max-w-sm flex-col items-stretch gap-6 py-12">
       <div className="space-y-1.5 text-center">
-        <h1
-          style={{ fontFamily: "var(--font-heading)" }}
-          className="text-2xl font-medium tracking-wide text-foreground"
-        >
-          {siteName}
-        </h1>
+        {/* Étape 11.22 : police de l'APPLICATION (Inter), plus la serif
+            éditoriale du site public — cette page est de l'interface. */}
+        <h1 className="text-2xl font-semibold text-foreground">{siteName}</h1>
         <p className="text-sm text-muted-foreground">
           Administration — connexion photographe
         </p>

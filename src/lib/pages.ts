@@ -1352,10 +1352,59 @@ export interface GalleryLayoutOptions {
   shadow: GalleryShadowLevel;
   /** Bordure optionnelle (épaisseur + couleur). */
   border: GalleryBorderSettings;
-  /** Animation au survol des vignettes (zoom / élévation / overlay). */
+  /** Interrupteur **général** des effets de survol (« active » / « none »). */
   hoverAnimation: GalleryHoverAnimation;
-  /** Voile dégradé sombre au survol (désactivé par défaut sur la Dynamic). */
+  /**
+   * « **Accentuation de la lisibilité** » (nommée ainsi en 11.23) : au survol,
+   * assombrit l'image **depuis le bas de la vignette vers le haut**, pour que le
+   * texte posé sur la couverture reste lisible. Indépendant des autres effets —
+   * donc **cumulable** avec eux.
+   */
   hoverOverlay: boolean;
+  /** Effets de survol optionnels et **cumulables** (zoom, élévation, parallaxe…). */
+  hoverEffects: GalleryHoverEffects;
+}
+
+/**
+ * ----------------------------------------------------------------------------
+ * EFFETS DE SURVOL — famille optionnelle et **cumulable** (Étape 11.23)
+ * ----------------------------------------------------------------------------
+ * Chaque effet est **indépendant** : on peut n'en activer qu'un, ou les
+ * combiner librement. Tous reposent sur les seules propriétés composées par le
+ * GPU — `transform`, `filter`, `box-shadow` — donc **aucun recalcul de mise en
+ * page** et aucune dégradation de la fluidité du défilement.
+ *
+ * Conditions d'application :
+ *   - l'interrupteur général `layout.hoverAnimation === "active"` ;
+ *   - un appareil à **survol réel** (`hover: hover` et `pointer: fine`) — sur
+ *     écran tactile, aucun effet ne se déclenche, l'affichage reste stable ;
+ *   - le **focus clavier** de la vignette déclenche les mêmes effets que le
+ *     survol : un utilisateur au clavier n'est pas privé du retour visuel.
+ *
+ * **Accessibilité** : sous `prefers-reduced-motion: reduce`, la feuille de
+ * styles ne se contente pas d'accélérer ces effets, elle les **supprime**
+ * (voir `globals.css` § Effets de survol) — un zoom instantané au survol reste
+ * une variation brutale pour les personnes sensibles au mouvement.
+ *
+ * **Repli** : `hoverEffects` absent d'un contenu enregistré avant cette étape
+ * ⇒ `DEFAULT_GALLERY_HOVER_EFFECTS`, dont les valeurs reproduisent **exactement**
+ * le rendu historique (zoom 105 %, élévation 4 px, aucun effet d'ambiance).
+ * **Aucune migration BDD** : le champ est optionnel dans le schéma zod.
+ * ----------------------------------------------------------------------------
+ */
+export interface GalleryHoverEffects {
+  /** Zoom de l'image au survol, en pourcentage (100 = aucun zoom). */
+  zoom: number;
+  /** Élévation de la vignette au survol, en px (0 = aucune). */
+  lift: number;
+  /** Parallaxe : déplacement vertical de l'image **dans** son cadre, en px. */
+  parallax: number;
+  /** Brillance : reflet diagonal discret qui traverse la vignette. */
+  shine: boolean;
+  /** Saturation et contraste progressifs. */
+  saturate: boolean;
+  /** Bordure lumineuse, à la couleur d'accent du thème. */
+  glow: boolean;
 }
 
 /** Socle commun des trois variantes de galerie. */
@@ -1394,6 +1443,12 @@ export interface GalleryAlbum {
   /** Id de l'image de couverture (dans `images`) ; null ⇒ première image. */
   coverImageId: string | null;
   images: GalleryImage[];
+  /**
+   * Album **masqué du site public** (Étape 11.20). Champ absent des contenus
+   * antérieurs ⇒ repli `false` à la lecture (les albums existants restent
+   * visibles ; aucune migration BDD).
+   */
+  hidden: boolean;
 }
 
 /** Galerie PORTFOLIO — couvertures d'albums, clic simple → album. */
@@ -1418,11 +1473,53 @@ export const galleryVariantLabels: Record<GalleryModuleVariant, string> = {
   portfolio: "Galerie portfolio",
 };
 
-/** Libellés français des modes d'affichage de la grille. */
+/**
+ * Libellés français des modes d'affichage de la grille.
+ *
+ * Vocabulaire **neutre** (« format », « vignettes ») à dessein : ces libellés
+ * sont **partagés par les trois variantes** — ils doivent rester vrais qu'il
+ * s'agisse de photos (static / dynamic) ou de **couvertures d'albums**
+ * (portfolio). « Grille régulière » et « Mosaïque » décrivaient la technique et
+ * se sont révélés difficiles à comprendre : ils décrivent désormais le
+ * **résultat visible**. Aucune valeur stockée ne change.
+ */
 export const galleryDisplayLabels: Record<GalleryDisplayMode, string> = {
-  uniform: "Grille régulière",
-  masonry: "Mosaïque (hauteurs libres)",
+  uniform: "Toutes au même format",
+  masonry: "Chacune à son format",
 };
+
+/**
+ * Explications des modes d'affichage, affichées **sous chaque option dans la
+ * liste déroulante** (`SelectItem` → `description`) plutôt qu'en aide sous le
+ * champ : la phrase ne redit pas le libellé, elle l'illustre, et elle reste au
+ * contact de l'option concernée.
+ */
+export const galleryDisplayDescriptions: Record<GalleryDisplayMode, string> = {
+  uniform: "Des vignettes de forme identique, alignées en lignes régulières.",
+  masonry:
+    "Chaque vignette garde ses proportions — portrait ou paysage — et les colonnes se décalent.",
+};
+
+/**
+ * Vocabulaire de l'**objet** affiché dans une grille, selon la variante
+ * (Étape 11.20.c).
+ *
+ * Les zones d'édition sont **partagées par les trois variantes** : écrire
+ * « couvertures d'albums » en dur mentirait sur `static` et `dynamic`, qui
+ * n'affichent que des photos. Chaque libellé dérivé de l'objet affiché passe
+ * donc par ici — « Arrondi des couvertures d'albums » en portfolio, « Arrondi
+ * des photos » ailleurs.
+ */
+export function galleryItemWording(variant: GalleryModuleVariant): {
+  /** Singulier : « couverture d'album » / « photo ». */
+  singular: string;
+  /** Pluriel contracté, pour les libellés « … des X ». */
+  plural: string;
+} {
+  return variant === "portfolio"
+    ? { singular: "couverture d’album", plural: "couvertures d’albums" }
+    : { singular: "photo", plural: "photos" };
+}
 
 /** Ordre d'affichage des modes d'affichage (Select éditeur). */
 export const galleryDisplayOrder: GalleryDisplayMode[] = ["uniform", "masonry"];
@@ -1524,6 +1621,25 @@ export const galleryBadgeDisplayLabels: Record<GalleryBadgeDisplay, string> = {
   none: "Aucun affichage",
 };
 
+/**
+ * Valeurs par défaut des effets de survol (Étape 11.23).
+ *
+ * Elles sont choisies pour reproduire **à l'identique** le rendu des galeries
+ * antérieures à cette étape (zoom 105 %, élévation 4 px — valeurs qui étaient
+ * alors écrites en dur dans `GalleryItem`), de sorte qu'activer l'interrupteur
+ * général ne change rien pour un contenu existant. Les effets d'ambiance sont
+ * **désactivés** par défaut : un site publié ne doit pas se mettre à scintiller
+ * parce qu'une option a été ajoutée.
+ */
+export const DEFAULT_GALLERY_HOVER_EFFECTS: GalleryHoverEffects = {
+  zoom: 105,
+  lift: 4,
+  parallax: 0,
+  shine: false,
+  saturate: false,
+  glow: false,
+};
+
 /** Valeurs par défaut de la mise en page (toutes variantes). */
 export const DEFAULT_GALLERY_LAYOUT: GalleryLayoutOptions = {
   display: "uniform",
@@ -1535,6 +1651,7 @@ export const DEFAULT_GALLERY_LAYOUT: GalleryLayoutOptions = {
   border: { enabled: false, width: 1, color: "#EAE5E5" },
   hoverAnimation: "none",
   hoverOverlay: false,
+  hoverEffects: { ...DEFAULT_GALLERY_HOVER_EFFECTS },
 };
 
 /** Valeurs par défaut des effets de finition. */
@@ -1660,6 +1777,37 @@ export function resolveGalleryLayout(layout: unknown): GalleryLayoutOptions {
       typeof record.hoverOverlay === "boolean"
         ? record.hoverOverlay
         : DEFAULT_GALLERY_LAYOUT.hoverOverlay,
+    // Repli champ par champ : un contenu enregistré avant la 11.23 n'a pas de
+    // `hoverEffects` ; un contenu plus récent peut n'en avoir qu'une partie.
+    hoverEffects: resolveGalleryHoverEffects(record.hoverEffects),
+  };
+}
+
+/**
+ * Normalise la famille d'effets de survol (Étape 11.23).
+ *
+ * **Repli champ par champ** plutôt que bloc par bloc : si un contenu ne porte
+ * qu'une partie des réglages (version intermédiaire, saisie partielle), les
+ * autres reprennent leur valeur par défaut au lieu d'être perdus. Les nombres
+ * sont bornés aux mêmes plages que les contrôles de l'éditeur, pour qu'aucune
+ * valeur héritée ne puisse produire un rendu aberrant.
+ */
+export function resolveGalleryHoverEffects(
+  raw: unknown
+): GalleryHoverEffects {
+  const record = isRecord(raw) ? raw : {};
+  const defaults = DEFAULT_GALLERY_HOVER_EFFECTS;
+  return {
+    zoom: readBoundedNumber(record.zoom, defaults.zoom, 100, 118),
+    lift: readBoundedNumber(record.lift, defaults.lift, 0, 16),
+    parallax: readBoundedNumber(record.parallax, defaults.parallax, 0, 12),
+    shine:
+      typeof record.shine === "boolean" ? record.shine : defaults.shine,
+    saturate:
+      typeof record.saturate === "boolean"
+        ? record.saturate
+        : defaults.saturate,
+    glow: typeof record.glow === "boolean" ? record.glow : defaults.glow,
   };
 }
 
@@ -1839,6 +1987,8 @@ function resolveGalleryAlbums(raw: unknown): GalleryAlbum[] {
       description: readString(record.description, ""),
       coverImageId,
       images,
+      // Repli `false` : les albums enregistrés avant la 11.20 restent visibles.
+      hidden: record.hidden === true,
     };
   });
 }
@@ -1893,6 +2043,7 @@ export function createGalleryAlbum(label: string): GalleryAlbum {
     description: "",
     coverImageId: null,
     images: [],
+    hidden: false,
   };
 }
 
@@ -1977,11 +2128,17 @@ export function resolveGalleryContent(raw: unknown): GalleryContent {
   };
 }
 
-/** Toutes les images visibles d'un contenu galerie (SEO / OG / LCP). */
+/**
+ * Toutes les images visibles d'un contenu galerie (SEO / OG / LCP).
+ * Étape 11.20 : les images des **albums masqués** sont exclues (un album retiré
+ * du site ne doit pas réapparaître dans les métadonnées de partage).
+ */
 export function galleryImageSources(content: GalleryContent): GalleryImage[] {
   const images =
     content.variant === "portfolio"
-      ? content.albums.flatMap((album) => album.images)
+      ? content.albums
+          .filter((album) => !album.hidden)
+          .flatMap((album) => album.images)
       : content.images;
   return images.filter((image) => image.url !== "" && !image.hidden);
 }

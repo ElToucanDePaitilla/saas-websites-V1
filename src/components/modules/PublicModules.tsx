@@ -72,11 +72,15 @@ export function GalleryModule({
   if (!content) return null;
 
   const resolved = resolveGalleryContent(content);
+  // Étape 11.20 — les images des albums **masqués** ne comptent pas : si tout
+  // est masqué, la section galerie n'est pas rendue (pas de grille vide).
   const hasVisibleImages =
     resolved.variant === "portfolio"
-      ? resolved.albums.some((album) =>
-          album.images.some((image) => image.url !== "" && !image.hidden)
-        )
+      ? resolved.albums
+          .filter((album) => !album.hidden)
+          .some((album) =>
+            album.images.some((image) => image.url !== "" && !image.hidden)
+          )
       : resolved.images.some((image) => image.url !== "" && !image.hidden);
   if (!hasVisibleImages) return null;
 

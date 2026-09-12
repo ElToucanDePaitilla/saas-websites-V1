@@ -625,3 +625,76 @@ export function resolveNavPreset(
 
   return { header, inMenuByPageSlug };
 }
+
+/* ==========================================================================
+   APERÇU & CIBLES DES MODÈLES (Étapes 4.4 / 10.1.a)
+   --------------------------------------------------------------------------
+   Deux besoins complémentaires :
+
+     1. **Aperçu** — libellés affichés dans les cartes de modèles (Back-Office
+        et écran de bienvenue), dérivés du catalogue `NAV_PRESETS` ;
+     2. **Purge** — les cibles d'un modèle (« page à créer », ancres de
+        sous-menu) sont des placeholders **intentionnels** structurant le menu
+        avant que les pages n'existent. Ils ne doivent donc PAS être purgés
+        comme des liens morts par la synchro client (`PagesNavigationSync`) ni
+        par le nettoyage serveur (`pruneOrphanNavigation`) — sinon appliquer un
+        modèle sur un site vierge serait aussitôt annulé.
+   ========================================================================== */
+
+/** Libellés des items racine d'un modèle (aperçu de carte UI). */
+export function presetRootLabels(presetId: NavPresetId): string[] {
+  const preset = NAV_PRESETS.find((candidate) => candidate.id === presetId);
+  if (!preset) {
+    return [];
+  }
+  return preset.nodes.map((node) => node.label);
+}
+
+/** Libellés des items de Niveau 2 d'un modèle, toutes racines confondues. */
+export function presetChildLabels(presetId: NavPresetId): string[] {
+  const preset = NAV_PRESETS.find((candidate) => candidate.id === presetId);
+  if (!preset) {
+    return [];
+  }
+  return preset.nodes.flatMap((node) =>
+    (node.children ?? []).map((child) => child.label)
+  );
+}
+
+/** Hrefs ciblés par le catalogue de modèles (pages résolues ou placeholders). */
+const PRESET_TARGET_HREFS: ReadonlySet<string> = (() => {
+  const hrefs = new Set<string>();
+  const collect = (nodes: readonly NavPresetNode[]): void => {
+    for (const node of nodes) {
+      hrefs.add(
+        node.target.kind === "href"
+          ? normalizeHref(node.target.href)
+          : normalizeHref(`/${node.target.slug}`)
+      );
+      if (node.children && node.children.length > 0) {
+        collect(node.children);
+      }
+    }
+  };
+  for (const preset of NAV_PRESETS) {
+    collect(preset.nodes);
+  }
+  return hrefs;
+})();
+
+/** Vrai si le `href` est une cible structurelle d'un modèle Onboarding. */
+export function isPresetTargetHref(href: string): boolean {
+  return PRESET_TARGET_HREFS.has(normalizeHref(href));
+}
+
+/**
+ * Vrai si l'entrée est un lien mort **éligible à la purge automatique** :
+ * orpheline (page interne inexistante) **et** non intentionnelle (hors cibles
+ * de modèles). Les placeholders de modèles sont donc préservés.
+ */
+export function isPurgableOrphanNavEntry(
+  entry: NavMenuEntry,
+  slugs: ReadonlySet<string>
+): boolean {
+  return isOrphanNavEntry(entry, slugs) && !isPresetTargetHref(entry.href);
+}

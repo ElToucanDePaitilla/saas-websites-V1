@@ -297,3 +297,31 @@ flowchart TD
 | `updatePage` exige un draft complet | `handleApplyPreset` re-spread l'ensemble des champs de chaque page modifiée (title, menuTitle, slug, status, inMenu) |
 | Badge « preset actif » obsolète après édition | Invalidation systématique de `appliedPresetId` dans les mutations (0.4) |
 | Couplage PagesStore ← NavigationManager | Orchestration localisée dans l'écran ; modèle reste pur et sans dépendance inter-store (0.3) |
+
+## 9. Amendement — Emplacement des modèles (retour UX)
+
+**Constat** : le panneau figurait en tête de `/admin/navigation`, au même rang
+que l'édition courante, alors qu'il **remplace le Header** et **recalcule
+`inMenu`** — une action de démarrage (ou de reset), pas d'édition. Un second
+point d'entrée existait déjà dans l'écran de bienvenue (10.1).
+
+**Décisions appliquées** :
+
+- **4.4-D1 — Un modèle est un état de départ.** Dans `NavigationManager`, le
+  panneau n'est rendu que si le menu est **vide** (`isNavigationEmpty`). Sinon,
+  il est accessible via la **Zone de réinitialisation** (« Repartir d'un
+  modèle »), au même titre que « Vider la navigation ».
+- **4.4-D2 — Renommage.** « Presets Onboarding » → **« Modèles de navigation »**
+  (badge « Modèle actif », dialogue d'avertissement explicite). Le vocabulaire
+  « onboarding » reste réservé à l'écran de bienvenue.
+- **4.4-D3 — Écran de bienvenue auto-suffisant.** `WelcomeOnboarding` embarque
+  `SiteStarterPicker` (les 3 cartes) ; l'application passe par l'API serveur
+  `POST /api/navigation/presets` (aucun store monté sur un site vide), puis
+  guide vers la création de la page d'accueil.
+- **4.4-D4 — Durabilité des placeholders.** La purge des liens morts (serveur
+  `pruneOrphanNavigation`, client `PagesNavigationSync` étape 5) **préserve**
+  les cibles de modèles via `isPurgableOrphanNavEntry` — sinon un modèle
+  appliqué sur un site vierge était purgé au rechargement (conflit 4.4 ↔ 10.1.a).
+
+**Hors périmètre (inchangé)** : pas de création automatique de pages ni de
+contenus ; Footer toujours intact ; schéma BDD inchangé.

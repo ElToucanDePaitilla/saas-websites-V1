@@ -1,7 +1,10 @@
 "use client";
 
+import * as React from "react";
+
 import {
   resolveGalleryContent,
+  type GalleryAlbum,
   type GalleryBaseShared,
   type GalleryContent,
   type GalleryLayoutOptions,
@@ -10,6 +13,8 @@ import {
 
 import { EditorSubZone, EditorZone } from "./EditorZone";
 import { TextField } from "./form-fields";
+import { AlbumCoverBadgePanel } from "./gallery/AlbumCoverBadgePanel";
+import { AlbumEditorPanel } from "./gallery/AlbumEditorPanel";
 import { AlbumManagerPanel } from "./gallery/AlbumManagerPanel";
 import { EffectSettingsPanel } from "./gallery/EffectSettingsPanel";
 import { GalleryCtaPanel } from "./gallery/GalleryCtaPanel";
@@ -36,7 +41,11 @@ import { LightboxSettingsPanel } from "./gallery/LightboxSettingsPanel";
  * portée :
  *
  *   1. **Les albums** (ou « Les photos ») — ce que le visiteur parcourt ;
- *   2. **Apparence des photos** — disposition, cadre et finition, survol ;
+ *   2. **Apparence** — réorganisée en 11.20.c en **deux sous-titres** :
+ *      « **Disposition des couvertures des albums dans la galerie Portfolio** »
+ *      (nombre de colonnes, écarts, format d'affichage) et « **Format des
+ *      couvertures des albums** » (effet de finition, arrondi, encadrement,
+ *      ombre portée, effets au survol, infos en pied de couverture) ;
  *   3. **Agrandissement et diaporama** — absent en variante `static` ;
  *   4. **Bouton d'appel à l'action**.
  *
@@ -126,9 +135,51 @@ export function ModuleGalleryEditor({
     updateShared({ layout: { ...resolved.layout, ...patch } });
   }
 
+  /**
+   * Album ouvert dans la vue d'édition (11.20.a). L'état est porté **ici**, et
+   * non plus dans la grille : la vue d'album doit être une `EditorZone`
+   * **sœur** de la zone « Les albums », dotée de sa **propre couleur d'accent**
+   * — c'est ce qui fait changer la couleur de la barre verticale au-dessus du
+   * bouton de retour, au lieu de la prolonger à l'identique depuis les réglages
+   * de galerie (constat de recette).
+   *
+   * `editingAlbum` est un **état dérivé** : si l'album disparaît (suppression),
+   * il redevient `null` et la grille réapparaît seule — jamais d'écran vide, et
+   * aucun `setState` dans un effet.
+   */
+  const [editingAlbumId, setEditingAlbumId] = React.useState<string | null>(null);
+  const editingAlbum =
+    editingAlbumId !== null && resolved.variant === "portfolio"
+      ? resolved.albums.find((album) => album.id === editingAlbumId) ?? null
+      : null;
+  const editingAlbumIndex =
+    editingAlbum !== null && resolved.variant === "portfolio"
+      ? resolved.albums.findIndex((album) => album.id === editingAlbum.id)
+      : -1;
+
+  /** Patch d'**un album** : nom, description, couverture, photos (A-2). */
+  function updateAlbum(albumId: string, patch: Partial<GalleryAlbum>) {
+    const current = resolveGalleryContent(resolved);
+    if (current.variant !== "portfolio") {
+      return;
+    }
+    commit({
+      ...current,
+      albums: current.albums.map((album) =>
+        album.id === albumId ? { ...album, ...patch } : album
+      ),
+    });
+  }
+
   const navItems: ZoneNavItem[] = [
-    { id: ZONE_IDS.photos, label: isPortfolio ? "Les albums" : "Les photos" },
-    { id: ZONE_IDS.appearance, label: "Apparence des photos" },
+    {
+      id: ZONE_IDS.photos,
+      label: isPortfolio ? "Les albums de la Galerie Portfolio" : "Les photos",
+    },
+    {
+      id: ZONE_IDS.appearance,
+      label: isPortfolio ? "Apparence des Albums" : "Apparence des photos",
+    },
     ...(hasSlideshow
       ? [{ id: ZONE_IDS.slideshow, label: "Agrandissement et diaporama" }]
       : []),
@@ -139,7 +190,7 @@ export function ModuleGalleryEditor({
     <div className="grid gap-4">
       {/* ---- En-tête affiché sur le site (non encadré, comme un titre) ---- */}
       <div className="grid gap-3">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <p className="text-[13px] font-semibold leading-snug text-foreground">
           Ce que le visiteur voit en haut de la galerie
         </p>
         <TextField
@@ -161,7 +212,9 @@ export function ModuleGalleryEditor({
       <EditorZone
         id={ZONE_IDS.photos}
         tone="content"
-        title={isPortfolio ? "Les albums" : "Les photos"}
+        title={
+          isPortfolio ? "Les albums de la Galerie Portfolio" : "Les photos"
+        }
         scope={
           isPortfolio
             ? "Chaque album regroupe des photos autour d’un thème. La couverture de l’album ouvre son propre diaporama."
@@ -172,10 +225,8 @@ export function ModuleGalleryEditor({
           <AlbumManagerPanel
             albums={resolved.albums}
             onChange={(albums) => commit({ ...resolved, albums })}
-            badge={resolved.badge}
-            onChangeBadge={(patch) =>
-              updateShared({ badge: { ...resolved.badge, ...patch } })
-            }
+            editingAlbumId={editingAlbumId}
+            onOpenAlbum={setEditingAlbumId}
           />
         ) : (
           <GalleryImagesPanel
@@ -186,34 +237,99 @@ export function ModuleGalleryEditor({
         )}
       </EditorZone>
 
-      {/* ---- ZONE 2 : l'aspect des photos ---- */}
+      {/* ---- VUE D'ALBUM : zone SŒUR, teinte distincte (11.20.a) -------------
+          Rendue **hors** de la zone « Les albums », avec la teinte `detail` :
+          la barre verticale change donc réellement de couleur au-dessus du
+          bouton de retour, au lieu de se poursuivre à l'identique depuis les
+          réglages de galerie (constat de recette — un simple bandeau imbriqué
+          ne suffisait pas, la barre de la zone continuant de courir sur toute
+          sa hauteur, en retrait du bandeau).
+          Aucune route, aucune persistance supplémentaire (D-4) : la grille cède
+          simplement la place. */}
+      {isPortfolio && editingAlbum !== null && editingAlbumIndex >= 0 ? (
+        <EditorZone
+          tone="detail"
+          title="Album en cours d’édition"
+          scope={`Vous modifiez « ${
+            editingAlbum.label.trim() !== ""
+              ? editingAlbum.label.trim()
+              : "un album sans nom"
+          } » : son nom, sa description, sa photo de couverture et ses photos. Les réglages situés au-dessus portent sur la galerie entière et ne concernent pas cet album en particulier.`}
+        >
+          <AlbumEditorPanel
+            album={editingAlbum}
+            position={editingAlbumIndex}
+            total={resolved.albums.length}
+            onPatch={(patch) => updateAlbum(editingAlbum.id, patch)}
+            onBack={() => setEditingAlbumId(null)}
+          />
+        </EditorZone>
+      ) : null}
+
+      {/* ---- ZONE 2 : l'aspect des vignettes de la galerie (11.20.c) --------
+          Deux sous-titres seulement, et un seul objet :
+            « Disposition… »  → où et comment les vignettes sont rangées ;
+            « Format… »       → ce que chaque vignette devient (effet, arrondi,
+                                encadrement, ombre, survol, infos en pied).
+          L'arrondi a quitté « Disposition » pour rejoindre l'encadrement : c'est
+          cette proximité qui manquait pour juger leur combinaison, et qui
+          laissait croire à une incompatibilité entre les deux. */}
       <EditorZone
         id={ZONE_IDS.appearance}
         tone="style"
-        title="Apparence des photos"
-        scope="S’applique à toutes les photos de la galerie : disposition de la grille, effet de présentation, ombre, encadrement et réaction au survol de la souris."
+        title={
+          isPortfolio
+            ? "Apparence de la galerie d’Albums"
+            : "Apparence de la galerie de photos"
+        }
+        scope={
+          isPortfolio
+            ? "Ces réglages valent pour toute la galerie d’albums — ils ne concernent jamais un album en particulier."
+            : "Ces réglages valent pour toute la galerie — ils ne concernent jamais une photo en particulier."
+        }
       >
-        <EditorSubZone title="Disposition de la grille">
+        <EditorSubZone
+          title={
+            isPortfolio
+              ? "Disposition des couvertures des albums dans la galerie Portfolio"
+              : "Disposition des photos dans la galerie"
+          }
+        >
           <GalleryLayoutPanel layout={resolved.layout} onChange={updateLayout} />
         </EditorSubZone>
 
-        <EditorSubZone title="Cadre et finition">
+        {/* Ordre voulu : Effet de finition, Arrondi, Encadrement, Ombre portée
+            (rendus par `EffectSettingsPanel`), puis Effets au survol, puis les
+            infos en pied de couverture (portfolio). */}
+        <EditorSubZone
+          title={
+            isPortfolio ? "Format des couvertures des albums" : "Format des photos"
+          }
+        >
           <EffectSettingsPanel
             effect={resolved.effect}
             layout={resolved.layout}
+            variant={resolved.variant}
             onChangeEffect={(patch) =>
               updateShared({ effect: { ...resolved.effect, ...patch } })
             }
             onChangeLayout={updateLayout}
           />
-        </EditorSubZone>
 
-        <EditorSubZone title="Au survol des photos">
           <GalleryHoverPanel
             layout={resolved.layout}
             variant={resolved.variant}
             onChange={updateLayout}
           />
+
+          {isPortfolio ? (
+            <AlbumCoverBadgePanel
+              badge={resolved.badge}
+              onChange={(patch) =>
+                updateShared({ badge: { ...resolved.badge, ...patch } })
+              }
+            />
+          ) : null}
         </EditorSubZone>
       </EditorZone>
 

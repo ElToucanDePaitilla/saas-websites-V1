@@ -23,7 +23,7 @@
 import { and, asc, eq } from "drizzle-orm";
 
 import {
-  isOrphanNavEntry,
+  isPurgableOrphanNavEntry,
   resolveNavPreset,
   type NavArea,
   type NavMenuEntry,
@@ -158,10 +158,15 @@ export async function getNavigation(
 
 /**
  * Purge les **liens de navigation orphelins** (Étape 10.1.a) : entrées sans
- * `pageId` (liens libres / placeholders) dont le `href` cible un slug interne
- * qui n'existe plus. Les entrées rattachées à une page sont déjà nettoyées par
- * la FK `ON DELETE CASCADE` ; ce nettoyage couvre les entrées `custom` (ancres
- * du seed, placeholders de presets…).
+ * `pageId` (liens libres) dont le `href` cible un slug interne qui n'existe
+ * plus. Les entrées rattachées à une page sont déjà nettoyées par la FK
+ * `ON DELETE CASCADE` ; ce nettoyage couvre les entrées `custom` (ancres du
+ * seed, liens manuels morts…).
+ *
+ * Les **cibles de modèles** (Étape 4.4) sont **préservées** : ce sont des
+ * placeholders intentionnels (« page à créer ») — sans quoi appliquer un
+ * modèle sur un site vierge serait aussitôt annulé (cf.
+ * `isPurgableOrphanNavEntry`).
  *
  * Retourne le nombre d'entrées supprimées (0 → aucune écriture).
  * À n'appeler que lorsque le site est **vide** (0 page) pour ne jamais
@@ -184,7 +189,7 @@ export async function pruneOrphanNavigation(
   const filterHeader = (entries: NavMenuEntry[]): NavMenuEntry[] =>
     entries
       .filter((entry) => {
-        if (isOrphanNavEntry(entry, slugSet)) {
+        if (isPurgableOrphanNavEntry(entry, slugSet)) {
           removed += 1;
           return false;
         }
@@ -197,7 +202,7 @@ export async function pruneOrphanNavigation(
 
   const header = filterHeader(navigation.header);
   const footer = navigation.footer.filter((entry) => {
-    if (isOrphanNavEntry(entry, slugSet)) {
+    if (isPurgableOrphanNavEntry(entry, slugSet)) {
       removed += 1;
       return false;
     }

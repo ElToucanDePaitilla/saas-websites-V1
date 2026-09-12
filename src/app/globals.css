@@ -68,7 +68,14 @@
   --shadow-pearl-sm: 0 8px 20px -12px rgba(220, 200, 200, 0.35);
   --ease-silk: cubic-bezier(0.16, 1, 0.3, 1);
 
-  /* ---- 4. Typographies (injectées par next/font dans <html>) ---- */
+  /* ---- 4. Typographies (injectées par next/font dans <html>) ----
+     `--font-admin` : police de l'APPLICATION (Back-Office) — neutre, dense,
+     indépendante de la charte du site public.
+     `--font-body` / `--font-heading` : duo éditorial, réservé au SITE PUBLIC.
+     Les valeurs ci-dessous servent de **repli** ; les familles réelles sont
+     posées au runtime par `next/font` sur <html>. */
+  --font-admin: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;
   --font-body: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
   --font-heading: "Cormorant Garamond", Georgia, "Times New Roman", serif;
 
@@ -192,8 +199,18 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 
-  /* Typographies du thème (variables runtime next/font) */
-  --font-sans: var(--font-body);
+  /* Famille par défaut des utilitaires Tailwind. Elle suit la police de
+     l'**application** : un `font-sans` dans le back-office ne doit jamais
+     ramener la police du site public. Le site public est re-ciblé dans la
+     couche de base (voir § Typographie).
+
+     `--font-mono` n'est volontairement PAS redéfini : il reste la pile monospace
+     **du système** (aucun téléchargement, aucune dépendance au thème). C'est la
+     seule famille autre que celles ci-dessus dans le back-office, et elle est
+     réservée aux **valeurs techniques**, où l'alignement compte : slug de page,
+     ancre `#contact`, code hexadécimal, nom de fichier importé, ratio d'image.
+     Une police proportionnelle y rendrait la lecture des chiffres plus lente. */
+  --font-sans: var(--font-admin);
 }
 
 /* Valeurs statiques : génèrent les utilitaires Tailwind
@@ -246,6 +263,128 @@
 }
 
 /* ==========================================================================
+   EFFETS DE SURVOL DES VIGNETTES DE GALERIE — famille cumulable (Étape 11.23)
+   --------------------------------------------------------------------------
+   Les VALEURS viennent des réglages du module, transmises en variables CSS par
+   `galleryHoverCssVars()` (src/lib/gallery-effects.ts) et posées sur le
+   conteneur de grille. Ici ne vit que la MÉCANIQUE.
+
+   Trois raisons de ne pas écrire ces effets en style en ligne :
+     1. un style en ligne ne peut pas décrire un état de `:hover` ;
+     2. la neutralisation sous `prefers-reduced-motion` se fait en UN endroit ;
+     3. le bornage des valeurs est centralisé côté domaine.
+
+   Comme `.cover-text-hover` ci-dessus, ces règles sont volontairement HORS
+   `@layer` : elles doivent primer sur les utilitaires Tailwind.
+
+   Performance : uniquement `transform`, `filter` et `box-shadow`, tous composés
+   par le GPU — aucun recalcul de mise en page, donc aucun impact sur le
+   défilement. `will-change` est délibérément absent : le promouvoir en
+   permanence consommerait de la mémoire pour un effet fugace.
+   ========================================================================== */
+.hv-frame,
+.hv-media {
+  transform: translate3d(0, 0, 0);
+}
+
+.hv-frame {
+  transition:
+    transform 300ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 300ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.hv-media {
+  transition:
+    transform 500ms cubic-bezier(0.16, 1, 0.3, 1),
+    filter 400ms ease-out;
+}
+
+/* Le déclencheur est le survol de la vignette OU le focus clavier : un
+   utilisateur au clavier bénéficie des mêmes effets, pas d'un site « mort ». */
+@media (hover: hover) and (pointer: fine) {
+  .group\/media:hover .hv-frame,
+  .group\/media:focus-within .hv-frame {
+    transform: translate3d(0, calc(-1 * var(--hv-lift, 0px)), 0);
+    box-shadow: var(--hv-glow, none);
+  }
+
+  .group\/media:hover .hv-media,
+  .group\/media:focus-within .hv-media {
+    transform: translate3d(0, var(--hv-parallax, 0px), 0)
+      scale(var(--hv-zoom, 1));
+    filter: var(--hv-filter, none);
+  }
+
+  .group\/media:hover .hv-shine,
+  .group\/media:focus-within .hv-shine {
+    opacity: 1;
+    transform: translate3d(320%, 0, 0) rotate(12deg);
+  }
+}
+
+/* Reflet diagonal de la brillance : un simple voile blanc qui traverse. */
+.hv-shine {
+  position: absolute;
+  top: -25%;
+  bottom: -25%;
+  left: -30%;
+  width: 18%;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate3d(-120%, 0, 0) rotate(12deg);
+  background: linear-gradient(
+    100deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.42) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  transition:
+    transform 700ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 300ms ease;
+}
+
+/* « Accentuation de la lisibilité » — assombrit depuis le bas vers le haut. */
+.hv-overlay {
+  opacity: 0;
+  transition: opacity 300ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .group\/media:hover .hv-overlay,
+  .group\/media:focus-within .hv-overlay {
+    opacity: 1;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   ACCESSIBILITÉ — `prefers-reduced-motion: reduce`
+   --------------------------------------------------------------------------
+   Les effets ne sont pas seulement « accélérés » : ils sont **supprimés**. Un
+   zoom instantané au passage de la souris reste une variation brutale pour les
+   personnes sensibles au mouvement — l'exigence porte sur le changement d'état,
+   pas sur sa durée. L'affichage redevient strictement statique, sans perte
+   d'information (le voile de lisibilité n'est pas un contenu).
+   -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .hv-frame,
+  .hv-media,
+  .hv-shine {
+    transform: none !important;
+    filter: none !important;
+    box-shadow: none !important;
+    transition: none !important;
+  }
+
+  .hv-shine {
+    opacity: 0 !important;
+  }
+
+  .hv-overlay {
+    transition: none !important;
+  }
+}
+
+/* ==========================================================================
    Base layer — typographie, fond, sélection
    ========================================================================== */
 @layer base {
@@ -258,21 +397,49 @@
     -webkit-text-size-adjust: 100%;
   }
 
+  /* --------------------------------------------------------------------------
+     POLICE PAR DÉFAUT = CELLE DE L'APPLICATION (Back-Office).
+     L'administration est un **outil** : sa typographie ne dépend pas de la
+     charte choisie pour le site public.
+
+     Pourquoi sur <body> et non sur le conteneur `.admin` : les dialogues, menus
+     et feuilles de Radix sont montés dans un **portail rattaché à <body>**, donc
+     EN DEHORS de `.admin`. Une police posée sur `.admin` les aurait laissés en
+     police éditoriale — soit exactement l'incohérence à supprimer.
+     -------------------------------------------------------------------------- */
   body {
     @apply bg-background text-foreground;
-    font-family: var(--font-body);
-    letter-spacing: 0.02em;
+    font-family: var(--font-admin);
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
 
-  /* Titres éditoriaux en serif raffiné (Cormorant Garamond / Playfair) */
-  h1,
-  h2,
-  h3,
-  h4,
-  h5,
-  h6 {
+  /* --------------------------------------------------------------------------
+     SITE PUBLIC — le duo éditorial, et lui seul.
+     Cible `body:not(:has(.admin))` plutôt qu'un conteneur dédié : la page
+     publique n'a **aucun nœud enveloppant** (Header / main / Footer sont enfants
+     directs de <body>), et ce ciblage couvre en plus les portails Radix du
+     chrome public — le menu mobile du Header — sans toucher au DOM ni ajouter de
+     `<div>` susceptible de perturber la mise en page `flex-col`.
+
+     Repli si `:has()` n'est pas supporté : le site public s'afficherait en police
+     d'application. Dégradation purement visuelle, jamais fonctionnelle.
+     -------------------------------------------------------------------------- */
+  body:not(:has(.admin)) {
+    font-family: var(--font-body);
+    letter-spacing: 0.02em;
+  }
+
+  /* Titres éditoriaux en serif — **site public uniquement**.
+     Jusqu'à l'étape 11.22 cette règle était globale : elle imposait Cormorant
+     Garamond à TOUS les h1–h6 du back-office, y compris les titres de zone (N1)
+     et de sous-zone (N3) de l'échelle typographique 11.21, réglés en sans-serif
+     semibold — d'où des titres d'éditeurs en serif, incohérents.
+
+     `:where()` maintient la spécificité à celle de l'ancienne règle (0,0,1) :
+     les utilitaires Tailwind de graisse (`font-light`, `font-semibold`…) des
+     titres publics continuent donc de l'emporter, exactement comme avant. */
+  :where(body:not(:has(.admin))) :is(h1, h2, h3, h4, h5, h6) {
     font-family: var(--font-heading);
     font-weight: 500;
     letter-spacing: 0.01em;

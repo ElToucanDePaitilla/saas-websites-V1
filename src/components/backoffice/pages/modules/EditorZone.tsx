@@ -5,6 +5,8 @@ import { ChevronDown } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
+import { EDITOR_INDENT, EDITOR_TYPE } from "./editor-type";
+
 /**
  * ============================================================================
  * ZONE D'ÉDITION — bloc de regroupement des formulaires de modules (11.17)
@@ -110,14 +112,13 @@ export function EditorZone({
               className="h-4 w-1 shrink-0 rounded-full"
               style={{ backgroundColor: toneColor }}
             />
-            <h5
-              id={titleId}
-              className="text-[13px] font-semibold text-foreground"
-            >
+            {/* N1 de l'échelle des éditeurs (voir `editor-type.ts`) : le plus
+                haut niveau DANS le formulaire, sous le nom du module (N0). */}
+            <h5 id={titleId} className={EDITOR_TYPE.zoneTitle}>
               {title}
             </h5>
           </div>
-          <p id={scopeId} className="text-xs leading-relaxed text-muted-foreground">
+          <p id={scopeId} className={EDITOR_TYPE.zoneScope}>
             {scope}
           </p>
         </div>
@@ -148,7 +149,13 @@ export function EditorZone({
         role={collapsible ? "region" : undefined}
         aria-labelledby={collapsible ? titleId : undefined}
         hidden={collapsible && !open}
-        className={cn("grid gap-3", !open && "hidden")}
+        className={cn(
+          "grid gap-3",
+          // La **géométrie** double la typographie : le contenu de la zone est
+          // décalé d'un cran, donc l'imbrication se lit sans comparer les tailles.
+          EDITOR_INDENT.zoneContent,
+          !open && "hidden"
+        )}
       >
         {children}
       </div>
@@ -190,8 +197,12 @@ export function EditorSubZone({
         className
       )}
     >
-      <p className="text-xs font-medium text-foreground">{title}</p>
-      {children}
+      {/* N3 de l'échelle : nettement au-dessus du libellé de champ (N4), dont
+          il partageait auparavant taille, graisse ET couleur. */}
+      <p className={EDITOR_TYPE.subTitle}>{title}</p>
+      <div className={cn("grid gap-3", EDITOR_INDENT.subZoneContent)}>
+        {children}
+      </div>
     </div>
   );
 }

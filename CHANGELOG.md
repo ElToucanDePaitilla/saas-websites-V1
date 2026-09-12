@@ -11,6 +11,34 @@ NOTICE D'UTILISATION DU FICHIER CHANGELOG.MD
 
 ---
 
+## 2026-09-11 – 18:51 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Retour UX — « Presets Onboarding » n'avait pas sa place dans Navigation & Menus : les modèles sont ramenés au démarrage du site.**
+- **Constat (utilisateur)** : le panneau figurait **en tête** de l'écran d'édition Navigation & Menus, au même rang que les actions courantes (ajouter / déplacer / renommer un lien), alors qu'il **remplace tout le Header** et **recalcule `inMenu` de toutes les pages** — une action d'**initialisation** (ou de reset), pas d'édition. Doublon d'entrée de surcroît : l'écran de bienvenue (Étape 10.1) proposait déjà un accès aux presets.
+- **Décision — un modèle est un état de départ** : dans [`NavigationManager`](src/components/backoffice/navigation/NavigationManager.tsx), le panneau n'est plus rendu que si le **menu est vide** (`isNavigationEmpty`). Sinon il reste accessible via la **Zone de réinitialisation** (nouveau bouton « Repartir d'un modèle »), au même titre que « Vider la navigation ».
+- **Renommage** : « Presets Onboarding » → **« Modèles de navigation »**, badge **« Modèle actif »**, et avertissement explicite dans le dialogue de confirmation (« Attention : tout le menu principal actuel sera remplacé »).
+- **Écran de bienvenue (site vierge)** : les 3 modèles sont désormais **affichés directement**, au lieu d'un simple lien sortant. Nouveau client island [`SiteStarterPicker`](src/components/onboarding/SiteStarterPicker.tsx) embarqué dans [`WelcomeOnboarding`](src/components/onboarding/WelcomeOnboarding.tsx). Aucun store n'étant monté sur un site vide, l'application passe par l'API serveur existante `POST /api/navigation/presets` (nouveau helper [`persistApplyPreset`](src/lib/persistence-client.ts)) ; après application, l'écran propose l'étape suivante — créer et publier la page d'accueil.
+- **Correctif de fond découvert — placeholders de modèles purgés** : les cibles d'un modèle (`/series`, `/galeries`, `/prestations#mariages`…) sont des placeholders **intentionnels** « page à créer ». Or la purge automatique des liens morts (serveur [`pruneOrphanNavigation`](src/db/repositories/navigation.repository.ts) et client [`PagesNavigationSync`](src/components/backoffice/navigation/PagesNavigationSync.tsx)) les supprimait : **un modèle appliqué sur un site vierge était aussitôt annulé au rechargement**. Nouveau prédicat pur [`isPurgableOrphanNavEntry()`](src/lib/navigation.ts) (orphelin **et** hors cibles de modèles), utilisé par les deux purges ; les ancres du seed restent nettoyées et le badge informatif « Lien mort » est inchangé. Helpers d'aperçu ajoutés au modèle pur (`presetRootLabels`, `presetChildLabels`).
+- Vérifications : `tsc --noEmit` OK (sources) ; `eslint` OK sur tous les fichiers modifiés ; `npm run build` OK (18 pages).
+
+### Incident d'environnement de développement (cache Turbopack) — cause & correctif
+- **Cause racine** : le dossier `.next/dev` a été supprimé **alors qu'un serveur `next dev` tournait**, et `npm run build` a été lancé **en parallèle** — deux écrivains sur le même cache Turbopack. La base de cache est devenue incohérente (`Unable to open static sorted file … introuvable`), puis **verrouillée par le serveur de dev encore actif**, d'où des `Accès refusé (os error 5)` à l'écriture du fichier `00000008.meta` et à la suppression du dossier (le serveur en cours détenait les fichiers).
+- **Correctif retenu** : `experimental.turbopackFileSystemCacheForDev: false` dans [`next.config.ts`](next.config.ts:1). Le cache persistant de développement est **activé par défaut** dans Next 16.3.4 ; le désactiver rend `next dev` déterministe et le soustrait à ce dossier verrouillé. Utiliser **`experimental.turbopackFileSystemCacheForDev`** (et non `turbopackPersistentCaching`) : c'est bien la clé lue par `isFileSystemCacheEnabledForDev()`.
+- **Validation** : une instance `next dev` lancée avec cette configuration affiche `✓ Ready` **sans aucun message « Persisting failed »** ; `npm run build` reste OK.
+- **Régénération** : le reliquat `.next/dev/cache` (vide ou verrouillé) est **inerte** avec l'option désactivée ; le supprimer après un redémarrage de Windows si l'on souhaite récupérer l'espace, puis réactiver l'option si désiré.
+- **Règle à retenir** : ne jamais lancer `npm run build` pendant que `npm run dev` tourne, et ne jamais supprimer `.next` sous un serveur Next actif.
+
+### Fichiers créés ou modifiés
+- Créé : `src/components/onboarding/SiteStarterPicker.tsx`
+- Modifiés : `src/lib/navigation.ts`, `src/lib/persistence-client.ts`, `src/components/backoffice/navigation/{NavigationManager,PresetOnboardingPanel,PagesNavigationSync}.tsx`, `src/db/repositories/navigation.repository.ts`, `src/components/onboarding/WelcomeOnboarding.tsx`, `next.config.ts`, `plans/ROADMAP-4.4-nav-presets-onboarding.md`, `CHANGELOG.md`
+- BDD : **aucune** migration. Schéma et contrat de données inchangés.
+
+### Prochaine étape prévue
+Recette : sur un site vierge, appliquer un modèle depuis l'écran de bienvenue puis **recharger** → le menu doit **persister** (plus de purge) ; dans Navigation & Menus, vérifier que le panneau n'apparaît **que** si le menu est vide, et qu'il est accessible (et refermable) via « Repartir d'un modèle » sinon.
+
+---
+
 ## 2026-09-10 – 22:31 (heure locale America/Bogota)
 
 ### Tâche exécutée
@@ -143,6 +171,397 @@ Nouvelle passe de recette `/demo` : Gallery Dynamic au clic simple (sans fermetu
 
 ### Prochaine étape prévue
 Contrôle visuel `/demo` : Gallery Static (aucune interaction, Passe-partout + CTA), Gallery Dynamic (double-clic → diaporama, aucun voile au survol), Gallery Portfolio (clic simple → album exclusif + badges) ; cycle de zoom fit → 1,5× → 2,5× et pan au clic maintenu ; import multiple et dossier non compressé depuis `/admin/pages` ; responsivité mobile / tablette / desktop.
+
+---
+
+## 2026-09-11 – 09:41 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Étape 11.20 — Gestion des albums du Portfolio par grille de vignettes** (plan [`plans/ROADMAP-11.20-albums-thumbnail-grid.md`](plans/ROADMAP-11.20-albums-thumbnail-grid.md)) — **Lots A + B + C** livrés (ordre retenu : A+B+C → E → D).
+- **Constat** : chaque album était rendu **intégralement déplié** ([`AlbumManagerPanel`](src/components/backoffice/pages/modules/gallery/AlbumManagerPanel.tsx)) → hauteur proportionnelle à *albums × photos* (600 vignettes pour 30 albums × 20 photos).
+- **LOT A — champ `hidden` (aucune migration)** : [`GalleryAlbum.hidden`](src/lib/pages.ts:1389) + `createGalleryAlbum` (`hidden: false`) + normalisation `record.hidden === true` (**repli `false`** : les albums existants restent visibles) ; [`galleryAlbumSchema`](src/lib/schemas/persistence.ts:275) → `hidden: z.boolean().optional()`. **Branchements publics** : [`GalleryManager`](src/components/modules/gallery/GalleryManager.tsx:74) (album masqué non affiché), [`galleryImageSources()`](src/lib/pages.ts:1990) (exclusion des albums masqués du **SEO/OG**) et [`PublicModules`](src/components/modules/PublicModules.tsx:75) (si tout est masqué, la section galerie n'est pas rendue).
+- **LOT B — grille de vignettes** : nouveaux [`AlbumThumbnail.tsx`](src/components/backoffice/pages/modules/gallery/AlbumThumbnail.tsx) (couverture `MediaImage` lazy, **n° d'ordre**, compte de photos, actions **au survol ET au focus clavier**, badge **« Masqué »** permanent, mention « Aucune photo — invisible sur le site ») et [`AlbumGrid.tsx`](src/components/backoffice/pages/modules/gallery/AlbumGrid.tsx) (tuile **« Nouvel album » en 1ʳᵉ cellule**, grille 2/3/4 colonnes, état vide, réordonnancement **↑ / ↓ accessible** hors glisser, création → ouverture + focus) ; [`AlbumManagerPanel`](src/components/backoffice/pages/modules/gallery/AlbumManagerPanel.tsx) réduit à la **composition** (compteur, phrase de portée, bloc « Affichage sur les couvertures », grille).
+- **LOT C — vue d'album en place** : formulaire **pleine largeur** (retour « ← Tous les albums », nom, description, sélecteur de couverture, réutilisation **telle quelle** de [`GalleryImagesPanel`](src/components/backoffice/pages/modules/gallery/GalleryImagesPanel.tsx)) — **sans route ni persistance supplémentaire** ; garde-fou **dérivé** (album disparu ⇒ retour à la grille, sans `setState` en effet).
+- **Décisions appliquées** : A-2 (un album ne porte que son contenu — pas les réglages de galerie), A-4/D-5 (le glisser-déposer ne sera **jamais** le seul moyen de réordonner), D-6 (numéro d'ordre affiché), D-9 (réutilisation de `GalleryImagesPanel`).
+- Vérifications : `npx tsc --noEmit` OK ; `npx eslint` OK (0 erreur, 0 avertissement) ; `npm run build` OK (18 pages).
+
+### Fichiers créés ou modifiés
+- Créés : `src/components/backoffice/pages/modules/gallery/AlbumThumbnail.tsx`, `src/components/backoffice/pages/modules/gallery/AlbumGrid.tsx`
+- Modifiés : `src/lib/pages.ts`, `src/lib/schemas/persistence.ts`, `src/components/modules/gallery/GalleryManager.tsx`, `src/components/modules/PublicModules.tsx`, `src/components/backoffice/pages/modules/gallery/AlbumManagerPanel.tsx`, `CHANGELOG.md`
+- BDD : **aucune migration** (`hidden` optionnel, repli `false`).
+
+### Prochaine étape prévue
+**LOT E** — import groupé « un dossier parent → chaque sous-dossier devient un album » (`webkitRelativePath`, cas limites §6.1 du plan), puis **LOT D** — glisser-déposer sur la grille **précédé du prototype obligatoire** (24 albums / 3 lignes, Échap) avec repli documenté ; mise à jour de [`ROADMAP.md`](ROADMAP.md) (Étape 11.20) en fin de parcours.
+
+---
+
+## 2026-09-11 – 16:25 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Étape 11.25 — Indicateur de page d'accueil dans la liste des pages** (demande : *« je souhaite que cette maison apparaisse grisée claire et que le fait de cliquer la rende noire indiquant ainsi qu'il s'agit de la page d'accueil ; le survol de cette icône ouvrira un tooltip indiquant "Ceci est votre page d'accueil" »*).
+
+**Ce qui n'allait pas.** La maison n'était affichée **que sur les pages qui n'étaient pas l'accueil** ([`PagesManager.tsx`](src/components/backoffice/pages/PagesManager.tsx)) : la page d'accueil, elle, portait un badge « Accueil » et **aucune maison**. Conséquences : nulle part la couleur ne disait « c'est l'accueil », puisqu'il manquait justement la maison sur cette ligne ; et la ligne de l'accueil, privée d'un bouton, **décalait ses icônes** d'un cran par rapport aux autres (alignement incohérent d'une ligne à l'autre).
+
+**Ce qui a été fait.**
+- La maison est désormais affichée **sur chaque ligne**, et c'est sa **couleur** qui porte l'information :
+  · **grise et cliquable** → cette page n'est pas l'accueil ; le clic la désigne comme accueil (`setHomePage`) ;
+  · **noire et non interactive** → c'est l'accueil du site.
+- Tooltips explicites : « **Ceci est votre page d'accueil** » sur la page d'accueil — votre formulation, mot pour mot — et « Définir cette page comme page d'accueil » sur les autres, où votre phrase aurait été **fausse** (elle affirmerait une chose qui n'est pas encore vraie).
+- L'alignement est réparé : le `size-9` de l'indicateur reproduit exactement la taille du bouton voisin.
+
+**Deux pièges techniques évités — c'est le cœur de cette étape.**
+1. **`disabled` était inutilisable ici.** [`ui/button.tsx`](src/components/ui/button.tsx) porte `disabled:pointer-events-none` : un bouton désactivé **ne reçoit aucun survol**, donc le **tooltip ne se serait jamais affiché** — or c'est précisément l'exigence. L'état « accueil » est donc rendu par un **indicateur** (`<span role="img">` avec `title` + `aria-label`), pas par un bouton désactivé.
+2. **Un bouton désactivé mais focusable reste un piège au clavier** : on tombe dessus avec Tab, on l'active, il ne se passe rien. Un indicateur n'est pas une action — il ne doit pas être dans l'ordre de tabulation. Le nouveau rendu respecte cela.
+
+**Accessibilité** : le `title` seul ne suffit jamais (il n'est pas exposé de façon fiable aux technologies d'assistance, et il n'apparaît qu'au survol) — un `aria-label` explicite l'accompagne, distinct selon que la page est l'accueil ou non. Et la couleur **n'est pas le seul signal** de l'information : la ligne de l'accueil conserve son **badge « Accueil »** (non demandé à la suppression — c'est le pendant **textuel** de la maison noire, pour les personnes qui ne distinguent pas les niveaux de gris) et son URL canonique `/` reste visible dans la colonne « URL ».
+
+- **Aucune donnée, aucun schéma, aucun comportement de navigation modifiés** : uniquement le rendu de la cellule d'actions.
+- Vérifications : `npx tsc --noEmit` OK ; `npm run lint` OK ; `npm run build` OK (18 pages).
+
+### Fichiers modifiés
+- `src/components/backoffice/pages/PagesManager.tsx` (indicateur de page d'accueil), `CHANGELOG.md`
+- BDD : **aucune migration**.
+
+### Prochaine étape prévue
+Recette : dans « Pages », la maison doit être **grise sur toutes les lignes sauf une**, la **noire** ; le survol de la grise doit proposer de définir la page comme accueil, et le survol de la noire doit afficher « Ceci est votre page d'accueil » ; un clic sur une maison grise doit basculer l'accueil (l'ancienne accueil redevenant grise).
+
+---
+
+## 2026-09-11 – 16:00 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Étape 11.24 — Désambiguïsation des deux boutons d'aperçu du Back-Office** (constat de recette : *« un bouton "Aperçu du site" est présent en haut à droite dans le header du tableau de bord, et si je sélectionne une page, un bouton "Aperçu" figure également en haut à droite… cela me semble être un doublon, perturbant pour le UX »*).
+
+**Diagnostic — deux commandes distinctes, une seule apparence.** L'analyse a montré que les deux boutons ne font **pas** la même chose :
+
+| Bouton | Emplacement | Destination |
+|---|---|---|
+| « Aperçu du site » ([`admin/layout.tsx`](src/app/(back-office)/admin/layout.tsx)) | barre du tableau de bord — **toutes** les pages d'administration | `/` (accueil du site) |
+| « Aperçu » ([`PageEditor.tsx`](src/components/backoffice/pages/PageEditor.tsx)) | en-tête de la page éditée | `pageHref(page.slug)` (**la page en cours**) |
+
+Mais trois facteurs les faisaient percevoir comme un doublon : **des libellés quasi identiques** (« Aperçu » / « Aperçu du site ») alors que les destinations diffèrent ; **la même position** (colonne de droite de deux barres superposées, même icône `ExternalLink`, même ouverture en nouvel onglet) ; et une **identité réelle** lorsque la page éditée *est* l'accueil, les deux pointant alors vers la même URL.
+
+**Décision retenue (choix du propriétaire du produit) : conserver les deux, lever l'ambiguïté par le libellé.** Le bouton contextuel devient « **Aperçu de la page** ». Motif : chacun conserve son utilité — l'aperçu **contextuel** montre ce qu'on est en train d'éditer, l'aperçu **global** reste le seul recours sur les écrans sans aperçu (médias, navigation, profil, identité visuelle, liste des pages). Supprimer l'un des deux aurait retiré une fonction réelle.
+- Une variante plus structurelle avait été proposée — **déplacer** « Aperçu du site » dans la barre latérale, hors de la zone d'actions du compte (où il voisine aujourd'hui avec « Déconnexion » et l'avatar, sans rapport avec eux) : elle a été **écartée**, le renommage suffisant.
+- Le commentaire d'en-tête de [`PageEditor.tsx`](src/components/backoffice/pages/PageEditor.tsx) documente désormais **pourquoi** les deux libellés sont distincts, afin qu'une simplification future ne les refusionne pas.
+
+**Aucun changement de comportement** : mêmes destinations, même ouverture en nouvel onglet, mêmes styles. Seul le texte change.
+- Vérifications : `npx tsc --noEmit` OK ; `npm run lint` OK ; `npm run build` OK (18 pages).
+
+### Fichiers modifiés
+- `src/components/backoffice/pages/PageEditor.tsx` (libellé « Aperçu » → « Aperçu de la page » + commentaire d'en-tête), `CHANGELOG.md`
+- BDD : **aucune migration**.
+
+### Prochaine étape prévue
+Recette : vérifier que depuis l'édition d'une page, « Aperçu de la page » ouvre bien **cette page**, et que « Aperçu du site » (barre du tableau de bord) ouvre toujours l'**accueil** — les deux libellés doivent être lisibles sans ambiguïté côte à côte.
+
+---
+
+## 2026-09-11 – 15:30 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Étape 11.23 — Module « Galerie Portfolio » : libellés, dédoublonnage du parcours d'import et famille d'effets de survol cumulables.** Quatre demandes, appliquées de façon complète et sans régression.
+
+**1. Libellés de la zone des albums** ([`ModuleGalleryEditor.tsx`](src/components/backoffice/pages/modules/ModuleGalleryEditor.tsx))
+- Titre de zone et entrée de la barre d'ancres : « Les albums » → **« Les albums de la Galerie Portfolio »**. Le pluriel a été respecté (« albums » et non « album ») — une coquille dans la formulation initiale.
+- Compteur ([`AlbumManagerPanel.tsx`](src/components/backoffice/pages/modules/gallery/AlbumManagerPanel.tsx)) : « N albums » → **« Nombre d’Albums actuellement créés : N »**, N étant le nombre **réel** d'albums (`albums.length`), donc toujours à jour.
+- Un **niveau d'annotation en phrase** a été ajouté au barème typographique ([`editor-type.ts`](src/components/backoffice/pages/modules/editor-type.ts), niveau **ML-b**) : les capitales du micro-libellé ML convenaient à une étiquette de deux mots, pas à une phrase entière.
+
+**2. Suppression du parcours d'import d'albums en doublon** — la demande était explicite et a été suivie **intégralement**.
+- Le bloc encadré « Importer un dossier d'albums », son paragraphe d'explication et son bouton « Choisir un dossier d'albums » sont **retirés** de la zone : la création d'albums passe désormais par **un seul parcours**, la tuile « + Nouvel album » de la grille.
+- Le composant [`AlbumFolderImportPanel.tsx`](src/components/backoffice/pages/modules/gallery/AlbumFolderImportPanel.tsx) est **supprimé du projet** (fichier supprimé, plus aucun import).
+- **Aucun résidu** : la prop devenue inutile `demo` a été retirée de `AlbumManagerPanel` (elle ne servait qu'au bloc supprimé), et la phrase de cadrage qui renvoyait au parcours disparu — « *Un dossier importé devient un album* » — a été **réécrite** ; elle aurait décrit une fonctionnalité inexistante. Vérification par recherche : plus aucune référence, plus aucun style ni gestionnaire d'événement orphelin.
+- **Ce qui demeure** : l'import de **photos** dans un album (dossier complet ou sélection multiple) reste disponible dans la vue d'album via [`GalleryImagesPanel`](src/components/backoffice/pages/modules/gallery/GalleryImagesPanel.tsx) — c'est le parcours conservé, avec la tuile « + Nouvel album ».
+
+**3. Famille d'effets de survol, optionnels et cumulables** (le cœur de l'étape)
+- **Deux effets demandés au minimum** : **Zoom** et **Élévation douce**, désormais **réglables finement** (zoom 100–118 %, élévation 0–16 px) — ils étaient auparavant **codés en dur** (`scale-105` / `-translate-y-1`).
+- **Quatre effets premium ajoutés**, choisis pour leur valeur perçue et leur coût :
+  · **Parallaxe** (0–12 px) — l'image glisse dans son cadre, profondeur immédiate ;
+  · **Brillance discrète** — un reflet diagonal traverse la vignette ;
+  · **Saturation et contraste** — les couleurs se ravivent ;
+  · **Bordure lumineuse** — un liseré à la couleur d'accent du thème.
+- **Chaque effet s'active indépendamment et se cumule** : l'interrupteur général (`hoverAnimation`) commande la famille, chaque sous-effet a son propre réglage, et **« Accentuation de la lisibilité » a été découplée** de l'interrupteur (elle fonctionnait auparavant uniquement si l'animation était active) — elle peut donc s'utiliser seule ou avec n'importe quelle combinaison.
+- **Persistance** : nouvelle famille `layout.hoverEffects` (`zoom`, `lift`, `parallax`, `shine`, `saturate`, `glow`) dans le JSONB du module. **Aucune migration** : le champ est `optional()` dans le schéma zod, et la lecture applique un **repli champ par champ** (`resolveGalleryHoverEffects`) — un contenu enregistré avant cette étape conserve donc **exactement** son rendu, les valeurs par défaut reproduisant l'ancien comportement (zoom 105 %, élévation 4 px, aucun effet d'ambiance).
+- **Performance** : uniquement `transform`, `filter` et `box-shadow`, composés par le GPU — aucun recalcul de mise en page. `will-change` est volontairement absent (le promouvoir en permanence consommerait de la mémoire pour un effet fugace).
+- **Accessibilité** : les effets ne se déclenchent que sur un appareil à **survol réel** (`hover: hover` et `pointer: fine`), ne s'appliquent pas sur écran tactile (l'affichage reste stable), et le **focus clavier** produit les **mêmes** effets que la souris. Sous `prefers-reduced-motion: reduce`, ils ne sont pas seulement accélérés : ils sont **supprimés** (`transform`, `filter`, `box-shadow` neutralisés) — un zoom instantané au survol demeure une variation brutale pour les personnes sensibles au mouvement.
+- **Choix technique** : les valeurs sont transmises en **variables CSS** posées sur le conteneur de grille ([`GalleryGrid`](src/components/modules/gallery/GalleryGrid.tsx) via `galleryHoverCssVars()`), la mécanique vivant dans [`globals.css`](src/app/globals.css). Trois raisons : un style en ligne ne peut pas décrire un état `:hover` ; la neutralisation `prefers-reduced-motion` se fait **en un seul endroit** ; le bornage des valeurs est centralisé dans le domaine.
+
+**4. « Accentuation de la lisibilité »** ([`GalleryHoverPanel.tsx`](src/components/backoffice/pages/modules/gallery/GalleryHoverPanel.tsx))
+- Libellé « Voile dégradé au survol » → **« Accentuation de la lisibilité »**.
+- Description remplacée par le texte demandé, **mot pour mot** en variante Portfolio : « *Lors du survol de la couverture de l'album, assombrit l'image depuis le bas de la couverture vers le haut pour améliorer la lisibilité du texte.* »
+- **Vérification demandée** : l'effet **correspond** à cette description — le dégradé existant (`from-black/70 via-black/10 to-transparent`) assombrit bien **depuis le bas vers le haut** — il s'applique au **survol** (et au focus clavier) et il est **compatible avec les effets cumulés** (calque indépendant, désormais découplé de l'interrupteur général). Aucun changement de rendu n'était donc nécessaire, seulement de libellé, de description et de découplage.
+- Sur les variantes `static` / `dynamic`, la description emploie « photo » au lieu de « couverture d'album » : la formulation fournie aurait été fausse sur ces variantes, qui n'affichent aucun album.
+
+### Validations
+- `npx tsc --noEmit` : **OK**
+- `npm run lint` : **OK**
+- `npm run build` : **OK — 18 pages**
+- BDD : **aucune migration**.
+- Contrôle d'orphelins : recherche de `AlbumFolderImportPanel` → plus aucune référence hors note historique.
+
+### Diff — fichiers touchés (périmètre demandé uniquement)
+| Fichier | Nature |
+|---|---|
+| `src/components/backoffice/pages/modules/ModuleGalleryEditor.tsx` | titre de zone + entrée d'ancres |
+| `src/components/backoffice/pages/modules/gallery/AlbumManagerPanel.tsx` | compteur en phrase, retrait du bloc d'import, prop `demo` retirée, phrase de cadrage corrigée |
+| `src/components/backoffice/pages/modules/gallery/AlbumFolderImportPanel.tsx` | **supprimé** |
+| `src/components/backoffice/pages/modules/editor-type.ts` | niveau d'annotation en phrase (ML-b) |
+| `src/lib/pages.ts` | type `GalleryHoverEffects`, champ `hoverEffects`, défauts, repli champ par champ |
+| `src/lib/gallery-effects.ts` | `galleryHoverCssVars()` |
+| `src/lib/schemas/persistence.ts` | `galleryHoverEffectsSchema` optionnel |
+| `src/app/globals.css` | mécanique des effets + neutralisation `prefers-reduced-motion` |
+| `src/components/modules/gallery/GalleryGrid.tsx` | variables CSS de survol |
+| `src/components/modules/gallery/GalleryItem.tsx` | classes `hv-*`, brillance, découplage de l'accentuation de lisibilité |
+| `src/components/backoffice/pages/modules/gallery/GalleryHoverPanel.tsx` | famille d'effets + libellé et description |
+
+### Incidence technique (transparence)
+Une écriture de fichier a produit un **fichier parasite** (`src/components/back`), dû à une troncature du chemin côté outil. Détecté immédiatement, **supprimé**, et la modification a été rejouée par retouches ciblées : l'arborescence est propre et `AlbumManagerPanel.tsx` porte bien les changements attendus.
+
+### Prochaine étape prévue
+Recette visuelle de la famille d'effets : activer l'interrupteur général puis **cumuler** zoom + élévation + parallaxe + brillance + saturation, vérifier la réponse au **focus clavier**, et contrôler qu'aucun effet ne subsiste avec « réduire les animations » activé dans le système. *Reste ouvert, non traité : les chaînes publiques `alt` / `aria-label` de `GalleryGrid` qui disent encore « photo » pour une couverture d'album.*
+
+---
+
+## 2026-09-11 – 14:25 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Étape 11.22 — Une police unique pour le Back-Office, indépendante du thème du site public** (demande : *« supprime toute dépendance aux polices assujetties au thème choisi par l'utilisateur… impose une police unique pour l'ensemble du back-office, indépendante des préférences de thème front-office »*).
+
+**Ce qui était en place.** Le layout **racine** ([`layout.tsx`](src/app/layout.tsx)) chargeait le duo éditorial du thème « Éclat Minéral & Nacre » sur `<html>` — Cormorant Garamond (`--font-heading`) et Plus Jakarta Sans (`--font-body`) — et [`globals.css`](src/app/globals.css) l'appliquait **globalement** :
+
+| Règle, avant 11.22 | Effet sur le Back-Office |
+|---|---|
+| `body { font-family: var(--font-body); letter-spacing: 0.02em }` | l'administration héritait de la police **et de l'interlettrage éditorial** (+0,02 em, pénalisant sous 13 px) |
+| `h1…h6 { font-family: var(--font-heading) }` — **globale** | **tous** les titres du back-office en **serif** Cormorant, y compris les titres de zone (N1) et de sous-zone (N3) de l'échelle 11.21 — réglés en sans-serif semibold et rendus en serif. La hiérarchie de 11.21 était donc **partiellement annulée par cette règle** |
+| `@theme { --font-sans: var(--font-body) }` | un `font-sans` dans le back-office ramenait la police du site public |
+| `var(--font-heading)` en style inline | titre de `/admin/login` en serif |
+
+**Correctif — quatre décisions.**
+
+1. **Nouvelle police d'application** : `Inter` déclarée dans le layout racine via `next/font` (variable `--font-admin`, `display: "swap"`, sous-ensemble latin). Inter est **variable** : toutes les graisses tiennent dans **un seul fichier**, donc aucun téléchargement multiple — c'est le critère « performante ». Choisie pour une interface **dense** : x-hauteur élevée (lisible à 11–13 px), chiffres tabulaires (tableaux, compteurs, hex), neutralité — le standard éprouvé des tableaux de bord.
+2. **La police d'application devient le défaut** : `body { font-family: var(--font-admin) }`, et l'interlettrage `0.02em` **quitte** le niveau global.
+3. **Le duo éditorial est restreint au site public** : `body:not(:has(.admin))` porte `--font-body` + l'interlettrage, et `:where(body:not(:has(.admin))) :is(h1…h6)` porte la serif. Le `:where()` **préserve la spécificité d'origine (0,0,1)** : les utilitaires de graisse des titres publics (`font-light`, `font-semibold`…) continuent de l'emporter, exactement comme avant — aucun risque de régression sur le site.
+4. **`--font-sans` suit la police d'application**, pour qu'aucun utilitaire ne ramène la police du site dans l'administration.
+
+**Le piège évité — et c'est le point technique de cette étape.** La police a été posée sur **`<body>`, pas sur le conteneur `.admin`**. Motif : les **dialogues, menus et feuilles de Radix** (Dialog, Select, Sheet) sont montés dans un **portail rattaché à `<body>`**, donc **en dehors** de `.admin`. Une police posée sur `.admin` les aurait laissés en police éditoriale — soit précisément l'incohérence à supprimer (« applique-la à tous les composants, menus, dialogues »). En ciblant `<body>`, **les portails héritent correctement sans aucune modification de composant**. Le marqueur `.admin` (déjà présent sur le conteneur du layout d'administration) sert simplement à distinguer les deux mondes, sans ajouter de `<div>` à la page publique — dont le chrome est enfant direct de `<body>`.
+
+**Ce qui reste volontairement inchangé :**
+- [`VisualIdentityScreen`](src/components/backoffice/visual-identity/VisualIdentityScreen.tsx) conserve `var(--font-heading)` dans ses **aperçus** : il **simule le rendu du site public**. Ce n'est donc pas une incohérence mais la seule police juste à cet endroit, et elle est désormais isolée.
+- **`font-mono`** : réservé aux **valeurs techniques** (slug, ancre `#contact`, code hex, nom de fichier, ratio d'image), et il utilise la pile monospace **du système** — aucune dépendance au thème, aucun téléchargement. Une police proportionnelle y nuirait à l'alignement des chiffres. Décision documentée dans [`globals.css`](src/app/globals.css).
+
+**Réserve assumée** : le ciblage repose sur `:has()` (supporté par tous les navigateurs actuels). En son absence, le site public s'afficherait en police d'application — **dégradation visuelle, jamais fonctionnelle**.
+
+**Observation annexe, non traitée ici** : les jetons de **palette** du back-office (`--background`, `--primary`…) sont définis sur `.admin`, donc **hors** des portails : un dialogue ouvert dans l'administration peut déjà emprunter la palette du `:root` éditorial. C'est un défaut **préexistant**, de même nature que celui corrigé ici pour les polices — il mériterait la même approche (`body:not(:has(.admin))` pour la palette). À traiter dans une étape dédiée.
+
+- **Aucune donnée, aucun schéma, aucun comportement, aucune structure DOM, aucun rendu des composants modifiés** : uniquement la déclaration d'une police et la répartition des familles.
+- Vérifications : `npx tsc --noEmit` OK ; `npm run lint` OK ; `npm run build` OK (18 pages — le build valide aussi le téléchargement d'Inter par `next/font`).
+
+### Fichiers créés ou modifiés
+- Modifiés : `src/app/layout.tsx`, `src/app/globals.css`, `src/app/(back-office)/admin/login/page.tsx`, `CHANGELOG.md`
+- BDD : **aucune migration**.
+
+### Prochaine étape prévue
+Recette visuelle : vérifier qu'un **dialogue** (édition d'une photo) et un **menu déroulant** s'affichent bien en Inter — c'est le cas le plus révélateur, puisque ces éléments vivent hors du conteneur `.admin`. Puis contrôler que le site public a **strictement** conservé son rendu (Cormorant sur les titres, Plus Jakarta dans le corps, interlettrage 0,02 em) sur `/`, une page `[slug]` et `/demo`. Envisager ensuite d'étendre la même approche aux **jetons de palette** (voir l'observation annexe).
+
+---
+
+## 2026-09-11 – 13:45 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Étape 11.21 — Échelle typographique des éditeurs de modules** (constat de recette : *« il est difficile de distinguer les titres des sous-titres et des libellés… conséquence catastrophique pour le UX »*, avec inversion des tailles signalée par le propriétaire).
+
+**Le constat était exact, et mesurable.** Relevé réel dans le code **avant** cette étape :
+
+| Rôle | Avant | |
+|---|---|---|
+| Valeur saisie / placeholder | **16 px** (mobile) / **14 px** (bureau) | [`input.tsx`](src/components/ui/input.tsx:11) |
+| Titre de zone | **13 px / 600** | [`EditorZone.tsx`](src/components/backoffice/pages/modules/EditorZone.tsx) |
+| Sous-titre de sous-zone | **12 px / 500** | idem |
+| Libellé de champ | **12 px / 500** | [`form-fields.tsx`](src/components/backoffice/pages/modules/form-fields.tsx) |
+| Aide | 12 px / 400 | idem |
+
+⇒ **quatre rôles partageaient 12 px**, et surtout : le **sous-titre et le libellé de champ étaient rigoureusement identiques** (même taille, même graisse, même couleur) — le lecteur ne pouvait pas savoir si une ligne était un titre de groupe ou un nom de champ. Et le **titre de zone (13 px) était plus petit que le texte saisi (14/16 px)** : la hiérarchie était inversée, comme signalé.
+
+**Correctif — une échelle unique, chaque niveau distingué par au moins deux critères** (taille, graisse, couleur), parce qu'un écart d'un pixel ne se perçoit pas. Nouvelle source unique [`editor-type.ts`](src/components/backoffice/pages/modules/editor-type.ts) :
+
+| Niveau | Rôle | Après |
+|---|---|---|
+| **N0** | Nom du module (accordéon) | 15 px / 600 — **déjà en place** dans [`ModuleRow`](src/components/backoffice/pages/ModuleRow.tsx:145) |
+| **N1** | Titre de zone | **14 px / 600** |
+| N2 | Portée de la zone | 12 px / 400 gris |
+| **N3** | Sous-titre de sous-zone | **13 px / 600** |
+| **N4** | Libellé de champ | **12 px / 600** |
+| N5 | Aide / explication | **11 px / 400** |
+| ML | Micro-libellé (compteur) | 11 px / 500 **CAPITALES** espacées, gris |
+| C | Contenu saisi | **14 px (16 px mobile) — inchangé** |
+
+**L'échelle n'est pas une invention** : N0 = 15 px / 600 et le second niveau de l'accordéon (13 px) étaient **déjà** les valeurs de [`ModuleRow`](src/components/backoffice/pages/ModuleRow.tsx). C'est le **formulaire** qui s'en écartait ; il s'y aligne. Un nouvel éditeur ne choisit plus ses tailles, il prend un **niveau**.
+
+**Second marqueur : la géométrie.** La taille est un signal fragile (zoom, fatigue visuelle, rendu) ; l'indentation ne l'est pas. Le contenu d'une zone est décalé d'un cran, celui d'une sous-zone d'un cran de plus (`EDITOR_INDENT`) : l'imbrication se lit sans comparer quoi que ce soit.
+
+**Localisation : trois composants partagés, dix éditeurs corrigés d'un coup** — [`EditorZone.tsx`](src/components/backoffice/pages/modules/EditorZone.tsx) (titre de zone, portée, sous-titre), [`form-fields.tsx`](src/components/backoffice/pages/modules/form-fields.tsx) (libellé, aides de `TextField` / `TextAreaField` / `SelectField`) et [`gallery/fields.tsx`](src/components/backoffice/pages/modules/gallery/fields.tsx) (`ColorField`, `SwitchField`). Aucun éditeur de module n'a été retouché un par un.
+
+**Alignement des styles concurrents** : les titres en `text-xs font-semibold uppercase tracking-wider text-muted-foreground` — un **cinquième système** typographique — sont rattachés à l'échelle. Deviennent **N3** les titres **structurels** : « Ce que le visiteur voit en haut de la galerie » ([`ModuleGalleryEditor`](src/components/backoffice/pages/modules/ModuleGalleryEditor.tsx)), `{title}` de [`ImportMediaPanel`](src/components/backoffice/pages/modules/gallery/ImportMediaPanel.tsx), « Importer un dossier d'albums » ([`AlbumFolderImportPanel`](src/components/backoffice/pages/modules/gallery/AlbumFolderImportPanel.tsx)), « Photos de l'album (n) » ([`GalleryImagesPanel`](src/components/backoffice/pages/modules/gallery/GalleryImagesPanel.tsx)), « Questions (n) », « Prestations (n) », « Sections de la page », et les catégories de [`AddSectionSheet`](src/components/backoffice/pages/AddSectionSheet.tsx). Restent **ML** (annotations, capitales conservées) : le compteur d'albums « 9 albums » et « Album 3 / 9 ». `SidebarNav` et `PagesManager` étaient déjà conformes.
+
+**Décision assumée** : **le texte saisi n'est pas réduit.** Sous 16 px, iOS zoome automatiquement la page dès qu'un champ reçoit le focus — un défaut pire que celui corrigé. C'est la seule exception de l'échelle, et elle ne touche que le *contenu*, jamais la *structure*.
+
+- **Aucune donnée, aucun schéma, aucun comportement, aucun rendu public modifiés** : uniquement de la typographie, de l'indentation et l'organisation des classes.
+- Vérifications : `npx tsc --noEmit` OK ; `npm run lint` OK ; `npm run build` OK (18 pages).
+
+### Fichiers créés ou modifiés
+- Créé : `src/components/backoffice/pages/modules/editor-type.ts`
+- Modifiés : `EditorZone.tsx`, `form-fields.tsx`, `gallery/fields.tsx`, `gallery/ImportMediaPanel.tsx`, `gallery/GalleryImagesPanel.tsx`, `gallery/AlbumFolderImportPanel.tsx`, `gallery/AlbumCoverBadgePanel.tsx`, `gallery/AlbumManagerPanel.tsx`, `gallery/AlbumEditorPanel.tsx`, `ModuleGalleryEditor.tsx`, `ModuleFaqEditor.tsx`, `ModuleServicesEditor.tsx`, `PageEditor.tsx`, `AddSectionSheet.tsx`, `CHANGELOG.md`
+- BDD : **aucune migration**.
+
+### Prochaine étape prévue
+Recette visuelle sur trois éditeurs contrastés (Héro, Galerie, FAQ) : vérifier que les quatre niveaux se distinguent **de loin** (titre de module > titre de zone > sous-titre > libellé), que l'aide ne se confond plus avec un libellé, et que l'indentation rend l'imbrication lisible sans comparaison. Si un niveau reste ambigu à l'écran, il se règle désormais **en un seul endroit** : `editor-type.ts`.
+
+---
+
+## 2026-09-11 – 13:20 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Étape 11.20.c — Réorganisation de la zone « Apparence » + correctif de l'arrondi avec encadrement.** Demande du propriétaire du produit, après deux constats de recette : les libellés ne décrivaient pas le bon objet (« photos » en Portfolio) et l'arrondi *semblait* incompatible avec l'encadrement.
+
+**1. Nouvelle organisation de la zone**, conforme à la structure demandée :
+
+| Niveau | Intitulé |
+|---|---|
+| Zone (titre) | « **Apparence de la galerie d'Albums** » (Portfolio) / « Apparence de la galerie de photos » (static, dynamic) |
+| Zone (portée) | « Ces réglages valent pour **toute la galerie d'albums** — ils ne concernent jamais un album en particulier. » |
+| Sous-titre 1 | « **Disposition des couvertures des albums dans la galerie Portfolio** » → nombre de colonnes, écart horizontal, écart vertical, **Format d'affichage** |
+| Sous-titre 2 | « **Format des couvertures des albums** » → **1.** Effet de finition (+ intensité + paramètres contextuels), **2.** Arrondi, **3.** Encadrement (+ épaisseur, couleur), **4.** Ombre portée, **5.** Effets au survol, **6.** Affichage des infos en pied de couverture |
+
+**2. Trois déplacements, aucun réglage perdu.**
+- **L'arrondi quitte « Disposition de la grille »** et rejoint l'encadrement dans « Format » ([`EffectSettingsPanel`](src/components/backoffice/pages/modules/gallery/EffectSettingsPanel.tsx)). C'est le point clé du correctif UX : l'arrondi et l'encadrement se **complètent**, mais se réglaient dans deux sous-blocs différents — impossible de juger leur combinaison, d'où l'impression d'incompatibilité. Les voici côte à côte, dans l'ordre.
+- **Le bloc « Affichage sur les couvertures » quitte la zone 1** pour le sous-titre « Format » : nouveau composant [`AlbumCoverBadgePanel`](src/components/backoffice/pages/modules/gallery/AlbumCoverBadgePanel.tsx). Il décrit l'**aspect** d'une couverture, pas le **contenu** de la galerie. La zone 1 ([`AlbumManagerPanel`](src/components/backoffice/pages/modules/gallery/AlbumManagerPanel.tsx)) ne contient donc plus que le contenu — compteur, phrase de portée, import groupé, grille.
+- **« Effets au survol » passe juste après « Ombre portée »**, et non plus dans un troisième sous-bloc séparé.
+
+**3. Correctif technique — rayons concentriques** ([`gallery-effects.ts`](src/lib/gallery-effects.ts), [`GalleryItem`](src/components/modules/gallery/GalleryItem.tsx)).
+- **Cause établie** : l'image intérieure recevait **le même rayon** que le cadre extérieur, alors qu'elle est enchâssée de l'épaisseur de l'encadrement **et** de la marge de l'effet (passe-partout 10/18/28 px, sous-verre 15 px, Polaroid). Deux arcs décalés apparaissaient dans chaque coin, la couleur de fond affleurait entre eux : l'arrondi *paraissait* cassé.
+- **Correctif** : `rayon intérieur = max(0, rayon extérieur − épaisseur enchâssée)`, via deux fonctions nouvelles — `galleryEffectPadding()` (rend la marge **mesurable** au lieu de la dupliquer) et `galleryConcentricRadius()`. Arrondi, encadrement, ombre et effet de finition restent **indépendants et cumulables** : aucun n'a été rendu exclusif, puisqu'un cadre fin à coins arrondis est un besoin courant et que l'ancien comportement était un défaut de rendu, non une incompatibilité.
+
+**4. Vocabulaire selon la variante** : `galleryItemWording()` ([`pages.ts`](src/lib/pages.ts)) centralise « couvertures d'albums » ↔ « photos » ; [`EffectSettingsPanel`](src/components/backoffice/pages/modules/gallery/EffectSettingsPanel.tsx) et [`GalleryHoverPanel`](src/components/backoffice/pages/modules/gallery/GalleryHoverPanel.tsx) reçoivent `variant`. Les libellés restant **neutres** (« Format d'affichage », « Nombre de colonnes ») le sont à dessein : `static` et `dynamic` n'ont pas d'albums, et écrire « couvertures » en dur y aurait menti.
+
+- **Aucune donnée, aucun schéma, aucun rendu public modifiés** : uniquement de l'organisation, des libellés et le calcul des rayons.
+- Vérifications : `npx tsc --noEmit` OK ; `npm run lint` OK ; `npm run build` OK (18 pages).
+
+### Fichiers créés ou modifiés
+- Créé : `src/components/backoffice/pages/modules/gallery/AlbumCoverBadgePanel.tsx`
+- Modifiés : `src/lib/gallery-effects.ts`, `src/lib/pages.ts`, `src/components/modules/gallery/GalleryItem.tsx`, `src/components/backoffice/pages/modules/ModuleGalleryEditor.tsx`, `src/components/backoffice/pages/modules/gallery/EffectSettingsPanel.tsx`, `src/components/backoffice/pages/modules/gallery/GalleryLayoutPanel.tsx`, `src/components/backoffice/pages/modules/gallery/GalleryHoverPanel.tsx`, `src/components/backoffice/pages/modules/gallery/AlbumManagerPanel.tsx`, `CHANGELOG.md`
+- BDD : **aucune migration**.
+
+### Points ouverts (assumés)
+- Le champ s'appelle **« Format d'affichage »** (validé en 11.20.b) alors que la dernière liste le nomme « Type d'affichage » : conservé tel quel, à trancher au besoin en un mot.
+- **Non traité** : les chaînes **publiques** qui parlent encore de « photo » pour une couverture d'album ([`GalleryGrid`](src/components/modules/gallery/GalleryGrid.tsx) : `alt` et `aria-label`) — même famille de défaut, mais hors du périmètre demandé ici.
+
+---
+
+## 2026-09-11 – 12:35 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Étape 11.20.b — « Format d'affichage » : libellés lisibles et explication portée par chaque option** (constat de recette : *« type de grille / grilles régulières / mosaïque me semblaient difficiles à comprendre »*).
+- **Renommage** ([`pages.ts`](src/lib/pages.ts:1427)) : le champ « **Type de grille** » devient « **Format d'affichage** » et ses deux options « *Grille régulière* » / « *Mosaïque (hauteurs libres)* » deviennent « **Toutes au même format** » / « **Chacune à son format** ». Motif : les anciens libellés nommaient la **technique** (une grille, une mosaïque) là où l'utilisateur veut savoir quel **résultat** il obtient. Nouveau dictionnaire `galleryDisplayDescriptions`.
+- **Vocabulaire neutre à dessein** (« vignettes ») : ces libellés sont **partagés par les trois variantes** — ils restent donc vrais qu'il s'agisse de photos (static / dynamic) ou de **couvertures d'albums** (portfolio). C'est le titre de la **zone** qui peut, lui, nommer les couvertures.
+- **Nouveauté d'interface réutilisable — explication **par option**** : [`SelectItem`](src/components/ui/select.tsx:102) accepte désormais une prop `description?`, et `SelectField` la propage depuis ses options ([`form-fields.tsx`](src/components/backoffice/pages/modules/form-fields.tsx:180)). L'explication s'affiche **sous le libellé, dans la liste déroulante**. Elle est rendue **hors de `ItemText`** — point technique décisif : Radix recopie le contenu d'`ItemText` dans le **champ fermé**, une explication placée à l'intérieur aurait donc pollué le déclencheur. Sans `description`, la structure et les classes d'origine sont **strictement conservées** : aucun risque de régression sur les autres menus. Tous les menus du back-office peuvent désormais s'en servir.
+- **Aide sous le champ supprimée** : la phrase « Grille régulière : toutes les photos ont la même hauteur… » redirait ce que chaque option explique maintenant au contact de l'option elle-même. Le champ gagne à la place un tooltip « i » sur ce que le réglage **ne** fait pas (« cela ne change que la forme des cases, jamais les images »).
+- **Périmètre strictement présentationnel** : les valeurs stockées (`uniform` / `masonry`), le calcul de la grille ([`GalleryGrid`](src/components/modules/gallery/GalleryGrid.tsx:101)), le rendu public et le schéma JSONB sont **inchangés**.
+
+### Fichiers créés ou modifiés
+- Modifiés : `src/lib/pages.ts`, `src/components/backoffice/pages/modules/gallery/GalleryLayoutPanel.tsx`, `src/components/backoffice/pages/modules/form-fields.tsx`, `src/components/ui/select.tsx`, `CHANGELOG.md`
+- BDD : **aucune migration**.
+
+### Prochaine étape prévue
+Restent à planifier, **non implémentés à ce stade** : (1) la réorganisation de la zone « Apparence » selon la liste validée sur le fond (titre « Apparence de la galerie d'Albums », libellés adaptés à la variante, **déplacement** du bloc « Affichage sur les couvertures » depuis la zone 1) ; (2) le **correctif des rayons concentriques** dans [`GalleryItem`](src/components/modules/gallery/GalleryItem.tsx:82), qui rend l'arrondi et l'encadrement réellement cumulables — le diagnostic est établi (rayon intérieur identique au rayon extérieur alors que l'image est enchâssée), le correctif reste à écrire ; (3) l'alignement des chaînes publiques qui parlent encore de « photo » pour une couverture d'album.
+
+---
+
+## 2026-09-11 – 10:55 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Étape 11.20.a — séparation de la vue d'album du Portfolio : la barre d'accent change *réellement* de couleur** (seconde passe, après un correctif insuffisant — cf. l'entrée 10:35).
+- **Constat de recette** : *« la barre verticale au-dessus du bouton n'a pas changé de couleur par rapport à la partie sous le bouton »*. **Exact, et voici pourquoi** : le correctif de 10:35 avait ajouté un bandeau **imbriqué** à accent `--primary` **dans** la vue d'album — mais la vue d'album était toujours rendue **à l'intérieur** de la `EditorZone` « Les albums », dont la `border-l-4` (`--zone-content`) court sur **toute** la hauteur de la zone. Le bandeau, étant un **enfant**, s'affichait **en retrait du `p-3`** de la zone : on obtenait donc **deux barres parallèles** (bleu glacier à gauche, `--primary` 12 px plus à droite) au lieu d'un **changement de couleur de la barre**. Le correctif était cosmétique, pas structurel.
+- **Correctif structurel retenu** : sortir la vue d'album de la zone « Les albums ».
+  - L'état `editingAlbumId` est **remonté** de [`AlbumGrid`](src/components/backoffice/pages/modules/gallery/AlbumGrid.tsx) vers [`ModuleGalleryEditor`](src/components/backoffice/pages/modules/ModuleGalleryEditor.tsx).
+  - La vue d'album y est rendue dans une `EditorZone` **sœur**, de teinte **`detail`** (vert d'eau `--zone-detail`), **distincte** de `--zone-content` (bleu glacier) : **la barre verticale change donc de couleur au-dessus du bouton de retour**, et la zone porte son propre titre (« Album en cours d'édition ») et sa phrase de portée (nommant l'album modifié).
+  - **Aucune modification du design system** : teinte **existante** réutilisée (variante b retenue) ; aucun jeton CSS ajouté.
+- **Découpage des composants** :
+  - nouveau [`AlbumEditorPanel.tsx`](src/components/backoffice/pages/modules/gallery/AlbumEditorPanel.tsx) — formulaire d'album (nom, description, couverture, photos) et en-tête « Retour vers la galerie des Albums », **sans cadre ni titre propres** (fournis par la zone porteuse) ;
+  - [`AlbumGrid.tsx`](src/components/backoffice/pages/modules/gallery/AlbumGrid.tsx) **réduit à la seule grille** (prop `onOpenAlbum`, plus d'état d'édition) — le glisser-déposer, les ↑/↓ et l'annonce `aria-live` sont inchangés ;
+  - [`AlbumManagerPanel`](src/components/backoffice/pages/modules/gallery/AlbumManagerPanel.tsx) ne contient plus que les réglages de la **galerie entière** et **masque la grille** pendant l'édition (`editingAlbumId !== null`), avec une note qui l'explique.
+- **Garde-fou conservé** : `editingAlbum` reste un **état dérivé** — si l'album disparaît (suppression), il redevient `null`, la zone d'album disparaît et la grille réapparaît seule. Le focus clavier est posé en tête de la vue d'album à l'ouverture.
+- Vérifications : `npx tsc --noEmit` OK ; `npm run lint` OK ; `npm run build` OK (18 pages).
+
+### Fichiers créés ou modifiés
+- Créé : `src/components/backoffice/pages/modules/gallery/AlbumEditorPanel.tsx`
+- Modifiés : `src/components/backoffice/pages/modules/ModuleGalleryEditor.tsx`, `src/components/backoffice/pages/modules/gallery/AlbumGrid.tsx`, `src/components/backoffice/pages/modules/gallery/AlbumManagerPanel.tsx`, `CHANGELOG.md`
+- BDD : **aucune migration**.
+
+### Prochaine étape prévue
+Recette : la barre doit passer du **bleu glacier** (réglages de galerie) au **vert d'eau** (album) **au-dessus** du bouton « Retour vers la galerie des Albums », puis les points déjà listés (§10 du plan).
+
+---
+
+## 2026-09-11 – 10:35 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Étape 11.20 — deux ajustements d'ergonomie de la vue d'album (Portfolio), relevés en recette.**
+- **Libellé du retour** : « Tous les albums » → **« Retour vers la galerie des Albums »** ([`AlbumGrid.tsx`](src/components/backoffice/pages/modules/gallery/AlbumGrid.tsx)).
+- **Confusion de rattachement corrigée** — constat : *« tout ce qui se trouve au-dessus du bouton Retour … est associé aux paramètres d'édition de l'album en cours d'édition, car relié par la même couleur de la barre verticale »*. **Cause racine** : la vue d'album est rendue **à l'intérieur** de la `EditorZone` « Les albums », qui porte la barre d'accent `--zone-content` (bleu glacier). Le formulaire d'album héritait donc de **la même barre verticale** que le compteur d'albums, le panneau d'import de dossier et les réglages des couvertures — quatre choses de **portées différentes** présentées comme un seul bloc.
+- **Correctif** : un **bandeau d'en-tête teinté** ouvre désormais la vue d'album, avec sa **propre barre d'accent `--primary`** (couleur d'accent du thème, **distincte des quatre teintes de zone** définies en 11.17), un titre qui **nomme la cible** (« Album en cours d'édition », principe P1 du 11.17) et une phrase de **portée** explicite rappelant que les réglages situés au-dessus portent sur la **galerie entière** et non sur l'album ouvert (principe P2). Le bouton de retour passe en `variant="outline"` dans ce bandeau, et l'indicateur « Album N / M » le rejoint sur la même ligne (`flex-wrap` pour les écrans étroits).
+- **Aucun changement de comportement ni de données** : purement présentationnel ; le focus clavier reste posé sur le bandeau à l'ouverture de la vue (§4.3).
+- Vérifications : `npx tsc --noEmit` OK ; `npm run lint` OK ; `npm run build` OK (18 pages).
+
+### Fichiers créés ou modifiés
+- Modifiés : `src/components/backoffice/pages/modules/gallery/AlbumGrid.tsx`, `plans/ROADMAP-11.20-albums-thumbnail-grid.md` (libellé de retour mis à jour), `CHANGELOG.md`
+- BDD : **aucune migration**.
+
+### Prochaine étape prévue
+Poursuite de la recette manuelle de l'Étape 11.20 (§10 du plan) : vérifier que la séparation de teinte est bien perçue entre les réglages de galerie et le formulaire d'album, puis les points déjà listés (24/30 albums, `Échap`, clavier, masquage public + métadonnées de partage, non-régression `static` / `dynamic`).
+
+---
+
+## 2026-09-11 – 10:05 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Étape 11.20 — LOT D : glisser-déposer sur la grille d'albums** (plan [`plans/ROADMAP-11.20-albums-thumbnail-grid.md`](plans/ROADMAP-11.20-albums-thumbnail-grid.md), §5 — dernier lot du chantier).
+- **Prototype : non exécuté comme exercice manuel d'une heure.** Le risque visé par le plan (`@hello-pangea/dnd` sur une **grille qui s'enroule** : disposition qui change sous le curseur, *placeholder* animé qui saute) a été **supprimé par le choix de mécanisme** plutôt que mesuré : `@hello-pangea/dnd` n'est éprouvé dans ce projet que sur une **liste verticale** ([`ModuleDndList`](src/components/backoffice/pages/ModuleDndList.tsx)), alors que le **HTML5 natif** y tourne **déjà sur une grille qui s'enroule** — [`GalleryImagesPanel`](src/components/backoffice/pages/modules/gallery/GalleryImagesPanel.tsx), grille de vignettes 3/4/6 colonnes avec actions au survol : forme **identique** à la grille d'albums. C'est le repli du plan, appliqué au bon niveau : on ne tente pas la bibliothèque incertaine, on réutilise le mécanisme déjà en service sur la même forme d'interface.
+- **Go : HTML5 natif** (`draggable` + `dragover` / `drop` / `dragend`), **sans dépendance nouvelle** (D-8). Aucun réordonnancement en direct : l'ordre n'est modifié **qu'au dépôt** — la grille ne saute donc pas pendant le geste, et `Échap` restitue un ordre d'origine intact **par construction**, non par restauration d'un instantané.
+- **Ergonomie** : indicateur de dépôt (anneau sur la cible), vignette déplacée atténuée, curseur `grab`/`grabbing`, et **garde** empêchant un glisser de partir de la barre d'actions (`data-album-actions`) — masquer / éditer / ↑ / ↓ / supprimer restent des clics purs.
+- **Accessibilité (§5.2, décision A-4)** : le glisser **n'est pas** le seul moyen de réordonner — les **↑ / ↓** de chaque vignette sont conservés et restent le chemin **clavier** ; le glisser est une **commodité**, disponible **en plus**. Déplacement **annoncé** aux lecteurs d'écran (`role="status"`, `aria-live="polite"`, texte `sr-only`), y compris l'annulation par `Échap`.
+- **À vérifier en recette manuelle** — le critère du plan ne peut pas être mesuré par l'agent (pas de navigateur) : déplacer la **première** vignette vers la **dernière** position d'une grille de **24 albums** sans saut de grille ; `Échap` en cours de geste ; réordonnancement **↑ / ↓** au clavier ; mise à jour **immédiate** du numéro d'ordre ; et répercussion du nouvel ordre sur la **grille publique**.
+- Vérifications : `npx tsc --noEmit` OK ; `npx eslint src/components/backoffice/pages/modules/gallery --max-warnings=0` OK ; `npm run build` OK (18 pages).
+
+### Fichiers créés ou modifiés
+- Modifiés : `src/components/backoffice/pages/modules/gallery/AlbumThumbnail.tsx` (prop `dnd` optionnelle, repère `data-album-actions`, styles de glisser / dépôt), `src/components/backoffice/pages/modules/gallery/AlbumGrid.tsx` (état de glisser, `Échap`, dépôt, annonce `aria-live`), `CHANGELOG.md`
+- BDD : **aucune migration**.
+
+### Prochaine étape prévue
+Recette manuelle de l'Étape 11.20 (§10 du plan) : volumétrie 30 albums, cohérence public / back-office du **masquage** (grille publique **et** métadonnées de partage), album **sans photo** signalé, parcours **clavier** complet, non-régression des variantes `static` / `dynamic` (CTA, badge, diaporama, disposition) et des contenus Portfolio enregistrés **avant** ce chantier.
+
+---
+
+## 2026-09-11 – 10:00 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Étape 11.20 — LOT E : import groupé « un dossier parent → chaque sous-dossier devient un album »** (plan [`plans/ROADMAP-11.20-albums-thumbnail-grid.md`](plans/ROADMAP-11.20-albums-thumbnail-grid.md)).
+- **Constat** : la grille rend la **gestion** des albums confortable, pas leur **création** — créer trente albums à la main reste trente fois le même geste.
+- **Mécanique** : `webkitRelativePath` expose le chemin relatif de chaque fichier (`Mariage/IMG_001.jpg`) ; le **premier** segment est le dossier racine choisi, le **deuxième** nomme l'album. Regroupement en mémoire, **aucun envoi** avant validation de l'opérateur.
+- **Nouveau composant** [`AlbumFolderImportPanel.tsx`](src/components/backoffice/pages/modules/gallery/AlbumFolderImportPanel.tsx) : bouton « Choisir un dossier d'albums », **analyse affichée avant import** (liste des albums détectés avec nombre de photos et fichiers refusés par dossier), puis bouton « Créer N albums et importer M photos » (le second clic **est** la confirmation).
+- **Cas limites §6.1 traités** : photos **à la racine** → album au nom du dossier parent ; sous-dossier **sans image exploitable** → ignoré **et signalé** (aucun album vide créé) ; fichiers refusés (non-image ou > 15 Mo) **comptés par dossier** ; **volume important** → avertissement + **confirmation explicite** au-delà de `RECOMMENDED_BATCH = 50` photos ; **album de même nom déjà présent** → création d'un nouvel album (aucune fusion silencieuse).
+- **Synthèse finale** en `role="status"` : albums créés, fichiers ignorés, envois en échec, dossiers vides. Un groupe dont **tous** les envois échouent est abandonné (aucun album vide enregistré).
+- **Réutilisation** : `createGalleryAlbum()` (couverture = première photo via `coverImageId: null`) et les visuels de galerie au **format exact** de `GalleryImagesPanel`.
+- **Zéro duplication** : `ALLOWED_IMAGE_TYPES`, `MAX_FILE_BYTES`, `RECOMMENDED_BATCH` et `baseNameWithoutExtension()` sont désormais **exportés** depuis [`ImportMediaPanel.tsx`](src/components/backoffice/pages/modules/gallery/ImportMediaPanel.tsx), avec un nouveau prédicat partagé `isUsableImageFile()` utilisé par **les deux** panneaux d'import (le contrat de filtrage reste donc identique).
+- Branchement dans [`AlbumManagerPanel`](src/components/backoffice/pages/modules/gallery/AlbumManagerPanel.tsx) juste avant la grille. **Le comportement de l'import de dossier simple est inchangé** (contrat de filtre identique, code partagé).
+- Vérifications : `npx tsc --noEmit` OK ; `npx eslint src/components/backoffice/pages/modules/gallery --max-warnings=0` OK.
+
+### Fichiers créés ou modifiés
+- Créé : `src/components/backoffice/pages/modules/gallery/AlbumFolderImportPanel.tsx`
+- Modifiés : `src/components/backoffice/pages/modules/gallery/ImportMediaPanel.tsx`, `src/components/backoffice/pages/modules/gallery/AlbumManagerPanel.tsx`, `ROADMAP.md`, `CHANGELOG.md`
+- BDD : **aucune migration**.
+
+### Prochaine étape prévue
+**LOT D** — glisser-déposer sur la grille, **précédé du prototype obligatoire** (critère mesurable : première → dernière position d'une grille de 24 albums, sans saut de grille, position intermédiaire conservée, Échap pour revenir à l'ordre d'origine) ; **go/no-go** consigné ici, y compris en cas d'échec avec le repli « Déplacer à la position… » (les ↑/↓ restent en place dans tous les cas).
 
 ---
 

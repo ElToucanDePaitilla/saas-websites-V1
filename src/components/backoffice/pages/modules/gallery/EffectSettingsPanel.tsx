@@ -5,12 +5,14 @@ import {
   galleryEffectIntensityOrder,
   galleryEffectLabels,
   galleryEffectOrder,
+  galleryItemWording,
   galleryShadowLabels,
   galleryShadowOrder,
   type GalleryEffectId,
   type GalleryEffectIntensity,
   type GalleryEffectSettings,
   type GalleryLayoutOptions,
+  type GalleryModuleVariant,
   type GalleryShadowLevel,
 } from "@/lib/pages";
 
@@ -19,18 +21,36 @@ import { ColorField, SwitchField } from "./fields";
 
 /**
  * ============================================================================
- * PANNEAU EFFETS DE FINITION GALERIE (Phase 11)
+ * PANNEAU « FORMAT DES COUVERTURES » — Galerie (Phase 11, réorganisé 11.20.c)
  * ----------------------------------------------------------------------------
- * Effet **exclusif** (Aucun / Passe-partout de Musée / Sous-Verre / Polaroid
- * papier glacé) décliné en light/normal/strong, avec **paramétrage contextuel**
- * du menu ouvert. L'ombre et la bordure (épaisseur + couleur) restent des
- * réglages indépendants et cumulables.
+ * Les quatre réglages d'**aspect d'une vignette**, dans l'ordre où ils se
+ * décident — du plus général au plus ponctuel :
+ *
+ *   1. **Effet de finition** — Aucun / Passe-partout de Musée / Sous-Verre /
+ *      Polaroid, son intensité et ses paramètres contextuels ;
+ *   2. **Arrondi** — courbure des coins ;
+ *   3. **Encadrement** — interrupteur, épaisseur, couleur ;
+ *   4. **Ombre portée** — niveau.
+ *
+ * Pourquoi cet ordre (constat de recette) : l'arrondi vivait auparavant dans
+ * « Disposition de la grille », **loin de l'encadrement** qu'il complète, ce qui
+ * rendait leur combinaison impossible à évaluer — et laissait croire à une
+ * incompatibilité entre les deux. Les voici côte à côte, dans l'ordre.
+ *
+ * Aucun de ces réglages n'est exclusif : ombre, encadrement et arrondi restent
+ * **indépendants et cumulables** (le rendu des rayons concentriques est corrigé
+ * dans `gallery-effects.ts` / `GalleryItem`).
+ *
+ * Le **vocabulaire suit la variante** : « couvertures d'albums » en portfolio,
+ * « photos » sur static / dynamic — la zone d'édition est partagée par les trois.
  * ============================================================================
  */
 
 type EffectSettingsPanelProps = {
   effect: GalleryEffectSettings;
   layout: GalleryLayoutOptions;
+  /** Variante de la galerie : détermine le vocabulaire des libellés. */
+  variant: GalleryModuleVariant;
   onChangeEffect: (patch: Partial<GalleryEffectSettings>) => void;
   onChangeLayout: (patch: Partial<GalleryLayoutOptions>) => void;
 };
@@ -38,17 +58,18 @@ type EffectSettingsPanelProps = {
 export function EffectSettingsPanel({
   effect,
   layout,
+  variant,
   onChangeEffect,
   onChangeLayout,
 }: EffectSettingsPanelProps) {
   const isNone = effect.effect === "none";
+  const { plural } = galleryItemWording(variant);
 
   return (
     // Étape 11.17 : plus de boîte ni de titre propres — ils sont fournis par
-    // `EditorZone` (solidité du cadre et phrase de portée), ce panneau ne rend
-    // plus que les champs.
+    // la sous-zone parente. Ce panneau ne rend que les champs.
     <div className="grid gap-3">
-
+      {/* ---- 1. Effet de finition ------------------------------------------ */}
       <div className="grid gap-3 sm:grid-cols-2">
         <SelectField<GalleryEffectId>
           label="Effet de finition"
@@ -69,11 +90,11 @@ export function EffectSettingsPanel({
           }))}
           onChange={(intensity) => onChangeEffect({ intensity })}
           disabled={isNone}
-          hint={isNone ? "Sélectionnez d'abord un effet." : undefined}
+          hint={isNone ? "Sélectionnez d’abord un effet." : undefined}
         />
       </div>
 
-      {/* Menu de paramétrage contextuel selon l'effet sélectionné. */}
+      {/* Paramétrage contextuel du menu ouvert. */}
       {effect.effect === "museum-pass" ? (
         <div className="grid gap-3 rounded-md border border-dashed border-border bg-background/40 p-3 sm:grid-cols-2">
           <ColorField
@@ -138,22 +159,24 @@ export function EffectSettingsPanel({
         </div>
       ) : null}
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <SelectField<GalleryShadowLevel>
-          label="Ombre portée"
-          value={layout.shadow}
-          options={galleryShadowOrder.map((value) => ({
-            value,
-            label: galleryShadowLabels[value],
-          }))}
-          onChange={(shadow) => onChangeLayout({ shadow })}
-          hint="Activée par défaut (niveau normal)."
-        />
-      </div>
+      {/* ---- 2. Arrondi (déplacé ici depuis « Disposition de la grille ») -- */}
+      <TextField
+        label={`Arrondi des ${plural}`}
+        type="number"
+        value={String(layout.radius)}
+        onChange={(value) => {
+          const parsed = Number.parseInt(value, 10);
+          if (!Number.isNaN(parsed)) {
+            onChangeLayout({ radius: Math.min(Math.max(parsed, 0), 200) });
+          }
+        }}
+        hint="Courbure des coins (px). Se combine avec l’encadrement et l’ombre."
+      />
 
+      {/* ---- 3. Encadrement ------------------------------------------------ */}
       <SwitchField
-        label="Bordure"
-        description="Encadre chaque vignette."
+        label={`Encadrement des ${plural}`}
+        description="Trace une bordure autour de chaque vignette."
         checked={layout.border.enabled}
         onChange={(enabled) =>
           onChangeLayout({ border: { ...layout.border, enabled } })
@@ -188,6 +211,18 @@ export function EffectSettingsPanel({
           />
         </div>
       ) : null}
+
+      {/* ---- 4. Ombre portée ----------------------------------------------- */}
+      <SelectField<GalleryShadowLevel>
+        label={`Ombre portée sous les ${plural}`}
+        value={layout.shadow}
+        options={galleryShadowOrder.map((value) => ({
+          value,
+          label: galleryShadowLabels[value],
+        }))}
+        onChange={(shadow) => onChangeLayout({ shadow })}
+        hint="Activée par défaut (niveau normal)."
+      />
     </div>
   );
 }

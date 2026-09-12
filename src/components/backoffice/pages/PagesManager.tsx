@@ -281,17 +281,48 @@ export function PagesManager() {
                               {/* Actions */}
                               <td className="px-4 py-3">
                                 <div className="flex items-center justify-end gap-1">
-                                  {!page.isHome ? (
+                                  {/* Page d'accueil : la maison est présente sur
+                                      **chaque ligne**, et c'est sa **couleur** qui
+                                      porte l'information, jamais sa présence.
+                                        · maison **grise et cliquable** → cette page
+                                          n'est pas l'accueil ; le clic la désigne ;
+                                        · maison **noire et non interactive** → c'est
+                                          l'accueil du site ; le survol l'explique.
+
+                                      Deux raisons de ne pas réutiliser `Button` pour
+                                      l'état « accueil » :
+                                        1. `disabled` impose `pointer-events-none`
+                                           (voir `ui/button.tsx`) : le **tooltip ne
+                                           s'afficherait jamais**, or c'est
+                                           précisément ce qui est demandé ici ;
+                                        2. un bouton désactivé mais focusable reste
+                                           un piège au clavier — un indicateur n'est
+                                           pas une action.
+                                      Le `size-9` reproduit exactement la taille du
+                                      bouton voisin : les icônes restent alignées
+                                      d'une ligne à l'autre (la ligne de l'accueil
+                                      décalait auparavant ses actions d'un cran). */}
+                                  {page.isHome ? (
+                                    <span
+                                      role="img"
+                                      aria-label={`« ${page.title} » est la page d’accueil du site`}
+                                      title="Ceci est votre page d'accueil"
+                                      className="flex size-9 shrink-0 items-center justify-center text-foreground"
+                                    >
+                                      <Home className="size-4" />
+                                    </span>
+                                  ) : (
                                     <Button
                                       variant="ghost"
                                       size="icon"
                                       onClick={() => setHomePage(page.id)}
-                                      aria-label={`Définir « ${page.title} » comme page d'accueil`}
-                                      title="Définir comme page d'accueil"
+                                      aria-label={`Définir « ${page.title} » comme page d’accueil`}
+                                      title="Définir cette page comme page d’accueil"
+                                      className="text-muted-foreground/45 hover:text-foreground"
                                     >
                                       <Home />
                                     </Button>
-                                  ) : null}
+                                  )}
                                   <Button
                                     variant="ghost"
                                     size="icon"

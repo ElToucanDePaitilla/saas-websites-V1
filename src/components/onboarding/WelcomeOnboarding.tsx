@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { SiteStarterPicker } from "@/components/onboarding/SiteStarterPicker";
 import { Button } from "@/components/ui/button";
 import { siteName } from "@/lib/site";
 import { getCurrentPhotographerId } from "@/lib/supabase/session";
@@ -12,7 +13,8 @@ import { getCurrentPhotographerId } from "@/lib/supabase/session";
  * `missing` (aucune page `is_home` en BDD). Il remplace l'ancien contenu de
  * démonstration inventé en mémoire (et évite un 404 brutal) :
  *   - **visiteur non connecté** → explication + CTA de connexion ;
- *   - **administrateur connecté** → guide « page blanche » ou « preset ».
+ *   - **administrateur connecté** → guide « page blanche » ou « modèle de
+ *     navigation » (`SiteStarterPicker`, appliqué côté serveur).
  *
  * Référence : plans/ROADMAP-10.1-site-starter-onboarding.md §D-3
  * ============================================================================
@@ -43,7 +45,7 @@ export async function WelcomeOnboarding() {
               s’affiche à la place d’une erreur.
             </p>
 
-            <div className="mt-6 grid gap-4 sm:grid-cols-2">
+            <div className="mt-6 grid gap-3">
               <div className="grid gap-3 rounded-lg border border-border bg-background/60 p-4">
                 <p className="text-sm font-semibold text-foreground">
                   1 · Partir d’une page blanche
@@ -60,22 +62,17 @@ export async function WelcomeOnboarding() {
               </div>
 
               <div className="grid gap-3 rounded-lg border border-border bg-background/60 p-4">
-                <p className="text-sm font-semibold text-foreground">
-                  2 · Utiliser un preset
-                </p>
-                <p className="text-xs leading-relaxed text-muted-foreground">
-                  Appliquez une structure de menu prête à l’emploi (Artiste,
-                  Commercial, Passionné). Les presets agissent sur la
-                  navigation : vous les personnaliserez ensuite.
-                </p>
-                <Button
-                  asChild
-                  size="sm"
-                  variant="outline"
-                  className="w-fit"
-                >
-                  <Link href="/admin/navigation">Choisir un preset</Link>
-                </Button>
+                <div>
+                  <p className="text-sm font-semibold text-foreground">
+                    2 · Partir d’un modèle de navigation
+                  </p>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                    Appliquez une structure de menu prête à l’emploi (Artiste,
+                    Commercial, Passionné). Les modèles agissent sur la
+                    navigation uniquement : ils ne créent ni pages ni contenus.
+                  </p>
+                </div>
+                <SiteStarterPicker />
               </div>
             </div>
           </>

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { Cormorant_Garamond, Plus_Jakarta_Sans } from "next/font/google";
+import { Cormorant_Garamond, Inter, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 
 /**
@@ -20,11 +20,30 @@ import "./globals.css";
  */
 
 /**
- * Duo typographique « Éditorial & Luxe » du thème « Éclat Minéral & Nacre »
- * (SPECIFICATIONS-V8.md §10.3 — PROJECT_CONTEXT.md §2)
- * - Titres  : Cormorant Garamond (serif raffiné, graisses Light/Regular).
- * - Corps   : Plus Jakarta Sans (sans-serif géométrique, letter-spacing 0.02em).
+ * ----------------------------------------------------------------------------
+ * DEUX TYPOGRAPHIES DISTINCTES — l'application et l'artefact (Étape 11.22)
+ * ----------------------------------------------------------------------------
+ * 1. **`--font-admin` — police de l'APPLICATION (Back-Office).**
+ *    Inter, sans-serif neutre conçue pour les interfaces denses : x-hauteur
+ *    élevée, chiffres tabulaires, graisses complètes en **un seul fichier
+ *    variable** (aucun téléchargement multiple). Elle est **indépendante du
+ *    thème du site public** : changer la charte du portfolio ne touche jamais
+ *    l'administration.
+ * 2. **`--font-body` / `--font-heading` — duo éditorial du SITE PUBLIC**
+ *    (thème « Éclat Minéral & Nacre », SPECIFICATIONS-V8.md §10.3) :
+ *    Cormorant Garamond pour les titres, Plus Jakarta Sans pour le corps.
+ *
+ * La répartition est appliquée dans `globals.css` : la police d'application est
+ * le **défaut** (donc héritée aussi par les portails Radix montés dans
+ * `<body>` : dialogues, menus, feuilles), et le duo éditorial est **restreint**
+ * aux pages publiques via `body:not(:has(.admin))`. Voir § Typographie.
  */
+const fontAdmin = Inter({
+  variable: "--font-admin",
+  subsets: ["latin"],
+  display: "swap",
+});
+
 const fontHeading = Cormorant_Garamond({
   variable: "--font-heading",
   subsets: ["latin"],
@@ -53,7 +72,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html
       lang="fr"
-      className={`${fontBody.variable} ${fontHeading.variable} h-full antialiased`}
+      className={`${fontAdmin.variable} ${fontBody.variable} ${fontHeading.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>

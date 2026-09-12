@@ -16,8 +16,17 @@ import { ModuleDndList } from "./ModuleDndList";
 /**
  * Écran « Éditeur de page » (Étape 3.2) — route `/admin/pages/[id]`.
  * Client Component (monté sans SSR via `PageEditorScreen`) :
- *   - En-tête : retour liste, titre + statut + slug, « Aperçu » (nouvel onglet),
- *     bouton « + Ajouter une section ».
+ *   - En-tête : retour liste, titre + statut + slug, « **Aperçu de la page** »
+ *     (nouvel onglet), bouton « + Ajouter une section ».
+ *
+ *     Le libellé était « Aperçu », soit **presque le même mot** que le bouton
+ *     « Aperçu du site » de la barre du tableau de bord ([`admin/layout`]). Les
+ *     deux commandes ne font pourtant pas la même chose — l'une ouvre **la page
+ *     en cours d'édition**, l'autre l'**accueil du site** — et, alignées à droite
+ *     dans deux barres superposées, elles se lisaient comme un doublon (constat
+ *     de recette). Le libellé est donc explicite, sans retirer aucune des deux
+ *     fonctions : l'aperçu global reste le seul recours sur les écrans qui n'ont
+ *     pas d'aperçu contextuel.
  *   - Canvas : liste des modules réordonnables (DnD) ou état vide.
  *   - Catalogue : `AddSectionSheet` → `addModule` (ajout en fin de page).
  *   - État « page introuvable » si l'id ne correspond à aucune page du store.
@@ -109,7 +118,7 @@ export function PageEditor({ pageId }: PageEditorProps) {
               rel="noopener noreferrer"
             >
               <ExternalLink />
-              Aperçu
+              Aperçu de la page
             </Link>
           </Button>
           <Button size="sm" onClick={() => setCatalogueOpen(true)}>
@@ -140,7 +149,7 @@ export function PageEditor({ pageId }: PageEditorProps) {
         ) : (
           <>
             <div className="mb-3 flex items-center justify-between">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <p className="text-[13px] font-semibold leading-snug text-foreground">
                 Sections de la page
               </p>
             </div>

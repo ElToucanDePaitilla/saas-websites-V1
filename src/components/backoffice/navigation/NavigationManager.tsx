@@ -333,6 +333,8 @@ export function NavigationManager() {
   );
   /** Confirmation de la réinitialisation complète du menu (10.1.a). */
   const [confirmClear, setConfirmClear] = React.useState(false);
+  /** Panneau « Modèles de navigation » révélé à la demande (menu non vide). */
+  const [showModels, setShowModels] = React.useState(false);
 
   const pageTargets: NavTargetPage[] = React.useMemo(
     () =>
@@ -353,6 +355,9 @@ export function NavigationManager() {
   const headerEntries = getEntries("header");
   const footerEntries = getEntries("footer");
   const totalEntries = countAll(headerEntries) + countAll(footerEntries);
+
+  /** Menu vierge → les **modèles** sont proposés d'emblée comme point de départ. */
+  const isNavigationEmpty = totalEntries === 0;
 
   /** Options de parent (Header) : items de Niveau 1, hors item édité. */
   const parentOptions: NavParentOption[] = React.useMemo(() => {
@@ -456,38 +461,60 @@ export function NavigationManager() {
         </div>
       </div>
 
-      {/* ---- Presets Onboarding (Étape 4.4) ---- */}
-      <PresetOnboardingPanel
-        appliedPresetId={appliedPresetId}
-        onApply={handleApplyPreset}
-      />
+      {/* ---- Modèles de navigation (Étape 4.4) ----
+          Affichés d'emblée **uniquement quand le menu est vide** (état de
+          départ). Sinon ils restent accessibles via la Zone de
+          réinitialisation : un modèle n'est pas un outil d'édition courant. */}
+      {isNavigationEmpty || showModels ? (
+        <PresetOnboardingPanel
+          appliedPresetId={appliedPresetId}
+          onApply={handleApplyPreset}
+          onClose={
+            !isNavigationEmpty && showModels
+              ? () => setShowModels(false)
+              : undefined
+          }
+        />
+      ) : null}
 
       {/* ---- Zone de réinitialisation (Étape 10.1.a) ---- */}
-      <section className="rounded-lg border border-destructive/40 bg-card">
-        <div className="border-b border-destructive/30 px-4 py-3">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-            <Trash2 aria-hidden="true" className="size-4 text-destructive" />
-            Zone de réinitialisation
-          </h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Vide entièrement le Header et le Footer — utile pour repartir d’un
-            site réellement vierge (les pages ne sont pas supprimées).
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center justify-between gap-3 p-3">
-          <p className="text-xs text-muted-foreground">
-            Action irréversible : liens manuels et sous-menus seront supprimés.
-          </p>
-          <Button
-            variant="outline"
-            size="sm"
-            className="shrink-0 text-destructive"
-            onClick={() => setConfirmClear(true)}
-          >
-            Vider la navigation
-          </Button>
-        </div>
-      </section>
+      {!isNavigationEmpty ? (
+        <section className="rounded-lg border border-destructive/40 bg-card">
+          <div className="border-b border-destructive/30 px-4 py-3">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <Trash2 aria-hidden="true" className="size-4 text-destructive" />
+              Zone de réinitialisation
+            </h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Repartez de zéro : videz le menu, ou reprenez une structure de
+              départ (« Modèles de navigation »).
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 p-3">
+            <p className="text-xs text-muted-foreground">
+              Actions irréversibles : liens manuels et sous-menus seront
+              supprimés ou remplacés.
+            </p>
+            <div className="flex shrink-0 items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowModels(true)}
+              >
+                Repartir d’un modèle
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-destructive"
+                onClick={() => setConfirmClear(true)}
+              >
+                Vider la navigation
+              </Button>
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       {/* ---- Dialog Confirmation « vider la navigation » ---- */}
       <Dialog open={confirmClear} onOpenChange={setConfirmClear}>

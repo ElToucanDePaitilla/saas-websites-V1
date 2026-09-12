@@ -1,8 +1,10 @@
 # ROADMAP — Étape 11.20 : Gestion des albums du Portfolio par grille de vignettes
 
-> **Statut** : PLANIFIÉ — en attente de validation
+> **Statut** : **IMPLÉMENTÉ** — lots **A, B, C, E** livrés et validés (`tsc` / `eslint` / `build`, 18 pages) ; lot **D** livré avec le mécanisme **HTML5 natif** (voir §5.1 et le CHANGELOG : le prototype n'a pas été exécuté comme exercice manuel, le risque visé ayant été supprimé par le choix de mécanisme déjà en service sur la même forme d'interface dans `GalleryImagesPanel`).
+> **⚠️ Amendement 11.23 — le lot E est retiré.** L'**import groupé** « un dossier parent → un album par sous-dossier » (`AlbumFolderImportPanel`) a été **supprimé du projet** à la demande du propriétaire du produit : son bloc encadré faisait **doublon** avec la tuile « **+ Nouvel album** », désormais **seul parcours de création d'album**. Le composant n'existe plus, la prop `demo` de `AlbumManagerPanel` a été retirée et la phrase de cadrage « Un dossier importé devient un album » a été réécrite. **Les §6 et §6.2 de ce plan sont donc caducs** (conservés comme historique de la décision) ; les lots **A, B, C et D restent en vigueur**. L'import de **photos** dans un album (dossier complet ou sélection multiple) reste disponible via `GalleryImagesPanel`.
+> **Reste à faire** : **recette manuelle** (§10) — dont le critère du prototype (§5.1) et la mise à jour de `ROADMAP.md` (faite : Étape 11.20) et du `CHANGELOG.md` (fait).
 > **Périmètre** : Back-Office (`AlbumManagerPanel` et ses composants) + filtrage public des albums masqués.
-> **Dépendance nouvelle** : aucune (`@hello-pangea/dnd` est déjà installé et utilisé).
+> **Dépendance nouvelle** : **aucune**.
 > **Aucune migration BDD** : le seul champ ajouté (`hidden`) est **optionnel**.
 
 ---
@@ -167,7 +169,7 @@ réglage **global à toutes les couvertures**, sa phrase de portée le dit déj�
 
 Remplacement de la grille par le formulaire de l'album, **dans la même zone**, avec :
 
-- un lien de retour **« ← Tous les albums »** ;
+- un lien de retour **« ← Retour vers la galerie des Albums »** ;
 - **Nom de l'album** (champ texte) ;
 - **Description** (zone de texte) ;
 - **Photo de couverture** (sélecteur, options = photos visibles de l'album) ;
@@ -282,6 +284,17 @@ couverture (première photo) et son compte déjà justes.
 - **D-8 — Aucune dépendance nouvelle.**
 - **D-9 — Réutilisation de `GalleryImagesPanel`** pour les photos d'album : même outil que les
   variantes static et dynamic, ce qui réalise la symétrie demandée à coût quasi nul.
+- **D-10 — La vue d'album est une zone d'édition *sœur*, de teinte distincte** (ajout **11.20.a**,
+  constat de recette : *« la barre verticale au-dessus du bouton n'a pas changé de couleur »*).
+  Rendue *à l'intérieur* de la `EditorZone` « Les albums », la vue d'album héritait de sa barre
+  d'accent (`--zone-content`) et semblait donc partager sa portée avec les réglages de galerie
+  (compteur, import de dossier, réglages des couvertures). Un bandeau **imbriqué** de couleur
+  différente ne suffit pas : la barre de la zone continue de courir sur toute sa hauteur, et le
+  bandeau — enfant, donc en retrait du `p-3` — fait apparaître une **seconde** barre parallèle.
+  Correctif : `editingAlbumId` est **remonté** à l'éditeur de galerie et la vue d'album devient une
+  `EditorZone` **sœur**, de teinte **`detail`** (`--zone-detail`, vert d'eau, distincte du bleu
+  glacier de `--zone-content`) — **aucun jeton CSS ajouté**. La grille cède la place pendant
+  l'édition ; D-4 reste vraie (aucune route, aucune persistance supplémentaire).
 
 ---
 

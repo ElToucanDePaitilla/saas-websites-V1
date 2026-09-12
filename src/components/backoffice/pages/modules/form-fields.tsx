@@ -16,6 +16,8 @@ import { Textarea } from "@/components/ui/textarea";
 import type { MediaField } from "@/lib/pages";
 import { cn } from "@/lib/utils";
 
+import { EDITOR_TYPE } from "./editor-type";
+
 /**
  * ============================================================================
  * CHAMPS DE FORMULAIRE PARTAGÉS — Édition de modules (Étapes 3.4 & 7.1)
@@ -80,7 +82,7 @@ type LabelWithTipProps = {
 export function LabelWithTip({ label, htmlFor, tip }: LabelWithTipProps) {
   return (
     <div className="flex items-center gap-1.5">
-      <Label htmlFor={htmlFor} className="text-xs font-medium text-foreground">
+      <Label htmlFor={htmlFor} className={EDITOR_TYPE.fieldLabel}>
         {label}
       </Label>
       {tip ? <HelpTip tip={tip} /> : null}
@@ -131,7 +133,7 @@ export function TextField({
         onChange={(event) => onChange(event.target.value)}
         className={cn(mono && "font-mono")}
       />
-      {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
+      {hint ? <p className={EDITOR_TYPE.hint}>{hint}</p> : null}
     </div>
   );
 }
@@ -168,7 +170,7 @@ export function TextAreaField({
         rows={rows}
         onChange={(event) => onChange(event.target.value)}
       />
-      {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
+      {hint ? <p className={EDITOR_TYPE.hint}>{hint}</p> : null}
     </div>
   );
 }
@@ -180,6 +182,12 @@ export function TextAreaField({
 type SelectOption<T extends string> = {
   value: T;
   label: string;
+  /**
+   * Explication **facultative**, affichée sous le libellé **dans la liste
+   * déroulante** (le champ fermé ne montre que le libellé, cf. `SelectItem`).
+   * Évite d'ajouter une phrase d'aide sous le champ qui redirait la même chose.
+   */
+  description?: string;
 };
 
 type SelectFieldProps<T extends string> = {
@@ -219,13 +227,17 @@ export function SelectField<T extends string>({
         </SelectTrigger>
         <SelectContent>
           {options.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
+            <SelectItem
+              key={option.value}
+              value={option.value}
+              description={option.description}
+            >
               {option.label}
             </SelectItem>
           ))}
         </SelectContent>
       </Select>
-      {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
+      {hint ? <p className={EDITOR_TYPE.hint}>{hint}</p> : null}
     </div>
   );
 }

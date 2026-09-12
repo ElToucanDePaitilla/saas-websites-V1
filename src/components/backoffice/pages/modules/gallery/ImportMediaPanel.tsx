@@ -42,7 +42,7 @@ type ImportMediaPanelProps = {
 };
 
 /** Types MIME image acceptés (miroir client de /api/media). */
-const ALLOWED_IMAGE_TYPES = new Set([
+export const ALLOWED_IMAGE_TYPES = new Set([
   "image/jpeg",
   "image/png",
   "image/webp",
@@ -51,13 +51,26 @@ const ALLOWED_IMAGE_TYPES = new Set([
 ]);
 
 /** Taille maximale par fichier (miroir serveur : 15 Mo). */
-const MAX_FILE_BYTES = 15 * 1024 * 1024;
+export const MAX_FILE_BYTES = 15 * 1024 * 1024;
 
 /** Nombre de photos conseillé par import (reste fluide, évite les timeouts). */
-const RECOMMENDED_BATCH = 50;
+export const RECOMMENDED_BATCH = 50;
+
+/**
+ * Un fichier est-il importable ? Même contrat que le panneau d'import simple
+ * (taille non nulle, ≤ 15 Mo, MIME image autorisé) — **source unique** partagée
+ * avec l'import groupé par sous-dossiers (Étape 11.20, lot E).
+ */
+export function isUsableImageFile(file: File): boolean {
+  return (
+    file.size > 0 &&
+    file.size <= MAX_FILE_BYTES &&
+    ALLOWED_IMAGE_TYPES.has(file.type)
+  );
+}
 
 /** Nom de base d'un fichier (sans extension) pour pré-remplir l'alt. */
-function baseNameWithoutExtension(name: string): string {
+export function baseNameWithoutExtension(name: string): string {
   const lastDot = name.lastIndexOf(".");
   return (lastDot > 0 ? name.slice(0, lastDot) : name).trim();
 }
@@ -96,12 +109,7 @@ export function ImportMediaPanel({
       return;
     }
 
-    const valid = fileList.filter(
-      (file) =>
-        file.size > 0 &&
-        file.size <= MAX_FILE_BYTES &&
-        ALLOWED_IMAGE_TYPES.has(file.type)
-    );
+    const valid = fileList.filter(isUsableImageFile);
     const ignored = fileList.length - valid.length;
 
     if (valid.length === 0) {
@@ -172,7 +180,7 @@ export function ImportMediaPanel({
 
   return (
     <div className="grid gap-2 rounded-md border border-dashed border-border bg-background/50 p-3">
-      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+      <p className="text-[13px] font-semibold leading-snug text-foreground">
         {title}
       </p>
 

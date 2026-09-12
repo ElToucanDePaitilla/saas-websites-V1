@@ -72,6 +72,10 @@ export function GalleryManager({
     const albums = content.albums;
     const covers: { albumIndex: number; item: GalleryGridItem }[] = [];
     albums.forEach((album, albumIndex) => {
+      // Étape 11.20 — un album masqué n'apparaît pas sur le site public.
+      if (album.hidden) {
+        return;
+      }
       const cover = galleryAlbumCover(album);
       if (!cover || cover.url === "" || cover.hidden) {
         return;

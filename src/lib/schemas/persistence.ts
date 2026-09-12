@@ -176,6 +176,24 @@ const galleryBorderSchema = z.object({
   color: z.string(),
 });
 
+/**
+ * Famille d'effets de survol cumulables (Étape 11.23).
+ *
+ * **Tous les champs sont optionnels** : un contenu enregistré avant cette étape
+ * reste valide sans modification, et `resolveGalleryHoverEffects` complète
+ * champ par champ à la lecture (les valeurs par défaut reproduisent le rendu
+ * historique). **Aucune migration BDD** — même technique que `badge.display`
+ * (11.16) et `album.hidden` (11.20).
+ */
+const galleryHoverEffectsSchema = z.object({
+  zoom: z.number().optional(),
+  lift: z.number().optional(),
+  parallax: z.number().optional(),
+  shine: z.boolean().optional(),
+  saturate: z.boolean().optional(),
+  glow: z.boolean().optional(),
+});
+
 /** Mise en page d'une galerie (grille, espacements, finitions, survol). */
 const galleryLayoutSchema = z.object({
   display: galleryDisplayModeSchema,
@@ -187,6 +205,8 @@ const galleryLayoutSchema = z.object({
   border: galleryBorderSchema,
   hoverAnimation: galleryHoverAnimationSchema,
   hoverOverlay: z.boolean(),
+  /** Effets de survol cumulables (11.23) — optionnels : aucune migration. */
+  hoverEffects: galleryHoverEffectsSchema.optional(),
 });
 
 /** Effet de finition exclusif + son paramétrage contextuel. */
@@ -278,6 +298,8 @@ const galleryAlbumSchema = z.object({
   description: z.string(),
   coverImageId: z.string().nullable(),
   images: z.array(galleryImageSchema),
+  /** Masquage du site public (11.20) — **optionnel** : aucune migration. */
+  hidden: z.boolean().optional(),
 });
 
 const galleryPortfolioContentSchema = gallerySharedSchema.extend({

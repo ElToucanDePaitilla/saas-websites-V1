@@ -6,7 +6,7 @@ import { usePagesStore } from "@/components/backoffice/PagesStoreProvider";
 import { pageHref, type SitePage } from "@/lib/pages";
 import {
   findNavEntry,
-  isOrphanNavEntry,
+  isPurgableOrphanNavEntry,
   type NavMenuEntry,
 } from "@/lib/navigation";
 
@@ -147,11 +147,12 @@ export function PagesNavigationSync() {
 
     // ---- 5 : liens INTERNES orphelins (10.1.a) — entrées `custom` sans
     //          `pageId` ciblant un slug inexistant (ancres du seed,
-    //          placeholders de presets…). Les URL externes et les ancres
-    //          locales sont conservées. ----
+    //          liens manuels morts…). Les URL externes et les ancres locales
+    //          sont conservées, ainsi que les **cibles de modèles** (4.4),
+    //          placeholders intentionnels « page à créer ». ----
     const slugs = new Set(pages.map((page) => page.slug));
     for (const entry of [...headerEntries, ...footer]) {
-      if (isOrphanNavEntry(entry, slugs)) {
+      if (isPurgableOrphanNavEntry(entry, slugs)) {
         const inHeader = findNavEntry(header, entry.id) !== undefined;
         removeEntry(inHeader ? "header" : "footer", entry.id);
       }

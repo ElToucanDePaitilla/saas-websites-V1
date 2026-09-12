@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Wand2 } from "lucide-react";
+import { Wand2, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,61 +15,59 @@ import {
 } from "@/components/ui/dialog";
 import {
   NAV_PRESETS,
+  presetChildLabels,
+  presetRootLabels,
   type NavPresetId,
 } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 
 /**
  * ============================================================================
- * PANEL — Presets Onboarding de Navigation (Étape 4.4)
+ * PANEL — Modèles de navigation (Étape 4.4)
  * ----------------------------------------------------------------------------
  * Client Component **présentational** (aucune logique de store ici) : affiche
  * les 3 cartes de profil issues de `NAV_PRESETS` (spec §7.2-D) avec leur
- * structure « starter », un badge « Preset actif » sur la carte correspondant à
+ * structure « starter », un badge « Modèle actif » sur la carte correspondant à
  * `appliedPresetId`, et un **Dialog de confirmation** avant application (le
  * menu principal actuel est remplacé).
  *
+ * Sémantique : un modèle est un **état de départ**. Il n'est donc affiché par
+ * défaut que lorsque la navigation est vide (`NavigationManager`) ; le reste du
+ * temps il est accessible via la « Zone de réinitialisation ».
+ *
  * L'orchestration inter-stores (`PagesStore.updatePage` pour `inMenu` +
  * `NavigationStore.applyPreset`) reste dans `NavigationManager` — ce composant
- * reçoit `appliedPresetId` et `onApply` en propriétés.
+ * reçoit `appliedPresetId`, `onApply` et un `onClose` facultatif en propriétés.
  *
  * Référence : plans/ROADMAP-4.4-nav-presets-onboarding.md §4.2
  * ============================================================================
  */
 
-/** Aperçu plat des libellés racine d'un preset (ex. « Accueil · Portfolio »). */
-function rootLabels(presetId: NavPresetId): string {
-  const preset = NAV_PRESETS.find((candidate) => candidate.id === presetId);
-  if (!preset) {
-    return "";
-  }
-  return preset.nodes.map((node) => node.label).join(" · ");
-}
-
-/** Labels des enfants (Niveau 2) d'un preset, toutes racines confondues. */
-function childLabels(presetId: NavPresetId): string[] {
-  const preset = NAV_PRESETS.find((candidate) => candidate.id === presetId);
-  if (!preset) {
-    return [];
-  }
-  return preset.nodes.flatMap((node) =>
-    (node.children ?? []).map((child) => child.label)
-  );
+/** Aperçu plat des libellés racine d'un modèle (ex. « Accueil · Portfolio »). */
+function rootPreview(presetId: NavPresetId): string {
+  return presetRootLabels(presetId).join(" · ");
 }
 
 export function PresetOnboardingPanel({
   appliedPresetId,
   onApply,
+  onClose,
 }: {
   appliedPresetId: NavPresetId | null;
+  /** Applique le modèle (orchestration store côté appelant). */
   onApply: (presetId: NavPresetId) => void;
+  /**
+   * Ferme le panneau (affiché à la demande depuis la Zone de réinitialisation).
+   * Absent quand le panneau est le point de départ (navigation vide).
+   */
+  onClose?: () => void;
 }) {
   const [pendingId, setPendingId] = React.useState<NavPresetId | null>(null);
 
   const pendingPreset =
     NAV_PRESETS.find((preset) => preset.id === pendingId) ?? null;
-  const pendingPreview = pendingId ? rootLabels(pendingId) : "";
-  const pendingChildren = pendingId ? childLabels(pendingId) : [];
+  const pendingPreview = pendingId ? rootPreview(pendingId) : "";
+  const pendingChildren = pendingId ? presetChildLabels(pendingId) : [];
 
   function confirmApply() {
     if (!pendingId) {
@@ -85,26 +83,43 @@ export function PresetOnboardingPanel({
       className="rounded-lg border border-border bg-card"
     >
       {/* En-tête de section */}
-      <div className="border-b border-border px-4 py-3">
-        <h2
-          id="presets-onboarding-title"
-          className="flex items-center gap-2 text-sm font-semibold text-foreground"
-        >
-          <Wand2 aria-hidden="true" className="size-4 text-muted-foreground" />
-          Presets Onboarding
-        </h2>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          Démarrez le menu principal à partir d’un profil : appliquer un preset
-          remplace la structure actuelle et réorganise les pages affichées au
-          menu (les pages retirées restent créées).
-        </p>
+      <div className="flex items-start justify-between gap-3 border-b border-border px-4 py-3">
+        <div>
+          <h2
+            id="presets-onboarding-title"
+            className="flex items-center gap-2 text-sm font-semibold text-foreground"
+          >
+            <Wand2 aria-hidden="true" className="size-4 text-muted-foreground" />
+            Modèles de navigation
+          </h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Repartez d’une structure de menu prête à l’emploi selon votre
+            profil. Appliquer un modèle{" "}
+            <strong className="font-semibold text-foreground">
+              remplace tout le menu principal actuel
+            </strong>{" "}
+            et réorganise les pages affichées au menu (les pages retirées
+            restent créées).
+          </p>
+        </div>
+        {onClose ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="shrink-0"
+            aria-label="Fermer les modèles de navigation"
+            onClick={onClose}
+          >
+            <X />
+          </Button>
+        ) : null}
       </div>
 
       {/* Cartes de profils */}
       <div className="grid gap-3 p-3 sm:grid-cols-3">
         {NAV_PRESETS.map((preset) => {
           const isActive = appliedPresetId === preset.id;
-          const children = childLabels(preset.id);
+          const children = presetChildLabels(preset.id);
           return (
             <div
               key={preset.id}
@@ -121,7 +136,7 @@ export function PresetOnboardingPanel({
                 </p>
                 {isActive ? (
                   <Badge className="shrink-0 rounded-sm px-1.5 py-0">
-                    Preset actif
+                    Modèle actif
                   </Badge>
                 ) : null}
               </div>
@@ -131,7 +146,7 @@ export function PresetOnboardingPanel({
               </p>
 
               <div className="rounded-md border border-border/60 bg-background/60 px-2.5 py-2 text-xs text-foreground">
-                <p className="leading-5">{rootLabels(preset.id)}</p>
+                <p className="leading-5">{rootPreview(preset.id)}</p>
                 {children.length > 0 ? (
                   <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
                     Sous-menu : {children.join(" · ")}
@@ -157,13 +172,13 @@ export function PresetOnboardingPanel({
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
-              Appliquer le preset « {pendingPreset?.profile} » ?
+              Appliquer le modèle « {pendingPreset?.profile} » ?
             </DialogTitle>
             <DialogDescription>
-              Le menu principal actuel sera remplacé par la structure :{" "}
               <span className="font-medium text-foreground">
-                {pendingPreview}
-              </span>
+                Attention : tout le menu principal actuel sera remplacé
+              </span>{" "}
+              par la structure : {pendingPreview}
               {pendingChildren.length > 0
                 ? ` (sous-menu : ${pendingChildren.join(" · ")})`
                 : ""}
@@ -178,7 +193,7 @@ export function PresetOnboardingPanel({
             </Button>
             <Button onClick={confirmApply}>
               <Wand2 />
-              Appliquer le preset
+              Appliquer le modèle
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -69,7 +69,7 @@ export function AddSectionSheet({
             >
               <h2
                 id={`module-category-${categoryIndex}`}
-                className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+                className="mb-2 pl-1 text-[13px] font-semibold leading-snug text-foreground"
               >
                 {category}
               </h2>

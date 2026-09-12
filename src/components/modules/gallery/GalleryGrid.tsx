@@ -2,6 +2,7 @@
 
 import * as React from "react";
 
+import { galleryHoverCssVars } from "@/lib/gallery-effects";
 import type {
   GalleryEffectSettings,
   GalleryImage,
@@ -136,6 +137,10 @@ export function GalleryGrid({
   const sizes = `(min-width: 1024px) ${desktopVw}vw, (min-width: 640px) 50vw, 100vw`;
 
   const containerStyle: CSSVars = {
+    // Effets de survol (11.23) : les valeurs deviennent des variables CSS lues
+    // par `globals.css`, seul endroit capable de décrire un état `:hover` et de
+    // tout neutraliser sous `prefers-reduced-motion`.
+    ...galleryHoverCssVars(layout),
     "--gallery-cols": String(layout.columns),
     "--gallery-cols-md": String(Math.min(layout.columns, 3)),
     "--gallery-cols-sm": String(Math.min(layout.columns, 2)),

@@ -15,7 +15,7 @@
  */
 
 import type { SitePage } from "./pages";
-import type { SiteNavigation } from "./navigation";
+import type { NavPresetId, SiteNavigation } from "./navigation";
 import type { PageMetadataDraft } from "./pages";
 import type { OwnerProfile } from "./owner-profile";
 import type { VisualIdentity } from "./visual-identity";
@@ -112,6 +112,15 @@ export async function persistNavigation(
   navigation: SiteNavigation
 ): Promise<void> {
   await send(jsonRequest("/api/navigation", "PUT", navigation));
+}
+
+/**
+ * Applique un **modèle de navigation** Onboarding (Étape 4.4) : transaction
+ * serveur atomique (recalcule `is_in_menu` des pages + remplace le Header).
+ * Utilisé par l'écran de bienvenue (site vierge), où aucun store n'est monté.
+ */
+export async function persistApplyPreset(presetId: NavPresetId): Promise<void> {
+  await send(jsonRequest("/api/navigation/presets", "POST", { presetId }));
 }
 
 /** Upsert du profil propriétaire complet (Étape 8.2). */

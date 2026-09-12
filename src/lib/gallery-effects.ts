@@ -19,6 +19,7 @@ import type { CSSProperties } from "react";
 import type {
   GalleryBorderSettings,
   GalleryEffectSettings,
+  GalleryLayoutOptions,
   GalleryShadowLevel,
 } from "@/lib/pages";
 
@@ -50,6 +51,94 @@ export function galleryBorderStyle(border: GalleryBorderSettings): CSSProperties
     return {};
   }
   return { border: `${border.width}px solid ${border.color}` };
+}
+
+/**
+ * Marge intérieure (px) creusée par l'effet de finition autour de l'image.
+ * Rend la valeur **mesurable** au lieu de la dupliquer dans le calcul des
+ * rayons (voir `galleryConcentricRadius`).
+ */
+export function galleryEffectPadding(effect: GalleryEffectSettings): number {
+  switch (effect.effect) {
+    case "museum-pass":
+      return effect.intensity === "light"
+        ? 10
+        : effect.intensity === "normal"
+          ? 18
+          : 28;
+    case "glass":
+      return 15;
+    case "polaroid":
+      return effect.intensity === "light"
+        ? 10
+        : effect.intensity === "normal"
+          ? 14
+          : 18;
+    default:
+      return 0;
+  }
+}
+
+/**
+ * ----------------------------------------------------------------------------
+ * RAYONS CONCENTRIQUES — correctif Étape 11.20.c
+ * ----------------------------------------------------------------------------
+ * Le cadre et l'image qu'il contient n'ont pas le même rayon **visuel** :
+ * l'image est enchâssée de l'épaisseur de la bordure **et** de la marge de
+ * l'effet. En donnant aux deux le même rayon, on obtenait deux arcs décalés
+ * dans chaque coin — la couleur de fond affleurait entre eux et l'arrondi
+ * *paraissait* cassé, voire incompatible avec l'encadrement. C'est le défaut
+ * constaté en recette.
+ *
+ * Un cadre imbriqué appelle donc un **rayon concentrique** :
+ * `rayon intérieur = max(0, rayon extérieur − épaisseur enchâssée)`.
+ */
+export function galleryConcentricRadius(
+  radius: number,
+  border: GalleryBorderSettings,
+  effect: GalleryEffectSettings
+): number {
+  if (radius <= 0) {
+    return 0;
+  }
+  const inset =
+    galleryEffectPadding(effect) + (border.enabled ? border.width : 0);
+  return Math.max(0, radius - inset);
+}
+
+/**
+ * ----------------------------------------------------------------------------
+ * EFFETS DE SURVOL → VARIABLES CSS (Étape 11.23)
+ * ----------------------------------------------------------------------------
+ * Les réglages deviennent des **variables CSS** posées sur le conteneur de la
+ * grille, que la feuille de styles consomme (voir `globals.css` § Effets de
+ * survol). Trois raisons à ce détour plutôt qu'un style en ligne :
+ *
+ *   1. un style en ligne ne peut pas décrire un **état de survol** ; les
+ *      variables, elles, sont lues par les règles `:hover` / `:focus-within` ;
+ *   2. la neutralisation sous `prefers-reduced-motion` se fait **en un seul
+ *      endroit**, au lieu d'être réécrite dans chaque composant ;
+ *   3. les valeurs sont **bornées ici** : aucune donnée héritée ne peut produire
+ *      un rendu aberrant.
+ */
+export function galleryHoverCssVars(
+  layout: GalleryLayoutOptions
+): Record<`--${string}`, string> {
+  const { zoom, lift, parallax, saturate, glow } = layout.hoverEffects;
+  const boundedZoom = Math.min(Math.max(zoom, 100), 118);
+  const boundedLift = Math.min(Math.max(lift, 0), 16);
+  const boundedParallax = Math.min(Math.max(parallax, 0), 12);
+
+  return {
+    // `scale()` attend un facteur, le réglage est un pourcentage lisible.
+    "--hv-zoom": String(boundedZoom / 100),
+    "--hv-lift": `${boundedLift}px`,
+    "--hv-parallax": `${boundedParallax}px`,
+    "--hv-filter": saturate ? "saturate(1.12) contrast(1.04)" : "none",
+    "--hv-glow": glow
+      ? "0 0 0 2px var(--accent-color-strong), 0 14px 32px -14px var(--accent-color-strong)"
+      : "none",
+  };
 }
 
 /** Convertit une couleur hexadécimale en `rgba(..., alpha)`. */

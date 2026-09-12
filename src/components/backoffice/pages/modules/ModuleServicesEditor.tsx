@@ -98,7 +98,7 @@ export function ModuleServicesEditor({
         scope="Chaque carte présentée au visiteur : son intitulé, sa description et son prix. Leur ordre est celui de la liste ci-dessous."
       >
         <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <p className="text-[13px] font-semibold leading-snug text-foreground">
             Prestations ({content.items.length})
           </p>
           <Button type="button" variant="outline" size="sm" onClick={addItem}>

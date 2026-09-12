@@ -7,6 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
 import { HelpTip } from "../form-fields";
+import { EDITOR_TYPE } from "../editor-type";
 
 /**
  * ============================================================================
@@ -36,7 +37,7 @@ export function ColorField({
   const id = React.useId();
   return (
     <div className={cn("grid gap-1.5", className)}>
-      <Label htmlFor={id} className="text-xs font-medium text-foreground">
+      <Label htmlFor={id} className={EDITOR_TYPE.fieldLabel}>
         {label}
       </Label>
       <div className="flex items-center gap-2">
@@ -54,7 +55,7 @@ export function ColorField({
           className="border-input focus-visible:border-ring focus-visible:ring-ring/50 h-9 min-w-0 flex-1 rounded-md border bg-transparent px-3 font-mono text-sm outline-none focus-visible:ring-[3px]"
         />
       </div>
-      {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
+      {hint ? <p className={EDITOR_TYPE.hint}>{hint}</p> : null}
     </div>
   );
 }
@@ -86,13 +87,13 @@ export function SwitchField({
     >
       <div className="min-w-0">
         <div className="flex items-center gap-1.5">
-          <Label htmlFor={id} className="text-xs font-medium text-foreground">
+          <Label htmlFor={id} className={EDITOR_TYPE.fieldLabel}>
             {label}
           </Label>
           {tip ? <HelpTip tip={tip} /> : null}
         </div>
         {description ? (
-          <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
+          <p className={cn("mt-0.5", EDITOR_TYPE.hint)}>{description}</p>
         ) : null}
       </div>
       <Switch id={id} checked={checked} onCheckedChange={onChange} />
