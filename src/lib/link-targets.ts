@@ -74,6 +74,18 @@ export type LinkTargetPreview = {
 };
 
 /**
+ * Valeurs sentinelles du sélecteur compact (`LinkTargetSelect`, Étape 11.21).
+ *
+ * Radix `Select` refuse `value=""` : l'absence de destination et le passage à la
+ * saisie libre ont donc chacun besoin d'une valeur conventionnelle. **Ces
+ * sentinelles ne sont jamais stockées** dans `href` — elles ne vivent que le
+ * temps d'un rendu, conformément au principe « le mode est dérivé, pas
+ * persisté » (11.21-D2).
+ */
+export const LINK_TARGET_NONE_VALUE = "__none__";
+export const LINK_TARGET_CUSTOM_VALUE = "__custom__";
+
+/**
  * Comparateur alphabétique français : insensible à la casse et aux accents,
  * avec tri numérique (`2024` avant `2025`, `page-2` avant `page-10`).
  */
@@ -164,6 +176,49 @@ export function collectAnchorTargets(
 }
 
 /**
+ * Un groupe du menu des sections = **une page hôte** (Étape 11.21).
+ * L'ordre de `collectAnchorTargets` est conservé (page puis libellé).
+ */
+export type AnchorTargetGroup = {
+  /** Identifiant de la page hôte — clé React stable. */
+  pageId: string;
+  /** Titre de la page hôte — libellé du groupe. */
+  pageTitle: string;
+  /** true si la page hôte est celle en cours d'édition. */
+  isCurrentPage: boolean;
+  /** Sections de cette page, dans l'ordre du helper. */
+  targets: AnchorTarget[];
+};
+
+/**
+ * Regroupe les cibles de section par page hôte **sans réordonner** : les cibles
+ * produites par `collectAnchorTargets` sont déjà triées par page puis par
+ * libellé, il suffit donc de découper les suites consécutives.
+ *
+ * Factorisé en 11.21 (ex-`LinkTargetField` lignes 112-128) car la vue complète
+ * ET la vue compacte consomment le même regroupement.
+ */
+export function groupAnchorTargets(
+  index: LinkTargetIndex
+): AnchorTargetGroup[] {
+  const groups: AnchorTargetGroup[] = [];
+  for (const target of index.anchors) {
+    const last = groups[groups.length - 1];
+    if (last !== undefined && last.pageId === target.pageId) {
+      last.targets.push(target);
+      continue;
+    }
+    groups.push({
+      pageId: target.pageId,
+      pageTitle: target.pageTitle,
+      isCurrentPage: target.isCurrentPage,
+      targets: [target],
+    });
+  }
+  return groups;
+}
+
+/**
  * Déduit le mode d'un `href` à partir des cibles connues (D-2 et D-5).
  *
  * | Forme de `href`                                  | Mode     |
@@ -251,4 +306,118 @@ export function describeLinkTarget(
     warning:
       "Cette destination n'existe plus dans le site (page renommée ou section supprimée). Le lien a été conservé tel quel.",
   };
+}
+
+/* --------------------------------------------------------------------------
+   Options du sélecteur compact (`LinkTargetSelect`) — Étape 11.21-D4
+   -------------------------------------------------------------------------- */
+
+/** Nature d'une option du menu unique (rendu et tests). */
+export type LinkTargetOptionKind = "none" | "page" | "anchor" | "custom";
+
+/** Une entrée choisissable du menu unique. */
+export type LinkTargetOption = {
+  /** Valeur remise au `Select` (un `href`, ou une sentinelle). */
+  value: string;
+  /** Libellé lisible affiché — jamais un identifiant technique. */
+  label: string;
+  /** Nature de l'option (destination réelle ou sentinelle). */
+  kind: LinkTargetOptionKind;
+};
+
+/** Un groupe d'options, coiffé d'un titre (`null` = pas d'en-tête). */
+export type LinkTargetOptionSection = {
+  /** Clé React stable du groupe. */
+  id: string;
+  /** Titre du groupe affiché en `SelectLabel`, ou `null`. */
+  label: string | null;
+  /** Options du groupe, dans l'ordre d'affichage. */
+  options: LinkTargetOption[];
+};
+
+/** Libellé d'une cible « section » — la mention « (masqué) » est signalée. */
+function anchorOptionLabel(target: AnchorTarget): string {
+  return target.hidden ? `${target.label} (masqué)` : target.label;
+}
+
+/**
+ * Construit la liste plate consommée par `LinkTargetSelect` (11.21-D4) :
+ *
+ *   1. « — Aucune — » (destination vide) ;
+ *   2. **Pages** du site, mentionnées « (brouillon) » le cas échéant ;
+ *   3. **Sections de cette page** (le cas le plus fréquent, remonté en tête) ;
+ *   4. **Autres sections**, préfixées du titre de leur page (« Prestations › Tarifs ») ;
+ *   5. **« Autre lien (externe)… »** — sentinelle qui révèle le champ libre.
+ *
+ * Fonction **pure** : aucune dépendance React, testable isolément, zéro `any`.
+ */
+export function buildLinkTargetOptions(
+  index: LinkTargetIndex
+): LinkTargetOptionSection[] {
+  const sections: LinkTargetOptionSection[] = [];
+
+  // 1. Choix neutre : aucune destination.
+  sections.push({
+    id: "none",
+    label: null,
+    options: [
+      { value: LINK_TARGET_NONE_VALUE, label: "— Aucune —", kind: "none" },
+    ],
+  });
+
+  // 2. Pages du site.
+  if (index.pages.length > 0) {
+    sections.push({
+      id: "pages",
+      label: "Pages",
+      options: index.pages.map((page) => ({
+        value: page.href,
+        label: page.draft ? `${page.label} (brouillon)` : page.label,
+        kind: "page",
+      })),
+    });
+  }
+
+  // 3. Sections de la page en cours d'édition (les plus probables).
+  const currentAnchors = index.anchors.filter((target) => target.isCurrentPage);
+  if (currentAnchors.length > 0) {
+    sections.push({
+      id: "current-anchors",
+      label: "Sections de cette page",
+      options: currentAnchors.map((target) => ({
+        value: target.href,
+        label: anchorOptionLabel(target),
+        kind: "anchor",
+      })),
+    });
+  }
+
+  // 4. Sections des autres pages — le titre de la page lève l'ambiguïté.
+  const otherAnchors = index.anchors.filter((target) => !target.isCurrentPage);
+  if (otherAnchors.length > 0) {
+    sections.push({
+      id: "other-anchors",
+      label: "Autres sections",
+      options: otherAnchors.map((target) => ({
+        value: target.href,
+        label: `${target.pageTitle} › ${anchorOptionLabel(target)}`,
+        kind: "anchor",
+      })),
+    });
+  }
+
+  // 5. Porte de sortie : lien externe / protocole / cible orpheline.
+  sections.push({
+    id: "custom",
+    label: null,
+    options: [
+      {
+        value: LINK_TARGET_CUSTOM_VALUE,
+        label: "Autre lien (externe)…",
+        kind: "custom",
+      },
+    ],
+  });
+
+  return sections;
 }

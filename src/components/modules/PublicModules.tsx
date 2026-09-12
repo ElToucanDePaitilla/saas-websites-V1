@@ -1,8 +1,15 @@
 import { MediaImage } from "@/components/common/MediaImage";
+import { BannerBackground } from "@/components/modules/banner/BannerBackground";
 import { GalleryManager } from "@/components/modules/gallery/GalleryManager";
+import { BaseHero } from "@/components/modules/hero/BaseHero";
 import { HeroModule } from "@/components/modules/hero/HeroModule";
-import { Button } from "@/components/ui/button";
-import { resolveGalleryContent, type PageModule } from "@/lib/pages";
+import { bannerEffectiveVariant } from "@/lib/banner-effects";
+import {
+  BANNER_HEIGHT_CLASS,
+  resolveCtaBannerContent,
+  resolveGalleryContent,
+  type PageModule,
+} from "@/lib/pages";
 
 /**
  * ============================================================================
@@ -124,29 +131,42 @@ export function ServicesModule({ module }: { module: PageModule }) {
   );
 }
 
-/** Bandeau CTA (contenu `cta-banner`). */
+/**
+ * Bandeau message ou d'appel à l'action (contenu `cta-banner`) — Étape 11.27.
+ *
+ * Séparateur **pleine largeur** dont la hauteur (petit / standard / grand) et le
+ * fond (**couleur unie, carrousel, parallaxe, vidéo**) se règlent par module.
+ *
+ * Réutilisation assumée des briques existantes : le cadre est celui du Héro
+ * (`BaseHero`), le message celui de `HeroTextBlock`. Le CTA hérite donc, sans
+ * une ligne de plus ici, de la discrimination de destination livrée en 11.26
+ * (ancre interne rendue par `NavLink` avec compensation du Header fixe, URL
+ * absolue en nouvel onglet, `mailto:` / `tel:` en même onglet).
+ *
+ * Deux réglages de `BaseHero` sont adaptés au rôle de **séparateur** :
+ * `titleTag="h2"` (un séparateur ne porte jamais le titre de la page) et
+ * `pullUp={false}` (il ne remonte pas sous le Header, contrairement à un Héro
+ * placé en tête de page).
+ */
 export function CtaBannerModule({ module }: { module: PageModule }) {
-  const content = module.content.type === "cta-banner" ? module.content : null;
-  if (!content) return null;
+  const raw = module.content.type === "cta-banner" ? module.content : null;
+  if (!raw) return null;
+
+  // Forme complète (upgrade legacy + défauts) — le rendu ne lit rien de brut.
+  const content = resolveCtaBannerContent(raw);
 
   return (
-    <section
-      id={module.anchorId}
-      className="mx-auto my-10 max-w-7xl rounded-2xl bg-accent/30 px-6 py-16 text-center sm:px-8"
+    <BaseHero
+      module={module}
+      content={content}
+      // Un aplat de couleur n'a pas besoin d'assombrissement ; un fond média, si.
+      hasImage={bannerEffectiveVariant(content) !== "color"}
+      minHeightClass={BANNER_HEIGHT_CLASS[content.height]}
+      pullUp={false}
+      titleTag="h2"
     >
-      <h2
-        style={{ fontFamily: "var(--font-heading)" }}
-        className="text-3xl font-light tracking-wide"
-      >
-        {content.heading}
-      </h2>
-      <p className="mt-3 text-[var(--text-muted)]">{content.subheading}</p>
-      {content.ctaLabel && content.ctaHref ? (
-        <Button asChild size="lg" className="mt-6">
-          <a href={content.ctaHref}>{content.ctaLabel}</a>
-        </Button>
-      ) : null}
-    </section>
+      <BannerBackground content={content} />
+    </BaseHero>
   );
 }
 

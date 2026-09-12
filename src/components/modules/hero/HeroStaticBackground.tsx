@@ -21,11 +21,18 @@ type HeroStaticBackgroundProps = {
   media: HeroStaticMedia;
   /** true quand le Héro est l'image LCP de la page (fetchpriority="high"). */
   priority?: boolean;
+  /**
+   * Cadrage **vertical** de la photo, en % (Étape 11.27) : `0` = haut de
+   * l'image, `100` = bas. Omis, le comportement historique est strictement
+   * conservé (`object-cover` centré) — la propriété n'est alors pas écrite.
+   */
+  focalY?: number;
 };
 
 export function HeroStaticBackground({
   media,
   priority = false,
+  focalY,
 }: HeroStaticBackgroundProps) {
   const desktopUrl = media.desktop.url;
   const mobileUrl = media.mobile.url;
@@ -34,6 +41,8 @@ export function HeroStaticBackground({
   const hasTablet = tabletUrl !== "";
   const hasMobile = mobileUrl !== "";
   const hasImage = hasDesktop || hasMobile || hasTablet;
+  const focalYStyle =
+    focalY === undefined ? undefined : { objectPosition: `50% ${focalY}%` };
 
   if (!hasImage) {
     return (
@@ -62,6 +71,7 @@ export function HeroStaticBackground({
           src={fallbackUrl}
           alt={imgAlt}
           className="absolute inset-0 h-full w-full object-cover"
+          style={focalYStyle}
           loading={priority ? "eager" : "lazy"}
           decoding="async"
           fetchPriority={priority ? "high" : "auto"}

@@ -30,6 +30,11 @@
   --border-color: #eae5e5;         /* Perle irisée — découpe chirurgicale 1px */
   --text-muted: rgba(26, 26, 26, 0.6); /* Gris perle foncé (sous-titres, dates) */
 
+  /* Hauteur du Header fixe (barre `h-16`) — nommée ici pour que les sections
+     qui se mesurent « sous la barre » (Héro, bandeau message/CTA, ancres)
+     partagent la même source au lieu de répéter `4rem`. */
+  --header-height: 4rem;
+
   /* ---- 2. Tokens sémantiques shadcn/ui (bancarisés sur la palette) ---- */
   --background: var(--bg-color);
   --foreground: var(--text-color);
@@ -259,6 +264,48 @@
 @media (prefers-reduced-motion: reduce) {
   .cover-text-hover {
     transition: none;
+  }
+}
+
+/* ==========================================================================
+   HAUTEURS DU BANDEAU MESSAGE / CTA — Étape 11.27
+   --------------------------------------------------------------------------
+   Le bandeau occupe une fraction de l'**espace compris entre le bas du Header
+   fixe et le bas de la fenêtre**, soit `100svh` moins `--header-height`.
+
+   Pourquoi ces hauteurs vivent ici et non en style en ligne :
+     1. `svh` (petit viewport) est la seule unité qui ne « saute » pas quand les
+        barres d'outils mobiles apparaissent ; le repli `vh` couvre les
+        navigateurs qui l'ignorent, via `@supports` ;
+     2. le composant ne transmet qu'un **nom** de hauteur, jamais une valeur ;
+     3. la constante de hauteur du Header reste définie en un seul endroit.
+
+   Hors `@layer` volontairement : ces classes doivent primer sur les utilitaires
+   Tailwind (même choix que les effets de galerie ci-dessous).
+   ========================================================================== */
+.banner-h-small {
+  min-height: calc((100vh - var(--header-height)) / 3);
+}
+
+.banner-h-standard {
+  min-height: calc((100vh - var(--header-height)) / 2);
+}
+
+.banner-h-large {
+  min-height: calc((100vh - var(--header-height)) * 0.75);
+}
+
+@supports (height: 100svh) {
+  .banner-h-small {
+    min-height: calc((100svh - var(--header-height)) / 3);
+  }
+
+  .banner-h-standard {
+    min-height: calc((100svh - var(--header-height)) / 2);
+  }
+
+  .banner-h-large {
+    min-height: calc((100svh - var(--header-height)) * 0.75);
   }
 }
 

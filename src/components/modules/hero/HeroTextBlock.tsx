@@ -1,3 +1,4 @@
+import { NavLink } from "@/components/common/NavLink";
 import { Button } from "@/components/ui/button";
 import type {
   FontWeightClass,
@@ -22,6 +23,12 @@ import { cn } from "@/lib/utils";
  *   - `HeroSlider` (slide) : alignement `bottom-left` sur desktop (centré sur
  *     mobile via les classes `lg:*`).
  * Zéro duplication de la typographie Héro.
+ *
+ * Cible du CTA (Étape 11.21-D5) : la même discrimination qu'au CTA de galerie
+ * (`CTAButton`) — URL absolue en nouvel onglet, protocole d'action en même
+ * onglet, **destination interne/ancre via `NavLink`** (défilement lissé avec
+ * compensation du Header fixe). Sans cela, un CTA de Héro pointant une section
+ * sautait sous la barre de navigation.
  * ============================================================================
  */
 
@@ -41,6 +48,13 @@ type HeroTextBlockProps = {
   ctaStyle: HeroCtaStyle;
   /** "center" (static / mobile) | "bottom-left" (desktop du slider). */
   align?: HeroTextAlign;
+  /**
+   * Balise du titre principal (Étape 11.27) : `h1` par défaut — c'est le Héro,
+   * qui porte le titre de la page. Un **séparateur** inséré au milieu du contenu
+   * passe `h2` : deux `h1` concurrents casseraient la hiérarchie du document
+   * (SEO et lecteurs d'écran).
+   */
+  titleTag?: "h1" | "h2";
   className?: string;
 };
 
@@ -71,8 +85,10 @@ export function HeroTextBlock({
   ctaHref,
   ctaStyle,
   align = "center",
+  titleTag = "h1",
   className,
 }: HeroTextBlockProps) {
+  const TitleTag = titleTag;
   const headingClass =
     textTone === "light" ? "text-white" : "text-foreground";
   const mutedClass =
@@ -83,6 +99,11 @@ export function HeroTextBlock({
     ctaShow &&
     ctaLabel.trim() !== "" &&
     ctaHref.trim() !== "";
+
+  // Même discrimination que `CTAButton` (cf. en-tête) : un seul endroit décide
+  // de la nature du lien, le rendu public reste cohérent entre les modules.
+  const isAbsoluteUrl = /^https?:\/\//i.test(ctaHref.trim());
+  const isActionProtocol = /^(mailto|tel):/i.test(ctaHref.trim());
 
   return (
     <div
@@ -95,7 +116,7 @@ export function HeroTextBlock({
         className
       )}
     >
-      <h1
+      <TitleTag
         className={cn(
           "text-balance text-[clamp(2.4rem,7vw,5rem)] leading-[1.06] tracking-wide",
           weightH1,
@@ -103,7 +124,7 @@ export function HeroTextBlock({
         )}
       >
         {titleH1}
-      </h1>
+      </TitleTag>
 
       {subtitleH2.trim() !== "" ? (
         <h2
@@ -132,7 +153,15 @@ export function HeroTextBlock({
       {showCta ? (
         <div className="mt-8">
           <Button asChild size="lg" variant={heroCtaButtonVariant(ctaStyle)}>
-            <a href={ctaHref}>{ctaLabel}</a>
+            {isAbsoluteUrl ? (
+              <a href={ctaHref} target="_blank" rel="noopener noreferrer">
+                {ctaLabel}
+              </a>
+            ) : isActionProtocol ? (
+              <a href={ctaHref}>{ctaLabel}</a>
+            ) : (
+              <NavLink href={ctaHref}>{ctaLabel}</NavLink>
+            )}
           </Button>
         </div>
       ) : null}

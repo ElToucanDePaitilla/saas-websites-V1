@@ -2184,13 +2184,7 @@ export type ModuleContent =
       intro: string;
       items: ServiceItem[];
     }
-  | {
-      type: "cta-banner";
-      heading: string;
-      subheading: string;
-      ctaLabel: string;
-      ctaHref: string;
-    }
+  | CtaBannerContent
   | ({ type: "gallery" } & GalleryContent)
   | {
       type: "faq";
@@ -2205,6 +2199,459 @@ export type ModuleContent =
       phone: string;
       address: string;
     };
+
+/* ==========================================================================
+   BANDEAU MESSAGE OU D'APPEL À L'ACTION — « cta-banner » (Étape 11.27)
+   --------------------------------------------------------------------------
+   Séparateur éditorial **pleine largeur** : un message (titre, sous-titre,
+   paragraphe optionnel), un CTA optionnel et **quatre fonds** possibles
+   (couleur du thème, carrousel, parallaxe, vidéo) sur **trois hauteurs**.
+
+   Héritage : le bandeau reprend la surface texte/CTA du Héro (overlay, ton du
+   texte, graisses, `cta*`) — c'est exactement ce que consomme `BaseHero`, qui
+   sert donc de cadre. La **variante** diffère en revanche (`HeroVariant` ne
+   connaît pas « color ») : le bandeau déclare la sienne et n'hérite donc pas de
+   `HeroBaseShared.variant`.
+
+   Aucune migration : tout vit dans le JSONB `content`, et le résolveur tolérant
+   accepte les contenus enregistrés avant cette étape
+   (`{ type, heading, subheading, ctaLabel, ctaHref }` → fond couleur unie).
+   ========================================================================== */
+
+/** Fond du bandeau : couleur unie, carrousel, parallaxe ou vidéo. */
+export type BannerBackgroundKind = "color" | "slider" | "parallax" | "video";
+
+/** Hauteur du bandeau, relative à l'espace compris sous le Header. */
+export type BannerHeight = "small" | "standard" | "large";
+
+/** Jetons produit de la direction artistique « Éclat Minéral & Nacre ». */
+export type BannerThemeToken =
+  | "accent-color"
+  | "accent-color-strong"
+  | "surface-color"
+  | "surface-color-soft"
+  | "bg-color"
+  | "text-color"
+  | "border-color";
+
+/** Fond couleur : jeton du thème (suit le thème) ou valeur libre (pipette). */
+export interface BannerColorSettings {
+  /** `theme` → la couleur suit le thème ; `custom` → valeur figée. */
+  source: "theme" | "custom";
+  /** Jeton utilisé quand `source === "theme"`. */
+  token: BannerThemeToken;
+  /** Valeur hexadécimale utilisée quand `source === "custom"`. */
+  value: string;
+}
+
+/** Une image du carrousel de fond. */
+export interface BannerSlide {
+  /** Identifiant stable (mock : crypto.randomUUID()). */
+  id: string;
+  /** Art-direction responsive de l'image. */
+  media: HeroStaticMedia;
+  /** Cadrage vertical de la photo, en % (0 = haut, 100 = bas). */
+  focalY: number;
+}
+
+/** Contenu du module `cta-banner` (Étape 11.27). */
+export interface CtaBannerContent extends Omit<HeroBaseShared, "variant"> {
+  type: "cta-banner";
+  variant: BannerBackgroundKind;
+  height: BannerHeight;
+  /** Titre du message (clé historique conservée — le SEO de partage la lit). */
+  heading: string;
+  /** Sous-titre du message (clé historique conservée). */
+  subheading: string;
+  color: BannerColorSettings;
+  /** Photo du fond parallaxe. */
+  media: HeroStaticMedia;
+  /** Cadrage vertical du fond parallaxe, en %. */
+  focalY: number;
+  parallaxSpeed: ParallaxSpeed;
+  /** Images du carrousel de fond (liste vide ⇒ repli sur le fond couleur). */
+  slides: BannerSlide[];
+  /** Réglages du carrousel — mêmes clés et bornes que le Héro. */
+  settings: HeroSliderSettings;
+  video: HeroVideoMedia;
+}
+
+/** Fraction de l'espace sous le Header occupée par chaque hauteur. */
+export const BANNER_HEIGHT_RATIO: Record<BannerHeight, number> = {
+  small: 1 / 3,
+  standard: 1 / 2,
+  large: 3 / 4,
+};
+
+/**
+ * Classe CSS portant la hauteur (`min-height`), déclarée dans `globals.css`.
+ *
+ * La mécanique reste en CSS : le composant ne transmet qu'un **nom** de hauteur
+ * (mêmes principes que les effets de galerie — `svh` avec repli `vh`,
+ * neutralisation centralisée). `BANNER_HEIGHT_RATIO` sert uniquement au
+ * **libellé** de l'éditeur (« environ 1/3 »), jamais au calcul de rendu.
+ */
+export const BANNER_HEIGHT_CLASS: Record<BannerHeight, string> = {
+  small: "banner-h-small",
+  standard: "banner-h-standard",
+  large: "banner-h-large",
+};
+
+/** Ordre d'affichage des hauteurs (éditeur). */
+export const bannerHeightOrder: BannerHeight[] = ["small", "standard", "large"];
+
+/** Libellés des hauteurs — ils décrivent le **résultat**, pas la technique. */
+export const bannerHeightLabels: Record<BannerHeight, string> = {
+  small: "Petit — environ 1/3 de la zone visible",
+  standard: "Standard — environ la moitié de la zone visible",
+  large: "Grand — environ 3/4 de la zone visible",
+};
+
+/** Ordre des types de fond (éditeur). */
+export const bannerBackgroundOrder: BannerBackgroundKind[] = [
+  "color",
+  "slider",
+  "parallax",
+  "video",
+];
+
+/** Libellés des fonds, nommés par ce que le visiteur verra. */
+export const bannerBackgroundLabels: Record<BannerBackgroundKind, string> = {
+  color: "Couleur unie",
+  slider: "Carrousel de photos",
+  parallax: "Photo en parallaxe",
+  video: "Vidéo",
+};
+
+/** Jetons de thème proposés (la couleur suit alors le thème du site). */
+export const bannerThemeTokenOrder: BannerThemeToken[] = [
+  "accent-color",
+  "accent-color-strong",
+  "surface-color",
+  "surface-color-soft",
+  "bg-color",
+  "text-color",
+  "border-color",
+];
+
+export const bannerThemeTokenLabels: Record<BannerThemeToken, string> = {
+  "accent-color": "Accent nacre (rose chaud)",
+  "accent-color-strong": "Accent soutenu (bronze doux)",
+  "surface-color": "Surface nacre (rose voilé)",
+  "surface-color-soft": "Surface nacrée soutenue",
+  "bg-color": "Fond du thème (blanc)",
+  "text-color": "Anthracite (texte)",
+  "border-color": "Perle irisée (bordures)",
+};
+
+/** Cadrages verticaux proposés — nommés plutôt que chiffrés. */
+export const bannerFocalYOrder: number[] = [15, 35, 50, 65, 85];
+
+/** Libellés des cadrages verticaux de la photo. */
+export const bannerFocalYLabels: Record<number, string> = {
+  15: "Haut",
+  35: "Plutôt haut",
+  50: "Centre",
+  65: "Plutôt bas",
+  85: "Bas",
+};
+
+/** Défauts du message — vocabulaire du bandeau, distinct de celui du Héro. */
+const DEFAULT_BANNER_SHARED: Omit<HeroBaseShared, "variant"> = {
+  overlayLevel: "medium",
+  textTone: "light",
+  titleH1: "Un projet photo ? Parlons-en !",
+  subtitleH2: "Disponible pour vos événements et séances sur mesure.",
+  descriptionText: "",
+  weightH1: "font-medium",
+  weightH2: "font-normal",
+  weightText: "font-normal",
+  ctaShow: true,
+  ctaLabel: "Me contacter",
+  ctaHref: "/contact",
+  ctaStyle: "primary",
+};
+
+/** Fabrique une image de carrousel de démonstration (seeds stables). */
+export function createBannerSlide(demoIndex = 0): BannerSlide {
+  const seed = `banner-slide-${demoIndex + 1}`;
+  return {
+    id: crypto.randomUUID(),
+    media: {
+      desktop: {
+        url: `https://picsum.photos/seed/${seed}/1920/1080`,
+        alt: `Visuel ${demoIndex + 1} du bandeau — format paysage`,
+      },
+      mobile: {
+        url: `https://picsum.photos/seed/${seed}-mobile/720/1280`,
+        alt: `Visuel ${demoIndex + 1} du bandeau — format portrait`,
+      },
+      tablet: null,
+    },
+    focalY: 50,
+  };
+}
+
+/**
+ * Fabrique un contenu de bandeau complet.
+ *
+ * Défaut demandé : **fond parallaxe, hauteur standard, CTA activé** — c'est ce
+ * que reçoivent le catalogue (« + Ajouter une section ») et le seed de l'Accueil.
+ */
+export function createCtaBannerContent(): CtaBannerContent {
+  return {
+    ...DEFAULT_BANNER_SHARED,
+    type: "cta-banner",
+    variant: "parallax",
+    height: "standard",
+    heading: DEFAULT_BANNER_SHARED.titleH1,
+    subheading: DEFAULT_BANNER_SHARED.subtitleH2,
+    color: { source: "theme", token: "accent-color", value: "#E8D8D7" },
+    media: cloneHeroStaticMedia(DEFAULT_HERO_STATIC_MEDIA),
+    focalY: 50,
+    parallaxSpeed: "medium",
+    slides: [createBannerSlide(0), createBannerSlide(1), createBannerSlide(2)],
+    settings: {
+      autoplay: true,
+      autoplaySpeedMs: 5000,
+      transition: "fade",
+      showArrows: true,
+      showDots: true,
+    },
+    video: createHeroVideoContent().media,
+  };
+}
+
+function isBannerBackgroundKind(value: unknown): value is BannerBackgroundKind {
+  return (
+    value === "color" ||
+    value === "slider" ||
+    value === "parallax" ||
+    value === "video"
+  );
+}
+
+function isBannerHeight(value: unknown): value is BannerHeight {
+  return value === "small" || value === "standard" || value === "large";
+}
+
+function isBannerThemeToken(value: unknown): value is BannerThemeToken {
+  return (
+    typeof value === "string" &&
+    (bannerThemeTokenOrder as string[]).includes(value)
+  );
+}
+
+function isBannerParallaxSpeed(value: unknown): value is ParallaxSpeed {
+  return (
+    typeof value === "string" &&
+    (parallaxSpeedOrder as string[]).includes(value)
+  );
+}
+
+function isBannerAutoplaySpeed(value: unknown): value is HeroAutoplaySpeed {
+  return value === 3000 || value === 5000 || value === 7000 || value === 10000;
+}
+
+function isBannerTransition(value: unknown): value is HeroSliderTransition {
+  return value === "slide" || value === "fade";
+}
+
+/** Lit un pourcentage borné (cadrage vertical) avec repli. */
+function readPercent(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.max(0, Math.min(100, value))
+    : fallback;
+}
+
+/** Lit un média art-direction imbriqué (desktop / mobile / tablette). */
+function readHeroStaticMedia(
+  record: Record<string, unknown>,
+  key: string,
+  fallback: HeroStaticMedia
+): HeroStaticMedia {
+  const raw = record[key];
+  if (!isRecord(raw)) {
+    return cloneHeroStaticMedia(fallback);
+  }
+  const tabletFallback = fallback.tablet ?? fallback.desktop;
+  return {
+    desktop: readArtSource(raw, "desktop", fallback.desktop),
+    mobile: readArtSource(raw, "mobile", fallback.mobile),
+    tablet: isRecord(raw.tablet)
+      ? readArtSource(raw, "tablet", tabletFallback)
+      : null,
+  };
+}
+
+/**
+ * Lit les images du carrousel.
+ *
+ * Un tableau **vide** est conservé tel quel : le rendu public retombe alors sur
+ * le fond couleur (jamais un cadre noir). Un `slides` **absent** (contenu
+ * enregistré avant l'Étape 11.27) reçoit les images de démonstration.
+ */
+function readBannerSlides(raw: unknown, fallback: BannerSlide[]): BannerSlide[] {
+  if (!Array.isArray(raw)) {
+    return fallback.map((slide) => ({
+      id: slide.id,
+      media: cloneHeroStaticMedia(slide.media),
+      focalY: slide.focalY,
+    }));
+  }
+  const slides: BannerSlide[] = [];
+  raw.forEach((item, index) => {
+    if (!isRecord(item)) {
+      return;
+    }
+    slides.push({
+      id: readHeroText(item, "id", `banner-slide-${index + 1}`),
+      media: readHeroStaticMedia(item, "media", DEFAULT_HERO_STATIC_MEDIA),
+      focalY: readPercent(item.focalY, 50),
+    });
+  });
+  return slides;
+}
+
+/** Lit les réglages du carrousel (mêmes bornes que le Héro). */
+function readBannerSettings(
+  raw: Record<string, unknown>,
+  fallback: HeroSliderSettings
+): HeroSliderSettings {
+  return {
+    autoplay:
+      typeof raw.autoplay === "boolean" ? raw.autoplay : fallback.autoplay,
+    autoplaySpeedMs: isBannerAutoplaySpeed(raw.autoplaySpeedMs)
+      ? raw.autoplaySpeedMs
+      : fallback.autoplaySpeedMs,
+    transition: isBannerTransition(raw.transition)
+      ? raw.transition
+      : fallback.transition,
+    showArrows:
+      typeof raw.showArrows === "boolean"
+        ? raw.showArrows
+        : fallback.showArrows,
+    showDots:
+      typeof raw.showDots === "boolean" ? raw.showDots : fallback.showDots,
+  };
+}
+
+/**
+ * Normalise un contenu `cta-banner` stocké (JSONB) vers une forme complète.
+ *
+ * Le repli diffère volontairement de celui de la fabrique : une variante
+ * **absente** (contenu enregistré avant l'Étape 11.27) donne un fond **couleur
+ * unie** — un bandeau ancien conserve ainsi son esprit d'aplat coloré et
+ * n'invente **aucune** image à télécharger. Les clés `heading` / `subheading`
+ * sont conservées (le SEO de partage les lit) et projetées sur
+ * `titleH1` / `subtitleH2`, la surface consommée par `BaseHero`.
+ */
+export function resolveCtaBannerContent(raw: unknown): CtaBannerContent {
+  const defaults = createCtaBannerContent();
+  if (!isRecord(raw)) {
+    return defaults;
+  }
+  const colorRaw = isRecord(raw.color) ? raw.color : {};
+  const settingsRaw = isRecord(raw.settings) ? raw.settings : {};
+  const videoRaw = isRecord(raw.video) ? raw.video : {};
+
+  // `heading` / `subheading` sont la **source de vérité** du message (clés
+  // historiques, celles qu'écrit l'éditeur) ; `titleH1` / `subtitleH2` en sont la
+  // projection, seule surface lue par `BaseHero`. L'ordre est délibéré : un
+  // contenu ancien (qui n'a que `heading`) et un contenu récent donnent le même
+  // résultat, et il n'existe qu'un seul jeu de clés à écrire.
+  const titleH1 = readHeroText(
+    raw,
+    "heading",
+    readHeroText(raw, "titleH1", defaults.heading)
+  );
+  const subtitleH2 = readHeroText(
+    raw,
+    "subheading",
+    readHeroText(raw, "subtitleH2", defaults.subheading)
+  );
+
+  return {
+    type: "cta-banner",
+    variant: isBannerBackgroundKind(raw.variant) ? raw.variant : "color",
+    height: isBannerHeight(raw.height) ? raw.height : defaults.height,
+    heading: titleH1,
+    subheading: subtitleH2,
+    overlayLevel: isHeroOverlay(raw.overlayLevel)
+      ? raw.overlayLevel
+      : defaults.overlayLevel,
+    textTone: isHeroTextTone(raw.textTone) ? raw.textTone : defaults.textTone,
+    titleH1,
+    subtitleH2,
+    descriptionText: readHeroText(
+      raw,
+      "descriptionText",
+      defaults.descriptionText
+    ),
+    weightH1: isFontWeight(raw.weightH1) ? raw.weightH1 : defaults.weightH1,
+    weightH2: isFontWeight(raw.weightH2) ? raw.weightH2 : defaults.weightH2,
+    weightText: isFontWeight(raw.weightText)
+      ? raw.weightText
+      : defaults.weightText,
+    ctaShow: isCtaShow(raw.ctaShow) ? raw.ctaShow : defaults.ctaShow,
+    ctaLabel: readHeroText(raw, "ctaLabel", defaults.ctaLabel),
+    ctaHref: readHeroText(raw, "ctaHref", defaults.ctaHref),
+    ctaStyle: isHeroCtaStyle(raw.ctaStyle) ? raw.ctaStyle : defaults.ctaStyle,
+    color: {
+      source: colorRaw.source === "custom" ? "custom" : "theme",
+      token: isBannerThemeToken(colorRaw.token)
+        ? colorRaw.token
+        : defaults.color.token,
+      value: readHeroText(colorRaw, "value", defaults.color.value),
+    },
+    media: readHeroStaticMedia(raw, "media", defaults.media),
+    focalY: readPercent(raw.focalY, defaults.focalY),
+    parallaxSpeed: isBannerParallaxSpeed(raw.parallaxSpeed)
+      ? raw.parallaxSpeed
+      : defaults.parallaxSpeed,
+    slides: readBannerSlides(raw.slides, defaults.slides),
+    settings: readBannerSettings(settingsRaw, defaults.settings),
+    video: {
+      videoUrl: readHeroText(videoRaw, "videoUrl", defaults.video.videoUrl),
+      loop:
+        typeof videoRaw.loop === "boolean"
+          ? videoRaw.loop
+          : defaults.video.loop,
+      posterDesktop: readArtSource(
+        videoRaw,
+        "posterDesktop",
+        defaults.video.posterDesktop
+      ),
+      fallbackMobile: readArtSource(
+        videoRaw,
+        "fallbackMobile",
+        defaults.video.fallbackMobile
+      ),
+    },
+  };
+}
+
+/** Images non vides d'un bandeau — sert au SEO de partage et au préchargement. */
+export function bannerImageSources(content: CtaBannerContent): ArtSource[] {
+  if (content.variant === "video") {
+    return [content.video.posterDesktop, content.video.fallbackMobile].filter(
+      (source) => source.url !== ""
+    );
+  }
+  if (content.variant === "slider") {
+    return content.slides.flatMap((slide) =>
+      [slide.media.desktop, slide.media.mobile].filter(
+        (source) => source.url !== ""
+      )
+    );
+  }
+  if (content.variant === "parallax") {
+    return [content.media.desktop, content.media.mobile].filter(
+      (source) => source.url !== ""
+    );
+  }
+  return [];
+}
 
 /**
  * Module de page — mappe 1:1 vers la future table `page_modules`
@@ -2326,9 +2773,10 @@ export const moduleCatalog: ModuleCatalogEntry[] = [
   {
     id: "cta-banner",
     type: "cta-banner",
-    label: "Bandeau d'appel à l'action",
+    label: "Bandeau message ou d'appel à l'action",
     category: "Bannières & réassurance",
-    description: "Un bandeau CTA pour convertir vos visiteurs.",
+    description:
+      "Un séparateur pleine largeur : message d'appel à l'action, slogan ou respiration éditoriale, sur photo, vidéo, carrousel ou couleur unie.",
   },
   {
     id: "faq",
@@ -2401,13 +2849,8 @@ export function createModuleContent(
         ],
       };
     case "cta-banner":
-      return {
-        type: "cta-banner",
-        heading: "Un projet photo ? Parlons-en !",
-        subheading: "Disponible pour vos événements et séances sur mesure.",
-        ctaLabel: "Me contacter",
-        ctaHref: "/contact",
-      };
+      // Étape 11.27 — défaut demandé : parallaxe, hauteur standard, CTA activé.
+      return createCtaBannerContent();
     case "gallery":
       return {
         type: "gallery",
@@ -2433,6 +2876,21 @@ export function createModuleContent(
             id: crypto.randomUUID(),
             question: "Sous quel délai recevons-nous les photos ?",
             answer: "Les photos retouchées sont livrées sous 2 à 3 semaines via une galerie en ligne privée.",
+          },
+          {
+            id: crypto.randomUUID(),
+            question: "Quel matériel utilisez-vous ?",
+            answer: "Je travaille en plein format avec des optiques lumineuses, et chaque prise de vue est enregistrée sur deux cartes mémoire pour plus de sécurité.",
+          },
+          {
+            id: crypto.randomUUID(),
+            question: "Qui détient les droits sur les photos ?",
+            answer: "Je conserve les droits d’auteur et vous recevez un droit d’usage privé illimité ; toute utilisation commerciale fait l’objet d’un accord écrit.",
+          },
+          {
+            id: crypto.randomUUID(),
+            question: "Proposez-vous des tirages papier ?",
+            answer: "Oui : des tirages d’art sur papier fine art sont disponibles en plusieurs formats, avec encadrement sur demande.",
           },
         ],
       };

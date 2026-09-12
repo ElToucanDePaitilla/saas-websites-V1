@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { PageModuleRenderer } from "@/components/modules/PublicModules";
 import {
+  createCtaBannerContent,
   createGalleryAlbum,
   createGalleryDynamicContent,
   createGalleryPortfolioContent,
@@ -167,8 +168,12 @@ function buildDemoModules(): PageModule[] {
   };
 
   const cta = createModule("cta-banner", 6);
+  // Étape 11.27 — le contenu complet vient de la fabrique (fond parallaxe,
+  // hauteur standard, CTA activé) ; seuls le message et la destination sont
+  // adaptés à la démonstration (ancre locale, pour éprouver le défilement
+  // compensant le Header fixe).
   cta.content = {
-    type: "cta-banner",
+    ...createCtaBannerContent(),
     heading: "Un projet photo ?",
     subheading: "Disponible pour vos événements et séances sur mesure.",
     ctaLabel: "Me contacter",

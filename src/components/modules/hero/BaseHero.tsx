@@ -5,6 +5,7 @@ import {
   type HeroBaseShared,
   type PageModule,
 } from "@/lib/pages";
+import { cn } from "@/lib/utils";
 
 import { HeroTextBlock } from "./HeroTextBlock";
 import { RevealHero } from "./RevealHero";
@@ -31,10 +32,31 @@ import { RevealHero } from "./RevealHero";
 type BaseHeroProps = {
   /** Ancre & animation d'entrée (champs scalaires partagés du module). */
   module: Pick<PageModule, "anchorId" | "animation">;
-  /** Champs partagés de la variante Héro rendue. */
-  content: HeroBaseShared;
+  /**
+   * Surface texte/CTA rendue. Seuls les champs de `HeroBaseShared` sont lus : la
+   * **variante** en est exclue, ce qui permet au « Bandeau message ou d'appel à
+   * l'action » (Étape 11.27), dont la variante désigne le type de fond, de
+   * réutiliser ce cadre sans conversion.
+   */
+  content: Omit<HeroBaseShared, "variant">;
   /** true si un fond image est réellement présent (sinon overlay désactivé). */
   hasImage: boolean;
+  /**
+   * Classe de hauteur de la section. Omise, le Héro occupe la hauteur d'écran
+   * disponible sous le Header ; le bandeau transmet la sienne (`banner-h-*`).
+   */
+  minHeightClass?: string;
+  /**
+   * Remonte la section sous le Header fixe (`-mt-4`) : vrai pour un Héro placé
+   * en tête de page, **faux** pour un séparateur inséré au milieu du contenu.
+   */
+  pullUp?: boolean;
+  /**
+   * Balise du titre du message : `h1` par défaut (le Héro porte le titre de la
+   * page), `h2` pour un **séparateur** inséré au milieu du contenu — deux `h1`
+   * concurrents casseraient la hiérarchie du document.
+   */
+  titleTag?: "h1" | "h2";
   /** Calque de fond injecté par la variante (ex. HeroStaticBackground). */
   children: ReactNode;
 };
@@ -43,6 +65,9 @@ export function BaseHero({
   module,
   content,
   hasImage,
+  minHeightClass,
+  pullUp = true,
+  titleTag = "h1",
   children,
 }: BaseHeroProps) {
   const overlayOpacity = hasImage
@@ -53,7 +78,12 @@ export function BaseHero({
   return (
     <section
       id={module.anchorId}
-      className="relative flex min-h-[calc(100svh-4rem)] w-full -mt-4 items-center justify-center overflow-hidden bg-background px-4 sm:px-6 supports-[height:100dvh]:min-h-[calc(100dvh-4rem)]"
+      className={cn(
+        "relative flex w-full items-center justify-center overflow-hidden bg-background px-4 sm:px-6",
+        pullUp && "-mt-4",
+        minHeightClass ??
+          "min-h-[calc(100svh-4rem)] supports-[height:100dvh]:min-h-[calc(100dvh-4rem)]"
+      )}
     >
       {/* Calque de fond (variante) */}
       {children}
@@ -85,6 +115,7 @@ export function BaseHero({
             ctaHref={content.ctaHref}
             ctaStyle={content.ctaStyle}
             align="center"
+            titleTag={titleTag}
           />
         </RevealHero>
       </div>

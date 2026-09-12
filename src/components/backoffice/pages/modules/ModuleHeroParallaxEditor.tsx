@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { ArtSourceField } from "./ArtSourceField";
 import { EditorZone } from "./EditorZone";
 import { HelpTip, SelectField, TextAreaField, TextField } from "./form-fields";
+import { LinkTargetSelect } from "./LinkTargetSelect";
 
 /**
  * ============================================================================
@@ -192,28 +193,27 @@ export function ModuleHeroParallaxEditor({
             />
           </div>
           {hero.ctaShow ? (
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <TextField
-                label="Libellé"
-                value={hero.ctaLabel}
-                onChange={(ctaLabel) => setHero({ ctaLabel })}
-              />
-              <TextField
-                label="Lien"
+            <div className="mt-3 grid gap-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <TextField
+                  label="Libellé"
+                  value={hero.ctaLabel}
+                  onChange={(ctaLabel) => setHero({ ctaLabel })}
+                />
+                <SelectField
+                  label="Style"
+                  value={hero.ctaStyle}
+                  options={[
+                    { value: "primary", label: "Principal" },
+                    { value: "secondary", label: "Secondaire" },
+                    { value: "outline", label: "Contours" },
+                  ]}
+                  onChange={(ctaStyle) => setHero({ ctaStyle })}
+                />
+              </div>
+              <LinkTargetSelect
                 value={hero.ctaHref}
-                mono
-                placeholder="/portfolio"
                 onChange={(ctaHref) => setHero({ ctaHref })}
-              />
-              <SelectField
-                label="Style"
-                value={hero.ctaStyle}
-                options={[
-                  { value: "primary", label: "Principal" },
-                  { value: "secondary", label: "Secondaire" },
-                  { value: "outline", label: "Contours" },
-                ]}
-                onChange={(ctaStyle) => setHero({ ctaStyle })}
               />
             </div>
           ) : null}

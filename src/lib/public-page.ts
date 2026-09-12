@@ -18,12 +18,14 @@ import {
 } from "@/db/repositories/pages.repository";
 import { resolvePublicPhotographerId } from "@/lib/supabase/session";
 import {
+  bannerImageSources,
   buildSeedModules,
   galleryImageSources,
   heroParallaxImageSources,
   heroSliderImageSources,
   heroStaticArtSources,
   heroVideoImageSources,
+  resolveCtaBannerContent,
   resolveGalleryContent,
   resolveHeroContent,
   resolveHeroParallaxContent,
@@ -70,6 +72,16 @@ function collectImageUrls(modules: PageModule[]): string[] {
       // Galerie : images directes (static/dynamic) ou images d'albums (portfolio).
       for (const image of galleryImageSources(resolveGalleryContent(mod.content))) {
         urls.push(image.url);
+      }
+    }
+    if (mod.content.type === "cta-banner") {
+      // Bandeau message / CTA (Étape 11.27) : photo de fond, visuels du
+      // carrousel ou replis de la vidéo — un bandeau peut être le seul visuel
+      // d'une page, ses images méritent donc le même sort que les autres.
+      for (const source of bannerImageSources(
+        resolveCtaBannerContent(mod.content)
+      )) {
+        urls.push(source.url);
       }
     }
   }
@@ -126,6 +138,10 @@ export function publicOgImage(modules: PageModule[]): string | null {
       if (first) return first.url;
     }
     if (content.type === "about" && content.media.url) return content.media.url;
+    if (content.type === "cta-banner") {
+      const first = bannerImageSources(resolveCtaBannerContent(content))[0];
+      if (first) return first.url;
+    }
     if (content.type === "gallery") {
       const first = galleryImageSources(resolveGalleryContent(content))[0];
       if (first) return first.url;

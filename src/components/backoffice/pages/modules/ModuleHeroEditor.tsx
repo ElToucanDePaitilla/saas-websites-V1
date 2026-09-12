@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils";
 import { ArtSourceField } from "./ArtSourceField";
 import { EditorZone } from "./EditorZone";
 import { SelectField, TextAreaField, TextField } from "./form-fields";
+import { LinkTargetField } from "./LinkTargetField";
 
 /**
  * ============================================================================
@@ -244,27 +245,27 @@ export function ModuleHeroEditor({
           </p>
 
           {hero.ctaShow ? (
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <TextField
-                label="Libellé du bouton"
-                value={hero.ctaLabel}
-                placeholder="Ex. Découvrir mon portfolio"
-                onChange={(ctaLabel) => setHero({ ctaLabel })}
-              />
-              <TextField
-                label="Lien du bouton"
+            <div className="mt-3 grid gap-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <TextField
+                  label="Libellé du bouton"
+                  value={hero.ctaLabel}
+                  placeholder="Ex. Découvrir mon portfolio"
+                  onChange={(ctaLabel) => setHero({ ctaLabel })}
+                />
+                <SelectField
+                  label="Style du bouton"
+                  value={hero.ctaStyle}
+                  options={CTA_STYLE_OPTIONS}
+                  onChange={(ctaStyle) => setHero({ ctaStyle })}
+                  tip="Principal : bouton coloré bien visible. Secondaire : plus discret. Contour : transparence avec une bordure."
+                />
+              </div>
+              <LinkTargetField
                 value={hero.ctaHref}
-                mono
-                placeholder="/portfolio"
-                tip="Page du site (/slug) ou adresse externe (https://…)."
                 onChange={(ctaHref) => setHero({ ctaHref })}
-              />
-              <SelectField
-                label="Style du bouton"
-                value={hero.ctaStyle}
-                options={CTA_STYLE_OPTIONS}
-                onChange={(ctaStyle) => setHero({ ctaStyle })}
-                tip="Principal : bouton coloré bien visible. Secondaire : plus discret. Contour : transparence avec une bordure."
+                label="Lien du bouton"
+                hint="Choisissez une page ou une section du site ; pour un site externe, collez l’adresse."
               />
             </div>
           ) : null}

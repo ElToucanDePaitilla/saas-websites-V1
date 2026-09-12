@@ -32,12 +32,20 @@ type HeroParallaxBackgroundProps = {
   media: HeroStaticMedia;
   parallaxSpeed: ParallaxSpeed;
   priority?: boolean;
+  /**
+   * Cadrage **vertical** de la photo, en % (Étape 11.27) : `0` = haut de
+   * l'image, `100` = bas. Appliqué à l'image animée **et** à son repli mobile
+   * (sans quoi le cadrage changerait d'un écran à l'autre). Omis, le rendu
+   * historique est strictement conservé.
+   */
+  focalY?: number;
 };
 
 export function HeroParallaxBackground({
   media,
   parallaxSpeed,
   priority = false,
+  focalY,
 }: HeroParallaxBackgroundProps) {
   const [isDesktop, setIsDesktop] = React.useState(true);
   const [reduced, setReduced] = React.useState(false);
@@ -131,7 +139,11 @@ export function HeroParallaxBackground({
   if (!enabled) {
     return (
       <div className="absolute inset-0" aria-hidden="true">
-        <HeroStaticBackground media={media} priority={priority} />
+        <HeroStaticBackground
+          media={media}
+          priority={priority}
+          focalY={focalY}
+        />
       </div>
     );
   }
@@ -152,6 +164,7 @@ export function HeroParallaxBackground({
         style={{
           top: `${-overscan * 100}%`,
           height: `${(1 + overscan * 2) * 100}%`,
+          objectPosition: focalY === undefined ? undefined : `50% ${focalY}%`,
         }}
         className="absolute left-0 w-full object-cover will-change-transform"
         loading={priority ? "eager" : "lazy"}

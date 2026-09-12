@@ -33,6 +33,8 @@ import { cn } from "@/lib/utils";
 import { ArtSourceField } from "./ArtSourceField";
 import { EditorZone } from "./EditorZone";
 import { HelpTip, SelectField, TextAreaField, TextField } from "./form-fields";
+import { LinkTargetSelect } from "./LinkTargetSelect";
+import { useLinkTargetIndex } from "./useLinkTargetIndex";
 
 /**
  * ============================================================================
@@ -123,6 +125,11 @@ export function ModuleHeroSliderEditor({
     [content]
   );
   const [openSlide, setOpenSlide] = React.useState(0);
+
+  // Index des destinations **calculé une seule fois** pour toutes les slides
+  // (11.21-D3, défaut B de l'audit) : la vue compacte le reçoit en prop au lieu
+  // de reconstruire l'index complet à chaque diapositive.
+  const linkTargetIndex = useLinkTargetIndex();
 
   /** Commite un contenu complet vers le store. */
   function commit(next: HeroSliderContent) {
@@ -379,33 +386,35 @@ export function ModuleHeroSliderEditor({
                       />
                     </div>
                     {slide.ctaShow ? (
-                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                        <TextField
-                          label="Libellé"
-                          value={slide.ctaLabel}
-                          placeholder="Ex. Découvrir la collection"
-                          onChange={(ctaLabel) => setSlide(slide.id, { ctaLabel })}
-                        />
-                        <TextField
-                          label="Lien"
+                      <div className="mt-3 grid gap-3">
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <TextField
+                            label="Libellé"
+                            value={slide.ctaLabel}
+                            placeholder="Ex. Découvrir la collection"
+                            onChange={(ctaLabel) => setSlide(slide.id, { ctaLabel })}
+                          />
+                          <SelectField
+                            label="Style du bouton"
+                            value={slide.ctaStyle}
+                            options={[
+                              { value: "primary", label: "Principal" },
+                              { value: "secondary", label: "Secondaire" },
+                              { value: "outline", label: "Contours" },
+                            ]}
+                            onChange={(ctaStyle) =>
+                              setSlide(slide.id, {
+                                ctaStyle: ctaStyle as HeroSliderSlide["ctaStyle"],
+                              })
+                            }
+                          />
+                        </div>
+                        {/* Vue compacte : une seule ligne par slide, l'index
+                            étant partagé par toutes les diapositives. */}
+                        <LinkTargetSelect
                           value={slide.ctaHref}
-                          mono
-                          placeholder="/portfolio"
                           onChange={(ctaHref) => setSlide(slide.id, { ctaHref })}
-                        />
-                        <SelectField
-                          label="Style du bouton"
-                          value={slide.ctaStyle}
-                          options={[
-                            { value: "primary", label: "Principal" },
-                            { value: "secondary", label: "Secondaire" },
-                            { value: "outline", label: "Contours" },
-                          ]}
-                          onChange={(ctaStyle) =>
-                            setSlide(slide.id, {
-                              ctaStyle: ctaStyle as HeroSliderSlide["ctaStyle"],
-                            })
-                          }
+                          index={linkTargetIndex}
                         />
                       </div>
                     ) : null}

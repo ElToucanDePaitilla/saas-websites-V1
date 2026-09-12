@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Loader2, Pipette, UploadCloud } from "lucide-react";
+import { Loader2, UploadCloud } from "lucide-react";
 
 import { isMediaDemoMode, uploadMedia } from "@/lib/media-client";
 import { persistVisualIdentity } from "@/lib/persistence-client";
@@ -9,9 +9,7 @@ import { siteName } from "@/lib/site";
 import {
   TEXT_LINE_PX,
   TEXT_SIZE_LETTER_SPACING,
-  VISUAL_IDENTITY_ACCENTS,
   VISUAL_IDENTITY_LIMITS,
-  VISUAL_IDENTITY_NEUTRALS,
   VISUAL_IDENTITY_PREVIEW_BG,
   fontWeightLabels,
   fontWeightOrder,
@@ -28,7 +26,8 @@ import {
 import { useVisualIdentity } from "@/lib/visual-identity-store";
 import { cn } from "@/lib/utils";
 
-import { HelpTip, SelectField, TextField } from "../pages/modules/form-fields";
+import { SelectField, TextField } from "../pages/modules/form-fields";
+import { ColorField } from "../shared/ColorField";
 
 /**
  * ============================================================================
@@ -90,30 +89,6 @@ function TextLineFields({
   tip: string;
   onPatch: (patch: Partial<VisualIdentityTextLine>) => void;
 }) {
-  const [pickError, setPickError] = React.useState<string | null>(null);
-
-  /** Pipette **écran** (EyeDropper API) — prélève une couleur hors de l'onglet. */
-  async function handlePickColor() {
-    type EyeDropperResult = { sRGBHex: string };
-    type EyeDropperCtor = new () => { open: () => Promise<EyeDropperResult> };
-    const Impl = (
-      window as unknown as { EyeDropper?: EyeDropperCtor }
-    ).EyeDropper;
-    if (!Impl) {
-      setPickError(
-        "Pipette non supportée par ce navigateur (fonctionne sur Chrome/Edge)."
-      );
-      return;
-    }
-    try {
-      const result = await new Impl().open();
-      onPatch({ color: result.sRGBHex });
-      setPickError(null);
-    } catch {
-      // Annulé par l'utilisateur (Échap) → silencieux.
-    }
-  }
-
   return (
     <div className="grid gap-3 rounded-lg border border-border bg-background/60 p-3">
       <RubricTitle title={title} description={description} />
@@ -148,70 +123,13 @@ function TextLineFields({
           tip="Normal 400 · Semi-gras 600 · Gras 700."
         />
       </div>
-      <div className="grid gap-2">
-        <span className="flex items-center gap-2 text-xs font-semibold text-foreground">
-          Couleur du texte
-          <HelpTip tip="Palette prédéfinie ou saisie libre Hex/RGBA (ex. #FFFFFF ou rgba(255,255,255,0.9))." />
-        </span>
-        <div className="flex flex-wrap items-center gap-3">
-          <input
-            type="color"
-            aria-label={`Sélecteur de couleur — ${title}`}
-            value={
-              /^#[0-9a-fA-F]{6}$/.test(line.color) ? line.color : "#1E293B"
-            }
-            onChange={(event) => onPatch({ color: event.target.value })}
-            className="h-9 w-12 cursor-pointer rounded border border-border bg-background"
-          />
-          <input
-            type="text"
-            value={line.color}
-            onChange={(event) => onPatch({ color: event.target.value })}
-            placeholder="#1E293B"
-            className="w-40 rounded-md border border-input bg-background px-3 py-1.5 text-sm"
-          />
-          <button
-            type="button"
-            onClick={() => {
-              void handlePickColor();
-            }}
-            title="Pipette — prélever une couleur n’importe où à l’écran (y compris hors de l’onglet)"
-            className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-sm transition-colors hover:bg-accent"
-          >
-            <Pipette className="size-4" /> Pipette
-          </button>
-        </div>
-        {/* Palette sur mesure — rangée neutres puis rangée accents. */}
-        <div className="grid gap-1.5">
-          {[VISUAL_IDENTITY_NEUTRALS, VISUAL_IDENTITY_ACCENTS].map(
-            (row, index) => (
-              <div key={index} className="flex flex-wrap gap-1.5">
-                {row.map((preset) => (
-                  <button
-                    key={preset}
-                    type="button"
-                    title={preset}
-                    aria-label={`Couleur ${preset}`}
-                    onClick={() => onPatch({ color: preset })}
-                    style={{ backgroundColor: preset }}
-                    className={cn(
-                      "size-6 rounded-full border",
-                      line.color.toLowerCase() === preset.toLowerCase()
-                        ? "border-primary ring-2 ring-primary/40"
-                        : "border-border"
-                    )}
-                  />
-                ))}
-              </div>
-            )
-          )}
-        </div>
-        {pickError ? (
-          <p role="alert" className="text-xs text-destructive">
-            {pickError}
-          </p>
-        ) : null}
-      </div>
+      {/* Champ couleur partagé (Étape 11.27) — palette, pipette et saisie libre. */}
+      <ColorField
+        label="Couleur du texte"
+        value={line.color}
+        onChange={(color) => onPatch({ color })}
+        ariaLabel={`Sélecteur de couleur — ${title}`}
+      />
     </div>
   );
 }

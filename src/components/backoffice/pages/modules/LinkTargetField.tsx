@@ -3,7 +3,6 @@
 import * as React from "react";
 import { AlertCircle, ArrowRight } from "lucide-react";
 
-import { usePagesStore } from "@/components/backoffice/PagesStoreProvider";
 import {
   Select,
   SelectContent,
@@ -14,19 +13,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  collectAnchorTargets,
-  collectPageTargets,
   describeLinkTarget,
   detectCtaTargetMode,
+  groupAnchorTargets,
   isExternalHref,
-  type AnchorTarget,
   type LinkTargetIndex,
 } from "@/lib/link-targets";
-import type { PageModule } from "@/lib/pages";
 import { cn } from "@/lib/utils";
 
-import { useCurrentPage } from "../CurrentPageContext";
 import { HelpTip, LabelWithTip, TextField } from "./form-fields";
+import { useLinkTargetIndex } from "./useLinkTargetIndex";
 
 /**
  * ============================================================================
@@ -54,7 +50,14 @@ import { HelpTip, LabelWithTip, TextField } from "./form-fields";
  * Composant générique (aucune dépendance à la galerie) : réutilisable tel quel
  * pour le CTA de la rubrique Héro.
  *
+ * Étape 11.21 : l'index n'est plus construit ici mais fourni par
+ * `useLinkTargetIndex()` — ou par l'appelant via la prop `index` (un éditeur à
+ * plusieurs boutons le calcule **une seule fois** pour N contrôles, défaut B de
+ * l'audit). Le regroupement des sections par page est délégué à
+ * `groupAnchorTargets()`, partagé avec le sélecteur compact.
+ *
  * Référence : plans/ROADMAP-11.16-galleries-albums-cta-linkpicker.md §2
+ *             plans/ROADMAP-11.21-cta-link-picker-generalise.md §4.1
  * ============================================================================
  */
 
@@ -72,14 +75,12 @@ type LinkTargetFieldProps = {
   /** Aide affichée sous le champ. */
   hint?: string;
   className?: string;
-};
-
-/** Un groupe du menu des sections = une page hôte (ordre du helper conservé). */
-type AnchorGroup = {
-  pageId: string;
-  pageTitle: string;
-  isCurrentPage: boolean;
-  targets: AnchorTarget[];
+  /**
+   * Index des cibles déjà construit par l'appelant (facultatif). Un éditeur qui
+   * rend **plusieurs** contrôles le calcule une fois pour tous (11.21-D3) ;
+   * omis, le composant le construit lui-même.
+   */
+  index?: LinkTargetIndex;
 };
 
 export function LinkTargetField({
@@ -89,43 +90,21 @@ export function LinkTargetField({
   tip,
   hint,
   className,
+  index: providedIndex,
 }: LinkTargetFieldProps) {
-  const { pages, getModules } = usePagesStore();
-  const { pageId: currentPageId } = useCurrentPage();
   const pageFieldId = React.useId();
   const anchorFieldId = React.useId();
 
   // Index des cibles connues : alimente les deux menus ET la dérivation du mode.
-  const index = React.useMemo<LinkTargetIndex>(() => {
-    const modulesByPage: Record<string, PageModule[]> = {};
-    for (const page of pages) {
-      modulesByPage[page.id] = getModules(page.id);
-    }
-    return {
-      pages: collectPageTargets(pages),
-      anchors: collectAnchorTargets(pages, modulesByPage, currentPageId),
-    };
-  }, [pages, getModules, currentPageId]);
+  // Fourni par l'appelant (éditeur à plusieurs boutons) ou construit ici.
+  const index = useLinkTargetIndex(providedIndex);
 
   // Regroupement du menu 2 par page hôte (les cibles sont déjà triées
   // par page puis par libellé de section côté helper).
-  const anchorGroups = React.useMemo<AnchorGroup[]>(() => {
-    const groups: AnchorGroup[] = [];
-    for (const target of index.anchors) {
-      const last = groups[groups.length - 1];
-      if (last !== undefined && last.pageId === target.pageId) {
-        last.targets.push(target);
-        continue;
-      }
-      groups.push({
-        pageId: target.pageId,
-        pageTitle: target.pageTitle,
-        isCurrentPage: target.isCurrentPage,
-        targets: [target],
-      });
-    }
-    return groups;
-  }, [index.anchors]);
+  const anchorGroups = React.useMemo(
+    () => groupAnchorTargets(index),
+    [index]
+  );
 
   const mode = detectCtaTargetMode(value, index);
   const preview = React.useMemo(
