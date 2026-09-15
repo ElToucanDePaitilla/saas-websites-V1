@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { PageModuleRenderer } from "@/components/modules/PublicModules";
+import { PublicModulesList } from "@/components/modules/PublicModules";
 import {
   getPublicPage,
   publicDescription,
@@ -55,19 +55,16 @@ export default async function PublicPage({ params }: PageProps) {
 
   // Modules **visibles** uniquement (le Toggle Eye masque sur le site public).
   const visibleModules = page.modules.filter((module) => !module.hidden);
-  const firstIsHero = visibleModules[0]?.content.type === "hero";
 
   return (
     <main className="flex-1">
-      {/* Titre H1 accessible quand la page ne commence pas par un Hero. */}
-      {!firstIsHero ? <h1 className="sr-only">{page.title}</h1> : null}
-      {visibleModules.map((module) => (
-        <PageModuleRenderer
-          key={module.id}
-          module={module}
-          exifByUrl={page.exifByUrl}
-        />
-      ))}
+      {/* Le titre de niveau 1 est décidé par la liste : un seul module le porte,
+          sinon la page pose son titre en `sr-only` (jamais de page sans h1). */}
+      <PublicModulesList
+        modules={visibleModules}
+        pageTitle={page.title}
+        exifByUrl={page.exifByUrl}
+      />
     </main>
   );
 }

@@ -346,6 +346,76 @@
 }
 
 /* ==========================================================================
+   HERO RIDEAU — la section suivante recouvre la section épinglée
+   --------------------------------------------------------------------------
+   Le « rideau » est une mécanique de **position**, pas une animation : le Héro
+   se colle sous le Header fixe et les sections suivantes montent par-dessus
+   lui, opaques, comme un rideau qui tombe. Aucun JavaScript, aucun `transform`
+   animé : rien à désactiver sous `prefers-reduced-motion`, le mouvement étant
+   celui du défilement, à la main du visiteur.
+
+   Trois classes, montées par `PublicModulesList`
+   ([`PublicModules.tsx`](../src/components/modules/PublicModules.tsx)) :
+
+     1. `.hero-curtain` — la section du Héro elle-même, **épinglée** ;
+     2. `.hero-scene`   — son conteneur, qui l'enveloppe **avec** les sections
+        destinées à le recouvrir ;
+     3. `.hero-cover`   — ces sections, **pleine largeur**, opaques, au-dessus.
+
+   **Pourquoi une scène ?** `position: sticky` n'immobilise un élément que
+   **tant que son conteneur continue** : la course d'épinglage est la hauteur du
+   conteneur moins celle du Héro. En prenant pour conteneur la scène — le Héro
+   *plus* ce qui doit passer devant lui — la course devient exactement la
+   traversée des sections suivantes : ni une de plus (le rideau ne reste pas
+   planté à la fin), ni une de moins. C'est aussi ce qui rend l'effet
+   indépendant de l'endroit de la page où le Héro a été inséré.
+
+   **Pourquoi un recouvrement pleine largeur ?** Les sections publiques sont
+   des blocs centrés et limités en largeur (À propos et Prestations à 1280 px,
+   FAQ à 768 px) : peindre leur fond laissait la photo visible dans les marges
+   de chaque côté. Le fond est donc porté par un bloc qui, lui, occupe toute la
+   largeur — même teinte que le `<body>` public, donc invisible partout où il
+   ne recouvre rien.
+
+   **Pourquoi aucun réglage pour le pied de page ?** L'épinglage est borné par
+   la scène : le Héro ne peut pas descendre plus bas que la fin du recouvrement,
+   donc jamais jusqu'au pied de page, qui suit la scène. Un élément positionné
+   n'a rien à protéger ici.
+
+   **Limite assumée** : la course du rideau est faite de ce qui le suit. Placé
+   en **dernière** position, le Héro n'a plus aucune course (`sticky` se
+   comporte alors comme un défilement normal) — un rideau sans rien à recouvrir
+   ne peut rien retenir. L'éditeur le rappelle au photographe.
+   ========================================================================== */
+.hero-scene {
+  /* Étiquetée `relative` + étage 0 : l'ordre entre le Héro (0) et le
+     recouvrement (1) est réglé **à l'intérieur** de la scène, sans jamais
+     entrer en concurrence avec le Header (z-50) ni le pied de page. */
+  position: relative;
+  z-index: 0;
+}
+
+.hero-curtain {
+  position: sticky;
+  /* Position **naturelle** du Héro (le `pt-20` du `<main>` et son `-mt-4` le
+     placent exactement sous la barre) : il se fixe sans le moindre à-coup, et
+     sa hauteur (`100svh - --header-height`) fait coïncider son bas avec la
+     ligne de flottaison — la section suivante démarre pile où le rideau tombe.
+     Le repli `4rem` couvre le cas où le jeton serait absent. */
+  top: var(--header-height, 4rem);
+  /* Contexte d'empilement obligatoire : sans lui, les calques internes du Héro
+     (voile en `z-[2]`, bloc texte en `z-10`) se compareraient au recouvrement
+     (1) et passeraient AU-DESSUS de lui. */
+  z-index: 0;
+}
+
+.hero-cover {
+  position: relative;
+  z-index: 1;
+  background-color: var(--bg-color);
+}
+
+/* ==========================================================================
    SECTION « CONTENU EN COLONNES » — mécanique de grille (Étape 12.1)
    --------------------------------------------------------------------------
    La RÉPARTITION entre colonnes est transmise par le composant dans

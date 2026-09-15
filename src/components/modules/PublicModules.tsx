@@ -7,6 +7,7 @@ import { HeroModule } from "@/components/modules/hero/HeroModule";
 import { bannerEffectiveVariant } from "@/lib/banner-effects";
 import {
   BANNER_HEIGHT_CLASS,
+  heroH1Text,
   resolveCtaBannerContent,
   resolveGalleryContent,
   type PageModule,
@@ -228,17 +229,27 @@ export function ContactModule({ module }: { module: PageModule }) {
   );
 }
 
-/** Aiguillage du rendu public par type de module. */
+/**
+ * Aiguillage du rendu public par type de module.
+ *
+ * `titleTag` est le **niveau de titre accordé par la page** (voir
+ * `PublicModulesList`) : seul le module qui porte le titre de la page reçoit
+ * `"h1"`, tous les autres `"h2"`. Les modules qui ne rendent pas de titre
+ * l'ignorent simplement ; le bandeau, lui, décide du sien (`h2` — c'est un
+ * séparateur).
+ */
 export function PageModuleRenderer({
   module,
   exifByUrl,
+  titleTag,
 }: {
   module: PageModule;
   exifByUrl?: Record<string, unknown>;
+  titleTag?: "h1" | "h2";
 }) {
   switch (module.content.type) {
     case "hero":
-      return <HeroModule module={module} />;
+      return <HeroModule module={module} titleTag={titleTag} />;
     case "about":
       return <AboutModule module={module} />;
     case "gallery":
@@ -254,4 +265,117 @@ export function PageModuleRenderer({
     case "content":
       return <ContentColumnsModule module={module} />;
   }
+}
+
+/**
+ * ============================================================================
+ * LISTE DES MODULES PUBLICS — dont la « scène » du Hero Rideau
+ * ----------------------------------------------------------------------------
+ * Rend la liste complète des modules visibles d'une page. Tant qu'aucun Héro
+ * « rideau » n'est présent, c'est un simple `map` — le rendu ne change pas d'un
+ * octet. Dès qu'un rideau existe, la liste est découpée en trois morceaux :
+ *
+ *   1. **Les modules d'avant** — inchangés.
+ *   2. **La scène** (`.hero-scene`) — le Héro rideau, puis un conteneur qui
+ *      recouvre. C'est cette scène, et elle seule, qui donne au Héro la place
+ *      de rester épinglé : `position: sticky` n'immobilise un élément que
+ *      **tant que son conteneur continue**, et le conteneur du rideau est ici
+ *      exactement « le rideau + ce qui doit passer devant lui ». La photo est
+ *      donc figée pendant toute la traversée des sections suivantes, et jamais
+ *      au-delà.
+ *   3. **Le recouvrement** (`.hero-cover`) — les modules d'après, dans un
+ *      **bloc pleine largeur** qui peint le fond du thème et passe à l'étage 1.
+ *      C'est lui, le rideau : il couvre la photo de toute la largeur de l'écran,
+ *      là où peindre le fond des sections une par une laissait la photo visible
+ *      dans les marges (les sections publiques sont centrées et limitées en
+ *      largeur : À propos et Prestations à 1280 px, FAQ à 768 px).
+ *
+ * Corollaire assumé, et seule limite du procédé : **un rideau doit avoir des
+ * sections après lui**. Placé en dernière position, la scène s'arrête à la fin
+ * de la photo, `sticky` n'a plus aucune course pour la retenir, et l'image
+ * défile normalement avec la page — c'est ce que l'éditeur rappelle au
+ * photographe.
+ *
+ * **Elle porte aussi l'unique `h1` de la page** (voir le calcul commenté plus
+ * bas) : un seul module reçoit le niveau 1 — le Héro de tête dont le titre est
+ * renseigné — tous les autres reçoivent `h2`, et la page ajoute un `h1`
+ * invisible (titre de page) quand aucun module ne peut le porter. La règle
+ * appartient à la page, pas aux modules : c'était le seul moyen de garantir
+ * « un seul `h1`, jamais vide » sur les pages sans héro comme sur celles qui
+ * empilent plusieurs héros ou un carrousel.
+ * ============================================================================
+ */
+export function PublicModulesList({
+  modules,
+  pageTitle,
+  exifByUrl,
+}: {
+  modules: PageModule[];
+  /**
+   * Titre de la page (même valeur que `<title>` et l'Open Graph). Il devient le
+   * `h1` **invisible** de la page quand aucun module ne peut le porter.
+   */
+  pageTitle: string;
+  exifByUrl?: Record<string, unknown>;
+}) {
+  // ---- Le titre de niveau 1, décidé UNE fois pour toute la page ------------
+  // Règle unique, et la seule du projet : le `h1` va au **premier module**,
+  // s'il est de la famille Héro et que son titre est renseigné. Partout
+  // ailleurs — héro au milieu ou en fin de page (l'ajout de section place en
+  // fin !), carrousel, titre vidé — le niveau redescend en `h2`, et la page
+  // prend son titre de repli. Aucun module ne décide seul : sans cela, un
+  // second héro, les diapositives d'un carrousel ou un titre vidé produisaient
+  // plusieurs `h1`, voire un `h1` vide.
+  const first = modules[0];
+  const firstHeroContent =
+    first && first.content.type === "hero" ? first.content : null;
+  const firstHeroTitle = firstHeroContent
+    ? heroH1Text(firstHeroContent).trim()
+    : "";
+  const h1ModuleId = first && firstHeroTitle !== "" ? first.id : null;
+
+  const renderModule = (module: PageModule) => (
+    <PageModuleRenderer
+      key={module.id}
+      module={module}
+      exifByUrl={exifByUrl}
+      titleTag={module.id === h1ModuleId ? "h1" : "h2"}
+    />
+  );
+
+  // Repli : `sr-only` est un vrai texte (pas un `display: none`), donc lu par
+  // les lecteurs d'écran **et** indexé — la page n'est jamais sans titre.
+  const fallbackH1 =
+    h1ModuleId === null ? <h1 className="sr-only">{pageTitle}</h1> : null;
+
+  const curtainIndex = modules.findIndex(
+    (module) =>
+      module.content.type === "hero" && module.content.variant === "curtain"
+  );
+
+  if (curtainIndex === -1) {
+    return (
+      <>
+        {fallbackH1}
+        {modules.map(renderModule)}
+      </>
+    );
+  }
+
+  const before = modules.slice(0, curtainIndex);
+  const curtain = modules[curtainIndex];
+  const after = modules.slice(curtainIndex + 1);
+
+  return (
+    <>
+      {fallbackH1}
+      {before.map(renderModule)}
+      <div className="hero-scene">
+        {renderModule(curtain)}
+        {after.length > 0 ? (
+          <div className="hero-cover">{after.map(renderModule)}</div>
+        ) : null}
+      </div>
+    </>
+  );
 }

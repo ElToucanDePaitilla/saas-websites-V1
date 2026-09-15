@@ -38,9 +38,22 @@ type HeroSliderProps = {
   module: Pick<PageModule, "anchorId">;
   /** Contenu résolu (slides + réglages) — données sérialisables. */
   content: HeroSliderContent;
+  /**
+   * Niveau accordé au carrousel par la page ([`PublicModulesList`]).
+   * **Toutes les diapositives sont dans le document** (piste glissante, fondu,
+   * et doublon de la première pour la boucle) : un `h1` par diapositive ferait
+   * quatre à cinq titres de niveau 1 sur une seule page. Seule la diapositive
+   * **affichée** conserve donc le niveau reçu ; les autres passent en `h2` —
+   * elles sont déjà `aria-hidden`, il ne leur manquait que le bon niveau.
+   */
+  titleTag?: "h1" | "h2";
 };
 
-export function HeroSlider({ module, content }: HeroSliderProps) {
+export function HeroSlider({
+  module,
+  content,
+  titleTag = "h1",
+}: HeroSliderProps) {
   const slides = content.slides;
 
   // Moteur partagé : état, autoplay, gestes et boucle transparente (11.27).
@@ -95,6 +108,7 @@ export function HeroSlider({ module, content }: HeroSliderProps) {
             ctaHref={slide.ctaHref}
             ctaStyle={slide.ctaStyle}
             align="bottom-left"
+            titleTag={isActive ? titleTag : "h2"}
             className="max-w-xl"
           />
         </div>

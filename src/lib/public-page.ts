@@ -23,6 +23,7 @@ import {
   contentSectionImageSources,
   contentSectionPlainText,
   galleryImageSources,
+  heroCurtainImageSources,
   heroParallaxImageSources,
   heroSliderImageSources,
   heroStaticArtSources,
@@ -31,10 +32,13 @@ import {
   resolveCtaBannerContent,
   resolveGalleryContent,
   resolveHeroContent,
+  resolveHeroCurtainContent,
   resolveHeroParallaxContent,
   resolveHeroSliderContent,
   resolveHeroVideoContent,
   seedPages,
+  type ArtSource,
+  type HeroContent,
   type PageModule,
 } from "./pages";
 import {
@@ -50,21 +54,38 @@ export interface PublicPage {
   exifByUrl: Record<string, ResolvedMediaMeta>;
 }
 
+/**
+ * Sources d'images d'un Héro, **toutes variantes confondues** — centralisé ici
+ * parce que chaque variante a son média et son résolveur, et que deux
+ * consommateurs en dépendent (la collecte des images de la page et l'image
+ * OpenGraph) : sans ce point unique, ajouter une variante se ferait en deux
+ * endroits, avec le risque d'en oublier un.
+ */
+function heroImageSources(content: HeroContent): ArtSource[] {
+  if (content.variant === "slider") {
+    return heroSliderImageSources(resolveHeroSliderContent(content));
+  }
+  if (content.variant === "video") {
+    return heroVideoImageSources(resolveHeroVideoContent(content));
+  }
+  if (content.variant === "parallax") {
+    return heroParallaxImageSources(resolveHeroParallaxContent(content));
+  }
+  if (content.variant === "curtain") {
+    return heroCurtainImageSources(resolveHeroCurtainContent(content));
+  }
+  // "static" (défaut / contenu legacy) : le résolveur statique lit `media`.
+  return heroStaticArtSources(resolveHeroContent(content));
+}
+
 /** Collecte les URLs d'images portées par des modules (hero/about/gallery). */
 function collectImageUrls(modules: PageModule[]): string[] {
   const urls: string[] = [];
   for (const mod of modules) {
     if (mod.content.type === "hero") {
-      // Héro : sources art-direction selon la variante (static ou slider).
-      const sources =
-        mod.content.variant === "slider"
-          ? heroSliderImageSources(resolveHeroSliderContent(mod.content))
-          : mod.content.variant === "video"
-            ? heroVideoImageSources(resolveHeroVideoContent(mod.content))
-            : mod.content.variant === "parallax"
-              ? heroParallaxImageSources(resolveHeroParallaxContent(mod.content))
-              : heroStaticArtSources(resolveHeroContent(mod.content));
-      for (const source of sources) {
+      // Héro : sources art-direction selon la variante (static/slider/vidéo/
+      // parallaxe/rideau), sélection centralisée ci-dessus.
+      for (const source of heroImageSources(mod.content)) {
         urls.push(source.url);
       }
     }
@@ -148,15 +169,7 @@ export function publicOgImage(modules: PageModule[]): string | null {
   for (const mod of modules) {
     const content = mod.content;
     if (content.type === "hero") {
-      const sources =
-        content.variant === "slider"
-          ? heroSliderImageSources(resolveHeroSliderContent(content))
-          : content.variant === "video"
-            ? heroVideoImageSources(resolveHeroVideoContent(content))
-            : content.variant === "parallax"
-              ? heroParallaxImageSources(resolveHeroParallaxContent(content))
-              : heroStaticArtSources(resolveHeroContent(content));
-      const first = sources[0];
+      const first = heroImageSources(content)[0];
       if (first) return first.url;
     }
     if (content.type === "about" && content.media.url) return content.media.url;

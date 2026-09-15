@@ -244,8 +244,8 @@ export interface MediaField {
    Référence : plans/ROADMAP-7.1-hero-static-basehero.md
    ========================================================================== */
 
-/** Variantes de la rubrique Héro (extension future : slider/video/parallax). */
-export type HeroVariant = "static" | "slider" | "video" | "parallax";
+/** Variantes de la rubrique Héro (static / slider / video / parallax / curtain). */
+export type HeroVariant = "static" | "slider" | "video" | "parallax" | "curtain";
 
 /** Niveau d'assombrissement de l'overlay (contraste des textes sur la photo). */
 export type HeroOverlayLevel = "none" | "light" | "medium" | "strong";
@@ -274,6 +274,25 @@ export interface HeroStaticMedia {
   mobile: ArtSource;
   /** Format 4:3 — OPTIONNEL (source `min-width: 768px`) ; null ⇒ repli desktop. */
   tablet: ArtSource | null;
+}
+
+/**
+ * Sources d'image non vides d'un média art-direction, dans l'ordre **desktop →
+ * tablette → mobile** — l'ordre de déclaration du `<picture>`.
+ *
+ * Un **seul** exemplaire de cette extraction pour les trois variantes qui
+ * partagent `HeroStaticMedia` (statique, parallaxe, rideau) : la liste alimente
+ * aussi bien la collecte des images de la page que l'image de partage
+ * OpenGraph, et trois copies auraient fini par diverger — un ordre de
+ * chargement optimisé d'un côté, oublié de l'autre.
+ */
+export function heroStaticMediaArtSources(media: HeroStaticMedia): ArtSource[] {
+  const sources: ArtSource[] = [media.desktop];
+  if (media.tablet) {
+    sources.push(media.tablet);
+  }
+  sources.push(media.mobile);
+  return sources.filter((source) => source.url !== "");
 }
 
 /**
@@ -841,20 +860,145 @@ export function resolveHeroParallaxContent(raw: unknown): HeroParallaxContent {
 export function heroParallaxImageSources(
   content: HeroParallaxContent
 ): ArtSource[] {
-  const sources: ArtSource[] = [content.media.desktop];
-  if (content.media.tablet) {
-    sources.push(content.media.tablet);
-  }
-  sources.push(content.media.mobile);
-  return sources.filter((source) => source.url !== "");
+  return heroStaticMediaArtSources(content.media);
 }
 
-/** Union des contenus Héro (static / slider / video / parallax). */
+/* ==========================================================================
+   HERO RIDEAU — variante "curtain"
+   --------------------------------------------------------------------------
+   Hérite 100 % du bloc commun `BaseHero` et réutilise `HeroStaticMedia` : les
+   trois images d'art-direction du Héro statique (desktop 16:9, tablette 4:3,
+   mobile 9:16), rendues par la **même** balise `<picture>`.
+
+   Ce qui change n'est ni le média ni les textes, c'est la **position** : la
+   section s'**épingle** sous le Header fixe et la section suivante monte
+   par-dessus elle, opaque — « le rideau tombe ». La mécanique est
+   entièrement en CSS (`globals.css`, classe `.hero-curtain`), sans JavaScript
+   ni `transform` animé.
+
+   D'où l'absence volontaire de tout réglage propre : ni `parallaxSpeed` (ce
+   n'est pas une parallaxe) ni `disableOnMobile` (l'épinglage est du CSS natif,
+   identique sur tous les écrans). La variante n'ajoute donc **que** le
+   discriminant et son média ; tout le reste vient de `BaseHero`.
+   ========================================================================== */
+
+/** Contenu d'un Hero RIDEAU (fond statique + sections qui le recouvrent). */
+export interface HeroCurtainContent extends HeroBaseShared {
+  variant: "curtain";
+  media: HeroStaticMedia;
+}
+
+/** Fabrique un contenu HeroRideau complet (images picsum HD + seed stables). */
+export function createHeroCurtainContent(): HeroCurtainContent {
+  return {
+    ...DEFAULT_HERO_SHARED,
+    variant: "curtain",
+    media: {
+      desktop: {
+        url: "https://picsum.photos/seed/hero-curtain-desktop/1920/1080",
+        alt: "Grand format — univers du photographe (rideau)",
+      },
+      mobile: {
+        url: "https://picsum.photos/seed/hero-curtain-mobile/720/1280",
+        alt: "Cadrage vertical (mobile) — univers du photographe",
+      },
+      tablet: {
+        url: "https://picsum.photos/seed/hero-curtain-tablet/1200/900",
+        alt: "Composition intermédiaire (tablette)",
+      },
+    },
+  };
+}
+
+/** Résout un contenu Héro « curtain » stocké (JSONB) vers un complet. */
+export function resolveHeroCurtainContent(raw: unknown): HeroCurtainContent {
+  if (!isRecord(raw)) {
+    return createHeroCurtainContent();
+  }
+  const defaults = createHeroCurtainContent();
+  const mediaRaw = isRecord(raw.media) ? raw.media : {};
+
+  return {
+    variant: "curtain",
+    overlayLevel: isHeroOverlay(raw.overlayLevel)
+      ? raw.overlayLevel
+      : defaults.overlayLevel,
+    textTone: isHeroTextTone(raw.textTone) ? raw.textTone : defaults.textTone,
+    titleH1: readHeroText(raw, "titleH1", defaults.titleH1),
+    subtitleH2: readHeroText(raw, "subtitleH2", defaults.subtitleH2),
+    descriptionText: readHeroText(raw, "descriptionText", defaults.descriptionText),
+    weightH1: isFontWeight(raw.weightH1) ? raw.weightH1 : defaults.weightH1,
+    weightH2: isFontWeight(raw.weightH2) ? raw.weightH2 : defaults.weightH2,
+    weightText: isFontWeight(raw.weightText)
+      ? raw.weightText
+      : defaults.weightText,
+    ctaShow: typeof raw.ctaShow === "boolean" ? raw.ctaShow : defaults.ctaShow,
+    ctaLabel: readHeroText(raw, "ctaLabel", defaults.ctaLabel),
+    ctaHref: readHeroText(raw, "ctaHref", defaults.ctaHref),
+    ctaStyle: isHeroCtaStyle(raw.ctaStyle) ? raw.ctaStyle : defaults.ctaStyle,
+    media: {
+      desktop: readArtSource(mediaRaw, "desktop", defaults.media.desktop),
+      mobile: readArtSource(mediaRaw, "mobile", defaults.media.mobile),
+      tablet: isRecord(mediaRaw.tablet)
+        ? readArtSource(mediaRaw, "tablet", defaults.media.tablet ?? { url: "", alt: "" })
+        : null,
+    },
+  };
+}
+
+/** Sources d'image non vides d'un HeroRideau (desktop → tablette → mobile). */
+export function heroCurtainImageSources(
+  content: HeroCurtainContent
+): ArtSource[] {
+  return heroStaticMediaArtSources(content.media);
+}
+
+/** Union des contenus Héro (static / slider / video / parallax / curtain). */
 export type HeroContent =
   | HeroStaticContent
   | HeroSliderContent
   | HeroVideoContent
-  | HeroParallaxContent;
+  | HeroParallaxContent
+  | HeroCurtainContent;
+
+/**
+ * Titre « principal » d'un Héro, quelle que soit sa variante — sert à décider
+ * **quel module porte le `h1` de la page** (voir `PublicModulesList`).
+ *
+ * Prend le contenu **brut** (celui du JSONB, non résolu) et passe par le
+ * résolveur de la variante : c'est la règle de lecture du projet (chaque
+ * consommateur résout ce qu'il lit), et sans elle un contenu stocké avant
+ * l'ajout d'un champ ferait échouer la lecture.
+ *
+ * Un slider en possède plusieurs (un par diapositive) : on retient le premier
+ * titre **non vide**, parce que son `h1` suit la diapositive affichée — la
+ * décision « ce Héro porte le titre de la page » doit donc se fonder sur la
+ * première diapositive qui possède réellement un titre. Une chaîne vide
+ * signifie : ce Héro ne peut pas porter le titre de la page ; la page retombe
+ * alors sur son propre titre (repli invisible).
+ */
+export function heroH1Text(raw: unknown): string {
+  if (!isRecord(raw)) {
+    return "";
+  }
+  if (raw.variant === "slider") {
+    const slide = resolveHeroSliderContent(raw).slides.find(
+      (item) => item.titleH1.trim() !== ""
+    );
+    return slide?.titleH1 ?? "";
+  }
+  if (raw.variant === "video") {
+    return resolveHeroVideoContent(raw).titleH1;
+  }
+  if (raw.variant === "parallax") {
+    return resolveHeroParallaxContent(raw).titleH1;
+  }
+  if (raw.variant === "curtain") {
+    return resolveHeroCurtainContent(raw).titleH1;
+  }
+  // "static" et contenus legacy (variante absente) : résolveur statique.
+  return resolveHeroContent(raw).titleH1;
+}
 
 /** Opacité effective de l'overlay noir (rendu `rgba(0,0,0, <valeur>)`). */
 export const HERO_OVERLAY_OPACITY: Record<HeroOverlayLevel, number> = {
@@ -928,6 +1072,7 @@ export const heroVariantLabels: Record<HeroVariant, string> = {
   slider: "Hero Slider",
   video: "Hero Vidéo",
   parallax: "Hero Parallax",
+  curtain: "Hero Rideau",
 };
 
 /** Défauts du bloc textes/styles partagé (toutes variantes). */
@@ -992,12 +1137,7 @@ export function createHeroStaticContent(): HeroStaticContent {
 
 /** Sources d'image non vides d'un HeroStatic, ordre desktop → tablet → mobile. */
 export function heroStaticArtSources(content: HeroStaticContent): ArtSource[] {
-  const sources: ArtSource[] = [content.media.desktop];
-  if (content.media.tablet) {
-    sources.push(content.media.tablet);
-  }
-  sources.push(content.media.mobile);
-  return sources.filter((source) => source.url !== "");
+  return heroStaticMediaArtSources(content.media);
 }
 
 /** Garde : objet simple non nul (pour le résolveur JSONB). */
@@ -3557,6 +3697,15 @@ export const moduleCatalog: ModuleCatalogEntry[] = [
       "Image en profondeur qui défile plus lentement (figée sur mobile pour la performance).",
   },
   {
+    id: "hero-curtain",
+    type: "hero",
+    variant: "curtain",
+    label: "Hero Rideau",
+    category: "Héro & accroche",
+    description:
+      "La photo reste en place et la section suivante vient la recouvrir au défilement, comme un rideau qui tombe.",
+  },
+  {
     id: "about",
     type: "about",
     label: "À propos (image + texte)",
@@ -3652,6 +3801,9 @@ export function createModuleContent(
     }
     if (variant === "parallax") {
       return { type: "hero", ...createHeroParallaxContent() };
+    }
+    if (variant === "curtain") {
+      return { type: "hero", ...createHeroCurtainContent() };
     }
     // Défaut (et variante "static") : HeroStatic — rubrique 7.1.
     return { type: "hero", ...createHeroStaticContent() };

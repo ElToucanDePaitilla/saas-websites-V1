@@ -57,6 +57,13 @@ type BaseHeroProps = {
    * concurrents casseraient la hiérarchie du document.
    */
   titleTag?: "h1" | "h2";
+  /**
+   * Classe additionnelle de la section. Utilisée par la variante **rideau**
+   * (`hero-curtain`, `globals.css`) pour l'épingler sous le Header : la
+   * mécanique est hors `@layer`, elle prime donc sur le `relative` de base.
+   * Omise, le rendu de toutes les variantes existantes est inchangé.
+   */
+  className?: string;
   /** Calque de fond injecté par la variante (ex. HeroStaticBackground). */
   children: ReactNode;
 };
@@ -68,6 +75,7 @@ export function BaseHero({
   minHeightClass,
   pullUp = true,
   titleTag = "h1",
+  className,
   children,
 }: BaseHeroProps) {
   const overlayOpacity = hasImage
@@ -82,7 +90,8 @@ export function BaseHero({
         "relative flex w-full items-center justify-center overflow-hidden bg-background px-4 sm:px-6",
         pullUp && "-mt-4",
         minHeightClass ??
-          "min-h-[calc(100svh-4rem)] supports-[height:100dvh]:min-h-[calc(100dvh-4rem)]"
+          "min-h-[calc(100svh-4rem)] supports-[height:100dvh]:min-h-[calc(100dvh-4rem)]",
+        className
       )}
     >
       {/* Calque de fond (variante) */}

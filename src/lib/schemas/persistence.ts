@@ -158,12 +158,21 @@ const heroParallaxContentSchema = heroSharedSchema
     disableOnMobile: z.literal(true),
   });
 
-/** Union des contenus Héro validée (static / slider / video / parallax). */
+/** Variante « curtain » (Hero Rideau) — média static, **aucun réglage propre** :
+ *  l'épinglage de la section et le recouvrement par la suivante sont une
+ *  mécanique CSS (`.hero-curtain`), sans paramètre à valider. */
+const heroCurtainContentSchema = heroSharedSchema.extend({
+  variant: z.literal("curtain"),
+  media: heroStaticMediaSchema,
+});
+
+/** Union des contenus Héro validée (static / slider / video / parallax / curtain). */
 export const heroContentSchema = z.discriminatedUnion("variant", [
   heroStaticContentSchema,
   heroSliderContentSchema,
   heroVideoContentSchema,
   heroParallaxContentSchema,
+  heroCurtainContentSchema,
 ]);
 
 /* --------------------------------------------------------------------------

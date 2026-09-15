@@ -14,6 +14,7 @@ import { ModuleGalleryEditor } from "./ModuleGalleryEditor";
 import { ModuleHeroEditor } from "./ModuleHeroEditor";
 import { ModuleHeroSliderEditor } from "./ModuleHeroSliderEditor";
 import { ModuleHeroParallaxEditor } from "./ModuleHeroParallaxEditor";
+import { ModuleHeroCurtainEditor } from "./ModuleHeroCurtainEditor";
 import { ModuleHeroVideoEditor } from "./ModuleHeroVideoEditor";
 import { ModuleContentColumnsEditor } from "./ModuleContentColumnsEditor";
 import { ModuleServicesEditor } from "./ModuleServicesEditor";
@@ -54,7 +55,8 @@ export function ModuleContentEditor({
 }: ModuleContentEditorProps) {
   switch (content.type) {
     case "hero":
-      // Aiguillage par variante : slider (7.2) / video (7.3) / static (7.1).
+      // Aiguillage par variante : slider (7.2) / vidéo (7.3) / parallaxe (7.4) /
+      // rideau (7.5) / statique (7.1, défaut).
       if (content.variant === "slider") {
         return (
           <ModuleHeroSliderEditor
@@ -74,6 +76,14 @@ export function ModuleContentEditor({
       if (content.variant === "parallax") {
         return (
           <ModuleHeroParallaxEditor
+            content={content}
+            onChangeContent={onChangeContent}
+          />
+        );
+      }
+      if (content.variant === "curtain") {
+        return (
+          <ModuleHeroCurtainEditor
             content={content}
             onChangeContent={onChangeContent}
           />

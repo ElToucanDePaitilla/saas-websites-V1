@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { PageModuleRenderer } from "@/components/modules/PublicModules";
+import { PublicModulesList } from "@/components/modules/PublicModules";
 import {
   createCtaBannerContent,
   createGalleryAlbum,
@@ -208,13 +208,11 @@ export default function DemoPage() {
 
   return (
     <main className="flex-1">
-      {modules.map((module) => (
-        <PageModuleRenderer
-          key={module.id}
-          module={module}
-          exifByUrl={DEMO_EXIF}
-        />
-      ))}
+      <PublicModulesList
+        modules={modules}
+        pageTitle="Démo — Rendu des modules"
+        exifByUrl={DEMO_EXIF}
+      />
     </main>
   );
 }

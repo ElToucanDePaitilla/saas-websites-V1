@@ -49,10 +49,12 @@ type HeroTextBlockProps = {
   /** "center" (static / mobile) | "bottom-left" (desktop du slider). */
   align?: HeroTextAlign;
   /**
-   * Balise du titre principal (Étape 11.27) : `h1` par défaut — c'est le Héro,
-   * qui porte le titre de la page. Un **séparateur** inséré au milieu du contenu
-   * passe `h2` : deux `h1` concurrents casseraient la hiérarchie du document
-   * (SEO et lecteurs d'écran).
+   * Balise du titre principal. Le niveau n'est **pas** décidé ici : la page
+   * ([`PublicModulesList`](../PublicModules.tsx)) ne l'accorde qu'à **un seul**
+   * module — le Héro de tête, si son titre est renseigné — et transmet `"h2"` à
+   * tous les autres (Héro séparateur, diapositives non affichées, Héro ajouté en
+   * fin de page). Le défaut `"h1"` ne sert plus qu'aux usages isolés (démo,
+   * tests) : il garantit qu'un Héro rendu seul reste un titre de niveau 1.
    */
   titleTag?: "h1" | "h2";
   className?: string;
@@ -116,15 +118,21 @@ export function HeroTextBlock({
         className
       )}
     >
-      <TitleTag
-        className={cn(
-          "text-balance text-[clamp(2.4rem,7vw,5rem)] leading-[1.06] tracking-wide",
-          weightH1,
-          headingClass
-        )}
-      >
-        {titleH1}
-      </TitleTag>
+      {/* Titre vide = pas de titre du tout : un `<h1></h1>` vide ferait croire
+          à un titre absent alors que la page en a un autre (le repli de page),
+          et les lecteurs d'écran annoncent « titre de niveau 1 » sans texte.
+          Le sous-titre et la description étaient déjà protégés, pas le titre. */}
+      {titleH1.trim() !== "" ? (
+        <TitleTag
+          className={cn(
+            "text-balance text-[clamp(2.4rem,7vw,5rem)] leading-[1.06] tracking-wide",
+            weightH1,
+            headingClass
+          )}
+        >
+          {titleH1}
+        </TitleTag>
+      ) : null}
 
       {subtitleH2.trim() !== "" ? (
         <h2
