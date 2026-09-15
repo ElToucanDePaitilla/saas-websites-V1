@@ -15,6 +15,7 @@ import { ModuleHeroEditor } from "./ModuleHeroEditor";
 import { ModuleHeroSliderEditor } from "./ModuleHeroSliderEditor";
 import { ModuleHeroParallaxEditor } from "./ModuleHeroParallaxEditor";
 import { ModuleHeroVideoEditor } from "./ModuleHeroVideoEditor";
+import { ModuleContentColumnsEditor } from "./ModuleContentColumnsEditor";
 import { ModuleServicesEditor } from "./ModuleServicesEditor";
 
 /**
@@ -102,5 +103,12 @@ export function ModuleContentEditor({
       return <ModuleFaqEditor content={content} onChangeContent={onChangeContent} />;
     case "contact":
       return <ModuleContactEditor content={content} onChangeContent={onChangeContent} />;
+    case "content":
+      return (
+        <ModuleContentColumnsEditor
+          content={content}
+          onChangeContent={onChangeContent}
+        />
+      );
   }
 }

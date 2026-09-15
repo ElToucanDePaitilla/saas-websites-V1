@@ -84,6 +84,42 @@
   --font-body: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
   --font-heading: "Cormorant Garamond", Georgia, "Times New Roman", serif;
 
+  /* ---- 4.b Échelle des titres de niveau H2 (Étape 12.2) ----
+     **Source unique** des titres de section du site public : en-tête de la
+     section « Contenu en colonnes », texte riche et modules publics (classes
+     `module-h2` / `module-h3`) la consomment, au lieu de répéter la même valeur
+     module par module. Les titres de marque du Header et du Footer n'en
+     relèvent pas : ce sont des noms de site, pas des titres de section.
+
+     Les valeurs valent **+25 %** des tailles d'origine : 1,875 rem → 2,34375 rem
+     et 2,25 rem → 2,8125 rem (l'interligne suit le même rapport, 1,2 puis 1,111,
+     pour qu'aucune ligne ne se chevauche quand le titre passe sur deux lignes).
+
+     Le titre du **bandeau message / CTA** n'utilise pas ces jetons : sa balise
+     est un `h2` pour la structure du document, mais sa taille est celle du `h1`
+     du Héro (voir `BaseHero.titleTag`) — le +25 % l'aurait placé au-dessus du
+     titre de la page. */
+  --h2-size: 2.34375rem;
+  --h2-leading: 2.8125rem;
+  --h2-size-lg: 2.8125rem;
+  --h2-leading-lg: 3.125rem;
+
+  /* ---- 4.c Échelle des titres de niveau H3 et H4 (Étape 12.2) ----
+     Poursuite du même calibrage que §4.b : les tailles d'origine — 1,125 rem
+     pour un « Sous-titre », 1 rem pour un « Petit titre » — sont portées à
+     **+25 %**, interligne compris, pour rester proportionnées au H2. Un titre
+     agrandi seul aurait laissé les niveaux inférieurs décrocher, et la
+     hiérarchie perçue se serait inversée.
+
+     Le **H5** n'est volontairement pas concerné : côté site public il n'en
+     existe aucun, et côté Back-Office ses deux usages n'appartiennent pas à
+     cette échelle éditoriale (le titre de zone N1 de `editor-type.ts`, réglé
+     par l'étape 11.21, et les en-têtes de cartes). */
+  --h3-size: 1.40625rem;
+  --h3-leading: 2.1875rem;
+  --h4-size: 1.25rem;
+  --h4-leading: 1.875rem;
+
   /* ---- 5. Teintes des zones d'édition (Back-Office — Étape 11.17) ----
      Une teinte par QUESTION utilisateur, jamais plus de quatre (principe P3 de
      plans/ROADMAP-11.17-editor-zones-ux.md §1). Noms volontairement **génériques**
@@ -307,6 +343,445 @@
   .banner-h-large {
     min-height: calc((100svh - var(--header-height)) * 0.75);
   }
+}
+
+/* ==========================================================================
+   SECTION « CONTENU EN COLONNES » — mécanique de grille (Étape 12.1)
+   --------------------------------------------------------------------------
+   La RÉPARTITION entre colonnes est transmise par le composant dans
+   `--content-template` (poids normalisés en `fr`). Ici ne vit que la
+   MÉCANIQUE — même partage des responsabilités que `.banner-h-*` et les effets
+   de galerie.
+
+   Trois raisons de ne pas tout écrire en style en ligne :
+     1. un style en ligne ne peut pas être **neutralisé par un point de
+        rupture** — or l'empilement mobile est la règle première du module ;
+     2. l'empilement doit fonctionner **sans JavaScript** (site statique/ISR) ;
+     3. les jetons d'espacement et de largeur sont bornés ici, en un seul
+        endroit, au lieu d'être recopiés dans chaque composant.
+
+   Comme les effets de galerie, ces règles sont volontairement HORS `@layer` :
+   elles doivent primer sur les utilitaires Tailwind.
+
+   `minmax(0, …fr)` : le `0` n'est pas cosmétique — sans lui, une longue URL ou
+   un mot insécable élargit la colonne au-delà de sa part et casse la grille.
+   ========================================================================== */
+.content-cols {
+  display: grid;
+  /* Mobile-first : une seule colonne, donc empilement dans l'ordre du DOM. */
+  grid-template-columns: 1fr;
+  column-gap: var(--content-gap, 1.5rem);
+  row-gap: var(--content-gap, 1.5rem);
+}
+
+.content-cols[data-gap="sm"] {
+  --content-gap: 0.75rem;
+}
+
+.content-cols[data-gap="md"] {
+  --content-gap: 1.5rem;
+}
+
+.content-cols[data-gap="lg"] {
+  --content-gap: 2.5rem;
+}
+
+/*
+ * Colonnes côte à côte à partir du seuil choisi dans l'éditeur, et
+ * **séparateur vertical uniquement lorsque les colonnes sont effectivement
+ * côte à côte** — sinon un filet apparaîtrait au-dessus de blocs empilés.
+ *
+ * **Requêtes de conteneur** (`@container`) et non de fenêtre : c'est la
+ * largeur **du module** qui décide. Un module posé dans un conteneur étroit
+ * s'empile même sur un grand écran — c'est le comportement attendu d'un
+ * composant réellement réutilisable. Le conteneur de requête est
+ * `.content-section` (voir la règle `container-type` plus bas).
+ *
+ * Dégradation assumée, cohérente avec le reste du site (qui utilise déjà
+ * `:has()`, `svh` et `color-mix`) : sans prise en charge de `container-type`,
+ * les colonnes restent empilées. `@container` est mieux supporté que `:has()`,
+ * il n'y a donc pas de repli séparé.
+ */
+@container (min-width: 40rem) {
+  .content-cols[data-stack="sm"] {
+    grid-template-columns: var(--content-template);
+  }
+
+  .content-cols[data-stack="sm"][data-separator="true"] > * + * {
+    border-left: 1px solid var(--border-color);
+    padding-left: var(--content-gap, 1.5rem);
+  }
+}
+
+@container (min-width: 48rem) {
+  .content-cols[data-stack="md"] {
+    grid-template-columns: var(--content-template);
+  }
+
+  .content-cols[data-stack="md"][data-separator="true"] > * + * {
+    border-left: 1px solid var(--border-color);
+    padding-left: var(--content-gap, 1.5rem);
+  }
+}
+
+@container (min-width: 64rem) {
+  .content-cols[data-stack="lg"] {
+    grid-template-columns: var(--content-template);
+  }
+
+  .content-cols[data-stack="lg"][data-separator="true"] > * + * {
+    border-left: 1px solid var(--border-color);
+    padding-left: var(--content-gap, 1.5rem);
+  }
+}
+
+/* Hauteur : par défaut les colonnes s'étirent à la plus haute (`stretch`). */
+.content-cols[data-valign="start"] {
+  align-items: start;
+}
+
+.content-cols[data-valign="center"] {
+  align-items: center;
+}
+
+/*
+ * Conteneur de requête du module : c'est **sa** largeur qui décide de
+ * l'empilement des colonnes (`@container`), et non celle de la fenêtre.
+ * `inline-size` ne contient que l'axe horizontal : la hauteur continue donc de
+ * s'adapter au contenu, ce dont dépend l'exigence « hauteur = colonne la plus
+ * haute ». Les règles `@container` ci-dessus ciblent ce conteneur.
+ */
+.content-section {
+  container-type: inline-size;
+}
+
+/* Largeur totale de la section — jetons, jamais de valeur libre. */
+.content-section[data-width="narrow"] {
+  max-width: 42rem;
+}
+
+.content-section[data-width="standard"] {
+  max-width: 64rem;
+}
+
+.content-section[data-width="wide"] {
+  max-width: 80rem;
+}
+
+.content-section[data-width="full"] {
+  max-width: none;
+}
+
+/* --------------------------------------------------------------------------
+   ZONE D'EN-TÊTE DE LA SECTION (Étape 12.2)
+   --------------------------------------------------------------------------
+   Zone **facultative** posée au-dessus des colonnes et coiffant leur largeur
+   cumulée. Quand aucun élément n'est activé, le composant **ne rend rien du
+   tout** : il n'y a donc ni conteneur vide, ni marge résiduelle, ni décalage —
+   c'est le rendu qui s'abstient, et non le CSS qui masque.
+
+   PLAFONDS — `66 %` (H2), `75 %` (H3), `60 %` (texte) de la largeur cumulée
+   des colonnes, qui est celle de ce conteneur. Ce sont des **plafonds** : un
+   élément peut être plus étroit, jamais plus large. Un pourcentage ne peut donc
+   pas excéder la largeur du parent — la garantie est **structurelle**, et elle
+   tient quel que soit le nombre de colonnes, leur répartition ou leur contenu.
+   Les valeurs reprennent `CONTENT_HEADER_WIDTH_CAP` (src/lib/pages.ts), où elles
+   sont documentées et affichées dans l'éditeur.
+
+   Ces plafonds ne s'appliquent **que lorsque les colonnes sont côte à côte** :
+   sous le seuil d'empilement, un texte plafonné à 60 % d'un écran de téléphone
+   serait illisible. La condition est donc **le même `@container` et le même
+   jeton `data-stack` que les colonnes** — l'en-tête et la grille ne peuvent pas
+   se contredire, et aucun JavaScript n'est nécessaire.
+   -------------------------------------------------------------------------- */
+.content-header {
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  /* Sans ceci, un mot insécable pourrait élargir l'élément : la largeur reste
+     celle du conteneur, jamais celle du contenu. */
+  min-width: 0;
+}
+
+.content-header__h2,
+.content-header__h3,
+.content-header__text {
+  /* Empilé par défaut : plafond libéré pour la lisibilité, la borne du parent
+     restant effective. */
+  --content-header-cap: 100%;
+  max-width: var(--content-header-cap);
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: break-word;
+}
+
+/* Couleur uniquement : tailles, graisses et interlignes viennent de l'échelle
+   partagée « Titres de la section » (§ Texte riche, plus bas), qui couvre à la
+   fois cet en-tête et les titres H2–H4 du texte riche des colonnes. */
+.content-header__h2,
+.content-header__h3 {
+  color: var(--text-color);
+}
+
+/* --------------------------------------------------------------------------
+   ALIGNEMENT DE L'EN-TÊTE (Étape 12.2)
+   --------------------------------------------------------------------------
+   « Aligné à gauche » (défaut, lecture naturelle) ou « Centré » (mise en scène
+   d'un titre). Les trois éléments s'alignent **ensemble**, d'un seul geste.
+
+   Deux propriétés, chacune pour une raison distincte : `justify-items` place la
+   **boîte** de chaque élément dans la grille de l'en-tête — utile puisqu'un
+   plafond (`--content-header-cap`) la rend plus étroite que sa piste — et
+   `text-align` aligne le **texte** à l'intérieur de cette boîte. L'alignement ne
+   touche ni les plafonds ni les colonnes : leur propre mise en page est
+   inchangée.
+   -------------------------------------------------------------------------- */
+.content-header[data-align="center"] {
+  justify-items: center;
+  text-align: center;
+}
+
+.content-header__text {
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--text-muted);
+  /* Les retours à la ligne saisis sont **préservés** (même exigence que les
+     lignes vides du texte riche), sans figer les espaces : `pre-line` plie les
+     suites d'espaces, ce qui évite toute surprise d'indentation et tout risque
+     de débordement horizontal, contrairement à `pre-wrap`. */
+  white-space: pre-line;
+}
+
+@container (min-width: 40rem) {
+  .content-header[data-stack="sm"] .content-header__h2 {
+    --content-header-cap: 66%;
+  }
+
+  .content-header[data-stack="sm"] .content-header__h3 {
+    --content-header-cap: 75%;
+  }
+
+  .content-header[data-stack="sm"] .content-header__text {
+    --content-header-cap: 60%;
+  }
+}
+
+@container (min-width: 48rem) {
+  .content-header[data-stack="md"] .content-header__h2 {
+    --content-header-cap: 66%;
+  }
+
+  .content-header[data-stack="md"] .content-header__h3 {
+    --content-header-cap: 75%;
+  }
+
+  .content-header[data-stack="md"] .content-header__text {
+    --content-header-cap: 60%;
+  }
+}
+
+@container (min-width: 64rem) {
+  .content-header[data-stack="lg"] .content-header__h2 {
+    --content-header-cap: 66%;
+  }
+
+  .content-header[data-stack="lg"] .content-header__h3 {
+    --content-header-cap: 75%;
+  }
+
+  .content-header[data-stack="lg"] .content-header__text {
+    --content-header-cap: 60%;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   COLONNE — garde anti-débordement (Étape 12.2)
+   --------------------------------------------------------------------------
+   `min-width: 0` est indispensable : sans elle, un enfant large (image, mot
+   insécable) empêcherait la colonne de se réduire et déborderait la grille.
+
+   L'**indentation** des colonnes a été retirée : elle demandait de comprendre
+   la mécanique de la grille pour un gain visuel rare. Les variables
+   `--content-indent-*` ne sont donc plus produites, et un contenu qui en
+   portait reprend simplement toute sa piste — sans migration.
+   -------------------------------------------------------------------------- */
+.content-col {
+  min-width: 0;
+}
+
+/* --------------------------------------------------------------------------
+   TEXTE RICHE — portée `.rich-content` (Étape 12.1, lot D)
+   --------------------------------------------------------------------------
+   **Source unique** des styles de contenu, appliquée à l'identique par
+   `RichTextRenderer` (site public) et par l'éditeur riche du back-office — la
+   classe est posée sur le `contentEditable` lui-même, dans les deux cas.
+
+   C'est la condition du WYSIWYG : l'aperçu et le site publié ne peuvent pas
+   diverger s'ils partagent la même portée. Le style par défaut de
+   `.ProseMirror` est donc neutralisé par cette portée, jamais l'inverse.
+
+   Les valeurs viennent des jetons du thème public (`--text-color`,
+   `--text-muted`, `--accent-color`, `--border-color`, `--font-heading`) : une
+   section publiée suit l'identité visuelle sans aucun réglage.
+
+   Volontairement HORS `@layer`, comme les autres mécaniques du site : ces
+   règles doivent primer sur les utilitaires Tailwind.
+   -------------------------------------------------------------------------- */
+.rich-content {
+  color: var(--text-muted);
+  font-size: 0.9375rem;
+  line-height: 1.7;
+}
+
+.rich-content > :first-child {
+  margin-top: 0;
+}
+
+.rich-content > :last-child {
+  margin-bottom: 0;
+}
+
+.rich-content p {
+  margin: 0 0 0.75rem;
+}
+
+.rich-content h2,
+.rich-content h3,
+.rich-content h4 {
+  margin: 0 0 0.5rem;
+  color: var(--text-color);
+  font-family: var(--font-heading);
+  /* Un titre ne se termine pas sur un mot orphelin : même arbitrage que les
+     titres du site public (`text-wrap: balance` dans le `@layer base`). */
+  text-wrap: balance;
+}
+
+/* --------------------------------------------------------------------------
+   TITRES DE LA SECTION — échelle alignée sur le thème (Étape 12.2)
+   --------------------------------------------------------------------------
+   Un « Titre » doit avoir **exactement** l'allure du H2 d'une autre section du
+   site (Héro, À propos, Prestations, FAQ, Contact), un « Sous-titre » celle de
+   leur H3, et un « Petit titre » celle de leur texte d'accent. Les valeurs
+   reproduisent donc les utilitaires du thème, **interligne associé compris**,
+   sans en inventer d'autres — portées à **+25 %** (jetons `--h2-*` de §4.b,
+   `--h3-*` / `--h4-*` de §4.c) :
+
+     · Titre (H2)       → `text-3xl font-light tracking-wide sm:text-4xl`
+                          1,875 → 2,34375 rem / 300, puis 2,25 → 2,8125 rem ≥ 640 px ;
+     · Sous-titre (H3)  → `text-lg font-medium`   → 1,125 → 1,40625 rem / 500 ;
+     · Petit titre (H4) → `text-base font-medium` → 1 → 1,25 rem / 500.
+
+   Le sélecteur groupe **l'en-tête de section ET le texte riche** : c'est le même
+   contrat que `.rich-content`, dont l'aperçu (éditeur du back-office) et la page
+   publiée consomment la même déclaration — ils ne peuvent donc pas diverger.
+   Divergence corrigée ici : le H2 du texte riche valait 1,5 rem/400 et le H3 de
+   l'en-tête 1,25 rem/400, soit deux titres de plus que le thème n'en connaît.
+
+   L'interlettrage est posé explicitement : sur le site public, les titres
+   héritent de `0.01em` (base) ou de `tracking-wide`, mais le back-office — qui
+   travaille en police d'application — n'en hérite pas. Le reproduire ici est ce
+   qui rend l'aperçu fidèle à la page publiée.
+   -------------------------------------------------------------------------- */
+.content-header__h2,
+.rich-content h2,
+.module-h2 {
+  font-family: var(--font-heading);
+  font-size: var(--h2-size);
+  line-height: var(--h2-leading);
+  font-weight: 300;
+  letter-spacing: 0.025em;
+}
+
+.content-header__h3,
+.rich-content h3,
+.module-h3 {
+  font-family: var(--font-heading);
+  font-size: var(--h3-size);
+  line-height: var(--h3-leading);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.rich-content h4 {
+  font-size: var(--h4-size);
+  line-height: var(--h4-leading);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+@media (min-width: 640px) {
+  .content-header__h2,
+  .rich-content h2,
+  .module-h2 {
+    font-size: var(--h2-size-lg);
+    line-height: var(--h2-leading-lg);
+  }
+}
+
+.rich-content ul,
+.rich-content ol {
+  margin: 0 0 0.75rem;
+  padding-left: 1.25rem;
+}
+
+.rich-content ul {
+  list-style: disc;
+}
+
+.rich-content ol {
+  list-style: decimal;
+}
+
+.rich-content li {
+  margin-bottom: 0.25rem;
+}
+
+.rich-content blockquote {
+  margin: 0.75rem 0;
+  border-left: 2px solid var(--border-color);
+  padding-left: 1rem;
+  font-style: italic;
+}
+
+.rich-content a {
+  color: var(--accent-color);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.rich-content strong {
+  color: var(--text-color);
+  font-weight: 600;
+}
+
+.rich-content hr {
+  margin: 1rem 0;
+  border: 0;
+  border-top: 1px solid var(--border-color);
+}
+
+/*
+ * Surface d'édition : elle reproduit l'appairage du site public (fond
+ * `--bg-color` sur texte `--text-color`), ce qui **garantit le contraste** quel
+ * que soit le thème actif — sans quoi une palette sombre rendrait le texte
+ * invisible sur le fond clair du back-office.
+ */
+.rich-content-surface {
+  background-color: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: 0.375rem;
+  padding: 0.75rem;
+}
+
+.rich-content-surface:focus-within {
+  border-color: var(--accent-color);
+  outline: 2px solid color-mix(in srgb, var(--accent-color) 35%, transparent);
+  outline-offset: 1px;
+}
+
+/* Repère visible du curseur dans la surface d'édition. */
+.rich-content:focus {
+  outline: none;
 }
 
 /* ==========================================================================

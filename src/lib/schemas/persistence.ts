@@ -16,7 +16,16 @@ import { z } from "zod";
 /** Statut de publication d'une page. */
 const pageStatusSchema = z.enum(["draft", "published"]);
 
-/** Familles de modules (PageModuleType). */
+/**
+ * Familles de modules (PageModuleType).
+ *
+ * ⚠️ Cette énumération est un **quatrième** point d'intégration d'une nouvelle
+ * famille — et il ne se signale pas à la compilation, puisque Zod construit son
+ * type par inférence. L'oublier ne casse ni `tsc`, ni le build : l'ajout du
+ * module échoue seulement **à l'enregistrement**, avec un HTTP 400 au corps
+ * JSON. À vérifier à chaque nouvelle famille (avec `moduleTypeEnum` côté
+ * Postgres et les deux `switch` sans branche par défaut).
+ */
 const moduleTypeSchema = z.enum([
   "hero",
   "about",
@@ -25,6 +34,8 @@ const moduleTypeSchema = z.enum([
   "gallery",
   "faq",
   "contact",
+  // Étape 12.1 — « Contenu en colonnes ».
+  "content",
 ]);
 
 /** Animations d'entrée (ModuleAnimation). */

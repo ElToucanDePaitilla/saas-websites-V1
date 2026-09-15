@@ -35,10 +35,29 @@ type PersistModule = {
 async function send(request: Request): Promise<void> {
   const response = await fetch(request);
   if (!response.ok) {
-    // Remonte le message d'erreur du serveur (diagnostic).
-    const payload = (await response.json().catch(() => null)) as {
-      error?: string;
-    } | null;
+    // DIAGNOSTIC (temporaire) — discrimine l'origine d'un échec :
+    //   - `contentType` HTML  ⇒ réponse du **routeur** Next (route absente ou en
+    //     cours de recompilation : serveur de développement redémarré, ou
+    //     `.next` écrasé par un `next build` lancé pendant que `next dev` tourne) ;
+    //   - `contentType` JSON  ⇒ réponse du **gestionnaire** de route, qui porte
+    //     alors un message exploitable (`error`).
+    // La route `PUT /api/pages/[pageId]/modules` ne renvoie jamais 404 : un 404
+    // HTML désigne donc toujours le routeur, jamais le code métier.
+    const contentType = response.headers.get("content-type") ?? "";
+    const isJson = contentType.includes("application/json");
+    const payload = isJson
+      ? ((await response.json().catch(() => null)) as { error?: string } | null)
+      : null;
+
+    console.warn("[persistance] échec de l'écriture", {
+      method: request.method,
+      url: request.url,
+      status: response.status,
+      contentType,
+      /** true ⇒ le gestionnaire a répondu ; false ⇒ c'est le routeur Next. */
+      reponseDuGestionnaire: isJson,
+    });
+
     const detail = payload?.error ?? response.statusText;
     throw new Error(`Persistance BDD refusée (HTTP ${response.status}): ${detail}`);
   }

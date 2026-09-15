@@ -20,11 +20,14 @@ import { resolvePublicPhotographerId } from "@/lib/supabase/session";
 import {
   bannerImageSources,
   buildSeedModules,
+  contentSectionImageSources,
+  contentSectionPlainText,
   galleryImageSources,
   heroParallaxImageSources,
   heroSliderImageSources,
   heroStaticArtSources,
   heroVideoImageSources,
+  resolveContentColumnsContent,
   resolveCtaBannerContent,
   resolveGalleryContent,
   resolveHeroContent,
@@ -84,6 +87,15 @@ function collectImageUrls(modules: PageModule[]): string[] {
         urls.push(source.url);
       }
     }
+    if (mod.content.type === "content") {
+      // Section de contenu (Étape 12.1) : les photos insérées dans les colonnes
+      // comptent autant que les autres — une page peut n'être faite que de cela.
+      for (const source of contentSectionImageSources(
+        resolveContentColumnsContent(mod.content)
+      )) {
+        urls.push(source.url);
+      }
+    }
   }
   return urls;
 }
@@ -112,6 +124,16 @@ export function publicDescription(modules: PageModule[]): string {
         if (text) {
           return text;
         }
+      }
+    }
+    if (content.type === "content") {
+      // Une section de contenu peut être le seul texte de la page : son titre
+      // et le texte de ses blocs fournissent alors la description de partage.
+      const text = contentSectionPlainText(
+        resolveContentColumnsContent(content)
+      );
+      if (text.trim()) {
+        return text;
       }
     }
     if (content.type === "cta-banner" && content.subheading.trim()) {
@@ -144,6 +166,12 @@ export function publicOgImage(modules: PageModule[]): string | null {
     }
     if (content.type === "gallery") {
       const first = galleryImageSources(resolveGalleryContent(content))[0];
+      if (first) return first.url;
+    }
+    if (content.type === "content") {
+      const first = contentSectionImageSources(
+        resolveContentColumnsContent(content)
+      )[0];
       if (first) return first.url;
     }
   }

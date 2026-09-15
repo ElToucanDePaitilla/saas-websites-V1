@@ -1,5 +1,6 @@
 import { MediaImage } from "@/components/common/MediaImage";
 import { BannerBackground } from "@/components/modules/banner/BannerBackground";
+import { ContentColumnsModule } from "@/components/modules/content/ContentColumnsModule";
 import { GalleryManager } from "@/components/modules/gallery/GalleryManager";
 import { BaseHero } from "@/components/modules/hero/BaseHero";
 import { HeroModule } from "@/components/modules/hero/HeroModule";
@@ -48,10 +49,10 @@ export function AboutModule({ module }: { module: PageModule }) {
         </div>
       ) : null}
       <div>
-        <h2
-          style={{ fontFamily: "var(--font-heading)" }}
-          className="text-3xl font-light tracking-wide sm:text-4xl"
-        >
+        {/* `module-h2` : taille, interligne, police et graisse viennent des
+            jetons `--h2-*` (globals.css) — une seule échelle pour tous les H2
+            éditoriaux du site, modules publics compris. */}
+        <h2 className="module-h2">
           {content.heading}
         </h2>
         <p className="mt-5 text-base leading-relaxed text-[var(--text-muted)]">
@@ -109,17 +110,20 @@ export function ServicesModule({ module }: { module: PageModule }) {
 
   return (
     <section id={module.anchorId} className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
-      <h2
-        style={{ fontFamily: "var(--font-heading)" }}
-        className="text-3xl font-light tracking-wide sm:text-4xl"
-      >
+      {/* `module-h2` : taille, interligne, police et graisse viennent des
+          jetons `--h2-*` (globals.css) — une seule échelle pour tous les H2
+          éditoriaux du site, modules publics compris. */}
+      <h2 className="module-h2">
         {content.heading}
       </h2>
       <p className="mt-3 max-w-2xl text-[var(--text-muted)]">{content.intro}</p>
       <div className="mt-10 grid gap-6 sm:grid-cols-2">
         {content.items.map((item) => (
           <article key={item.id} className="rounded-xl border border-[var(--border-color)] bg-[var(--surface-color)] p-6">
-            <h3 className="text-lg font-medium">{item.title}</h3>
+            {/* `module-h3` : même échelle que le « Sous-titre » du texte riche
+                (jetons `--h3-*`), pour qu'un titre de carte et un intertitre
+                ne divergent pas d'une section à l'autre. */}
+            <h3 className="module-h3">{item.title}</h3>
             <p className="mt-2 text-sm leading-relaxed text-[var(--text-muted)]">
               {item.description}
             </p>
@@ -177,10 +181,7 @@ export function FaqModule({ module }: { module: PageModule }) {
 
   return (
     <section id={module.anchorId} className="mx-auto max-w-3xl px-4 py-20 sm:px-6">
-      <h2
-        style={{ fontFamily: "var(--font-heading)" }}
-        className="mb-8 text-center text-3xl font-light tracking-wide"
-      >
+      <h2 className="module-h2 mb-8 text-center">
         {content.heading}
       </h2>
       <div className="divide-y divide-[var(--border-color)] border-y border-[var(--border-color)]">
@@ -213,10 +214,7 @@ export function ContactModule({ module }: { module: PageModule }) {
       className="mx-auto grid max-w-4xl gap-10 px-4 py-20 sm:px-6 lg:grid-cols-2"
     >
       <div>
-        <h2
-          style={{ fontFamily: "var(--font-heading)" }}
-          className="text-3xl font-light tracking-wide"
-        >
+        <h2 className="module-h2">
           {content.heading}
         </h2>
         <p className="mt-3 text-[var(--text-muted)]">{content.intro}</p>
@@ -253,5 +251,7 @@ export function PageModuleRenderer({
       return <FaqModule module={module} />;
     case "contact":
       return <ContactModule module={module} />;
+    case "content":
+      return <ContentColumnsModule module={module} />;
   }
 }

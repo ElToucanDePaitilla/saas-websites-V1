@@ -1,18 +1,22 @@
 /**
  * ============================================================================
- * MODÈLE « PAGE » & HELPERS — Back-Office (Étapes 3.1, 3.2 & 3.4)
+ * MODÈLE « PAGE » & HELPERS — Back-Office (Étapes 3.1, 3.2, 3.4 & 12.1)
  * ----------------------------------------------------------------------------
  * - Étape 3.1 : modèle métier `SitePage` + helpers de slug URL.
  * - Étape 3.2 : modèle `PageModule` (module de page), catalogue `moduleCatalog`,
  *   fabriques de modules par défaut et helper de réordonnancement (Drag & Drop).
  * - Étape 3.4 : contenu éditable typé par famille (`ModuleContent`, union
  *   discriminé), champ `layoutVariant` réservé et fabriques de contenu par défaut.
+ * - Étape 12.1 : rubrique « Contenu » — section de contenu en colonnes
+ *   (`ContentColumnsContent` : 1 à 4 conteneurs indépendants, texte riche
+ *   ProseMirror, images et icônes, empilement responsive).
  * Conçu pour mapper 1:1 vers les futures tables `pages` et `page_modules`
  * (Supabase/Drizzle) — aucune dépendance externe, TypeScript strict, zéro `any`.
  *
  * Références : plans/ROADMAP-3.1-pagemetadata.md §1.4 —
  *              plans/ROADMAP-3.2-pagebuilder-dnd.md §1.2 —
- *              plans/ROADMAP-3.4-crud-expanded.md §1.1
+ *              plans/ROADMAP-3.4-crud-expanded.md §1.1 —
+ *              plans/ROADMAP-12.1-section-contenu-colonnes.md §3
  * ============================================================================
  */
 
@@ -188,7 +192,8 @@ export type PageModuleType =
   | "cta-banner"
   | "gallery"
   | "faq"
-  | "contact";
+  | "contact"
+  | "content";
 
 /** Animation d'entrée d'un module (spec §7.2-B ; sélecteur en 3.4). */
 export type ModuleAnimation =
@@ -1464,7 +1469,10 @@ export type GalleryContent =
   | GalleryPortfolioContent;
 
 /** Variantes de module (familles exposant plusieurs cartes au catalogue). */
-export type ModuleVariant = HeroVariant | GalleryModuleVariant;
+export type ModuleVariant =
+  | HeroVariant
+  | GalleryModuleVariant
+  | ContentVariant;
 
 /** Libellés français des variantes de galerie (catalogue / éditeur). */
 export const galleryVariantLabels: Record<GalleryModuleVariant, string> = {
@@ -2164,6 +2172,824 @@ export function galleryAlbumPhotoCount(album: GalleryAlbum): number {
     .length;
 }
 
+/* ==========================================================================
+   RUBRIQUE « CONTENU » — section de contenu en colonnes (Étape 12.1)
+   --------------------------------------------------------------------------
+   Nouvelle famille `type: "content"`, variante `"columns"` : l'utilisateur
+   compose du contenu mis en forme (texte riche, images, icônes) et le répartit
+   dans 1 à 4 colonnes — au sens des « colonnes » de Word, c'est-à-dire des
+   **conteneurs indépendants** posés côte à côte, qui s'empilent sur mobile.
+
+   Deux décisions structurantes sont **encodées par les types**, jamais laissées
+   à la discipline du développeur :
+
+   1. **Aucune dimension en pixels.** La répartition entre colonnes est un
+      **poids relatif** (`weight`) normalisé au rendu ; la largeur d'ensemble est
+      un **jeton** (`ContentMaxWidth`). Un `weight` en pixels casserait le
+      responsive à la première rotation d'écran ou au premier zoom.
+   2. **Le HTML n'est jamais stocké.** Le texte riche est un document
+      ProseMirror (`RichTextDoc`) : l'arbre JSON est la source de vérité, le HTML
+      n'en est qu'une projection produite au rendu (`RichTextRenderer`, lot F).
+      Un JSONB contenant du HTML serait ingérable — styles sauvages, surface
+      d'injection ouverte, impossible à restreindre a posteriori.
+
+   Rétro-compatibilité : le résolveur `resolveContentColumnsContent()` (lot A2)
+   applique les défauts aux contenus partiels, comme `resolveGalleryContent` et
+   `resolveCtaBannerContent` avant lui. **Aucune migration BDD** : tout vit dans
+   le JSONB `content` du module.
+
+   Référence : plans/ROADMAP-12.1-section-contenu-colonnes.md
+   ========================================================================== */
+
+/** Variantes de la rubrique Contenu (extension future : « flow » à la Word). */
+export type ContentVariant = "columns";
+
+/** Alignement horizontal d'un bloc ou d'un texte (atout « traitement de texte »). */
+export type ContentTextAlign = "left" | "center" | "right" | "justify";
+
+/**
+ * Niveaux de titre autorisés dans le contenu.
+ *
+ * **H1 est volontairement exclu** : le titre de la page appartient au Héro
+ * (`BaseHero` rend le seul `<h1>` de la page). Un second H1 dans une section
+ * casserait la hiérarchie sémantique et le SEO — c'est la même contrainte qui a
+ * conduit le bandeau CTA à rendre un `<h2>` (étape 11.27).
+ */
+export type ContentHeadingLevel = 2 | 3 | 4;
+
+/** Taille d'une icône insérée dans le contenu. */
+export type ContentIconSize = "sm" | "md" | "lg";
+
+/** Largeur totale de la section — jeton, jamais une valeur en pixels. */
+export type ContentMaxWidth = "narrow" | "standard" | "wide" | "full";
+
+/**
+ * Espacement entre colonnes.
+ * Le **même** jeton pilote l'écart horizontal (`column-gap`) en grand écran et
+ * l'écart vertical (`row-gap`) lorsque les colonnes s'empilent : un seul
+ * réglage à comprendre pour l'utilisateur.
+ */
+export type ContentGap = "sm" | "md" | "lg";
+
+/**
+ * Seuil sous lequel les colonnes s'empilent.
+ * Il s'apprécie sur la **largeur du module** (container query), jamais sur celle
+ * de la fenêtre : le module peut vivre dans une page pleine largeur ou dans un
+ * conteneur étroit, c'est sa propre largeur qui doit décider.
+ */
+export type ContentStackAt = "sm" | "md" | "lg";
+
+/**
+ * Nœud d'un document ProseMirror (texte riche).
+ *
+ * Volontairement ouvert : le modèle documentaire appartient à l'éditeur, pas au
+ * domaine. Le rendu public le rejoue à travers une **liste blanche
+ * d'extensions** (`rich-text-config.ts`, lot G) — il ne lui fait jamais
+ * confiance sur parole.
+ */
+export type RichTextNode = Record<string, unknown>;
+
+/** Document ProseMirror — la seule forme sous laquelle le texte riche est stocké. */
+export interface RichTextDoc {
+  type: "doc";
+  content?: RichTextNode[];
+}
+
+/** Bloc de texte riche : un document ProseMirror. */
+export interface ContentRichTextBlock {
+  id: string;
+  kind: "rich-text";
+  doc: RichTextDoc;
+}
+
+/** Bloc image inséré dans le flux (média + largeur + alignement). */
+export interface ContentImageBlock {
+  id: string;
+  kind: "image";
+  media: MediaField;
+  /** `full` = occupe toute la largeur de la colonne ; `auto` = largeur naturelle. */
+  width: "auto" | "full";
+  align: ContentTextAlign;
+}
+
+/**
+ * Bloc icône — **le nom est stocké, jamais le balisage SVG**.
+ *
+ * Le rendu instancie le composant (`lucide-react`, déjà en dépendance) : poids
+ * minimal, recoloration par `currentColor` (une icône suit donc le thème) et
+ * surface d'injection nulle. Stocker du SVG brut offrirait exactement ce que le
+ * point 2 du préambule interdit.
+ */
+export interface ContentIconBlock {
+  id: string;
+  kind: "icon";
+  name: string;
+  size: ContentIconSize;
+  align: ContentTextAlign;
+}
+
+/** Bloc espacement vertical (respiration entre deux blocs d'une colonne). */
+export interface ContentSpacerBlock {
+  id: string;
+  kind: "spacer";
+  size: ContentGap;
+}
+
+/** Union discriminée des blocs composant une colonne (narrowing exhaustif). */
+export type ContentBlock =
+  | ContentRichTextBlock
+  | ContentImageBlock
+  | ContentIconBlock
+  | ContentSpacerBlock;
+
+/**
+ * Une colonne : un **conteneur indépendant**, empilé sur mobile.
+ *
+ * Indépendance assumée — ce n'est **pas** le flux continu des « colonnes » de
+ * Word, où le texte déborde d'une colonne dans la suivante. Ce modèle est le
+ * seul qui permette d'affecter une image ou une icône à une colonne précise.
+ */
+export interface ContentContainer {
+  id: string;
+  /**
+   * Poids relatif de répartition (ex. `1` et `2` pour un tiers / deux tiers).
+   * **Ignoré quand `layout.sameWidth` est vrai** (colonnes d'égale largeur).
+   */
+  weight: number;
+  /**
+   * Sous-rubriques de la colonne, dans l'ordre du document. Une colonne est
+   * créée avec **un bloc de texte vide** : le type par défaut est le texte, et
+   * écrire ne demande aucune manipulation préalable.
+   */
+  blocks: ContentBlock[];
+}
+
+/**
+ * Réglages d'affichage de la **zone d'en-tête facultative** (Étape 12.2),
+ * posée au-dessus de l'ensemble des colonnes et **coiffant leur largeur
+ * cumulée**.
+ *
+ * Trois éléments, **indépendamment activables**, dans cet ordre imposé :
+ * titre `H2`, sous-titre `H3`, texte d'introduction. Chacun peut être omis sans
+ * laisser de conteneur vide, de marge résiduelle ni de décalage — c'est le
+ * rendu qui n'émet rien, et non le CSS qui masque.
+ *
+ * Le **texte du H2 n'est pas dupliqué ici** : il reste
+ * [`ContentColumnsContent.heading`], qui existait déjà et alimente la
+ * description de partage. Cette zone n'ajoute donc que ce qui manquait — les
+ * trois interrupteurs et les deux éléments suivants. Conséquence directe : un
+ * contenu enregistré **avant** cette étape conserve exactement le même rendu
+ * (voir `resolveContentHeader`).
+ */
+export interface ContentHeaderContent {
+  /** Affiche le titre H2 — dont le texte est lu dans `heading`. */
+  showH2: boolean;
+  /** Affiche le sous-titre H3 — dont le texte est lu dans `h3`. */
+  showH3: boolean;
+  /** Texte du sous-titre H3. */
+  h3: string;
+  /** Affiche le paragraphe d'introduction — dont le texte est lu dans `text`. */
+  showText: boolean;
+  /** Texte du paragraphe d'introduction (les sauts de ligne sont préservés). */
+  text: string;
+  /**
+   * Alignement horizontal de l'ensemble de la zone : les trois éléments
+   * s'alignent d'un seul geste, à gauche (défaut) ou centrés.
+   */
+  align: ContentHeaderAlign;
+}
+
+/**
+ * Alignement horizontal de la zone d'en-tête d'une section de contenu.
+ *
+ * Deux valeurs seulement, et dans le vocabulaire de l'utilisateur : « Aligné à
+ * gauche » (défaut, lecture naturelle) ou « Centré » (mise en scène d'un
+ * titre). Aucun alignement à droite ni justifié : un en-tête de section justifié
+ * produirait des blancs entre les mots sur une seule ligne.
+ */
+export type ContentHeaderAlign = "left" | "center";
+
+/** Réglages de mise en page de la section — tous des jetons, aucun pixel. */
+export interface ContentColumnsLayout {
+  maxWidth: ContentMaxWidth;
+  gap: ContentGap;
+  /**
+   * Colonnes d'égale largeur — miroir de la case « Largeur identique » de Word,
+   * **cochée par défaut** : l'utilisateur obtient un partage équilibré sans rien
+   * régler, et ne voit les réglages individuels qu'après l'avoir décochée.
+   */
+  sameWidth: boolean;
+  /** Trait vertical entre les colonnes (« Ligne entre les colonnes » de Word). */
+  separator: boolean;
+  stackAt: ContentStackAt;
+  /**
+   * `stretch` (défaut) étire les colonnes à la hauteur de la plus haute — c'est
+   * le comportement natif de CSS Grid et ce que demande l'énoncé ; `start` et
+   * `center` laissent au contraire chaque colonne à sa hauteur propre.
+   */
+  verticalAlign: "stretch" | "start" | "center";
+}
+
+/** Contenu du module `content` (variante `columns`) — Étape 12.1. */
+export interface ContentColumnsContent {
+  type: "content";
+  variant: "columns";
+  /**
+   * Texte du **titre H2** de la zone d'en-tête — source unique (la description
+   * de partage le lit déjà). Son affichage est commandé par `header.showH2`.
+   */
+  heading: string;
+  /** Zone d'en-tête facultative, au-dessus de l'ensemble des colonnes. */
+  header: ContentHeaderContent;
+  /**
+   * 1 à 4 colonnes. L'invariant est garanti par l'éditeur **et** par le schéma
+   * Zod (`contentColumnsContentSchema`, lot B) — jamais par convention orale.
+   */
+  containers: ContentContainer[];
+  layout: ContentColumnsLayout;
+}
+
+/** Nombre de colonnes proposé par l'éditeur (1 à 4). */
+export const CONTENT_COLUMN_COUNTS = [1, 2, 3, 4] as const;
+
+/** Nombre de colonnes — type dérivé de la liste ci-dessus. */
+export type ContentColumnCount = (typeof CONTENT_COLUMN_COUNTS)[number];
+
+/** Ordre d'affichage des largeurs totales (éditeur). */
+export const contentMaxWidthOrder: ContentMaxWidth[] = [
+  "narrow",
+  "standard",
+  "wide",
+  "full",
+];
+
+/**
+ * Libellés des largeurs — ils décrivent le **résultat** perçu, jamais la
+ * technique (principe P4 : zéro jargon).
+ */
+export const contentMaxWidthLabels: Record<ContentMaxWidth, string> = {
+  narrow: "Étroite — idéale pour un texte à lire",
+  standard: "Standard — la largeur habituelle des sections",
+  wide: "Large — pour un contenu dense",
+  full: "Pleine largeur de l’écran",
+};
+
+/** Ordre d'affichage des espacements (éditeur). */
+export const contentGapOrder: ContentGap[] = ["sm", "md", "lg"];
+
+/** Libellés des espacements (décrivent l'écart, pas une valeur CSS). */
+export const contentGapLabels: Record<ContentGap, string> = {
+  sm: "Resserré",
+  md: "Moyen",
+  lg: "Large",
+};
+
+/** Ordre d'affichage des seuils d'empilement (éditeur). */
+export const contentStackAtOrder: ContentStackAt[] = ["sm", "md", "lg"];
+
+/**
+ * Libellés des seuils d'empilement — formulés du point de vue du **visiteur**
+ * (« Sur téléphone ») et non du développeur (« breakpoint md »).
+ */
+export const contentStackAtLabels: Record<ContentStackAt, string> = {
+  sm: "Sur téléphone (le plus tôt)",
+  md: "Sur téléphone et petite tablette",
+  lg: "Seulement sur ordinateur",
+};
+
+/** Ordre d'affichage des tailles d'icône (éditeur). */
+export const contentIconSizeOrder: ContentIconSize[] = ["sm", "md", "lg"];
+
+/** Libellés des tailles d'icône. */
+export const contentIconSizeLabels: Record<ContentIconSize, string> = {
+  sm: "Petite",
+  md: "Moyenne",
+  lg: "Grande",
+};
+
+/** Ordre d'affichage des alignements (éditeur). */
+export const contentTextAlignOrder: ContentTextAlign[] = [
+  "left",
+  "center",
+  "right",
+  "justify",
+];
+
+/** Libellés des alignements. */
+export const contentTextAlignLabels: Record<ContentTextAlign, string> = {
+  left: "À gauche",
+  center: "Au centre",
+  right: "À droite",
+  justify: "Justifié",
+};
+
+/**
+ * Réglages de mise en page par défaut : deux colonnes d'égale largeur, seuil
+ * d'empilement « téléphone et petite tablette », colonnes étirées à la hauteur
+ * de la plus haute. Aucun pixel, aucun séparateur — l'utilisateur part d'un
+ * résultat propre et n'ajuste que ce qu'il souhaite.
+ */
+export const DEFAULT_CONTENT_COLUMNS_LAYOUT: ContentColumnsLayout = {
+  maxWidth: "standard",
+  gap: "md",
+  sameWidth: true,
+  separator: false,
+  stackAt: "md",
+  verticalAlign: "stretch",
+};
+
+/**
+ * Plafonds de largeur des éléments de la zone d'en-tête, **en pourcentage de la
+ * largeur cumulée des colonnes** — qui est aussi celle du conteneur partagé par
+ * l'en-tête et la grille.
+ *
+ * Ce sont des **plafonds** : un élément peut être plus étroit, jamais plus
+ * large. Un pourcentage ne peut donc pas excéder la largeur du parent : la
+ * garantie est **structurelle**, pas déclarative, et elle tient quel que soit
+ * le nombre de colonnes, leur répartition ou leur contenu.
+ *
+ * Ils ne s'appliquent **que lorsque les colonnes sont côte à côte** : sous le
+ * seuil d'empilement, un texte plafonné à 60 % d'un écran de téléphone serait
+ * illisible. La mécanique `@container` de [`globals.css`](../../app/globals.css)
+ * arbitre, avec **le même seuil** que les colonnes — l'en-tête et la grille ne
+ * peuvent donc pas se contredire. Ces valeurs y sont reprises à l'identique ;
+ * l'éditeur les affiche comme repères (source unique).
+ */
+export const CONTENT_HEADER_WIDTH_CAP = {
+  h2: 66,
+  h3: 75,
+  text: 60,
+} as const;
+
+/** Ordre d'affichage des alignements d'en-tête (éditeur). */
+export const contentHeaderAlignOrder: ContentHeaderAlign[] = ["left", "center"];
+
+/** Libellés des alignements d'en-tête — le résultat perçu, jamais la technique. */
+export const contentHeaderAlignLabels: Record<ContentHeaderAlign, string> = {
+  left: "Aligné à gauche",
+  center: "Centré",
+};
+
+/** Nombre maximal de conteneurs — dérivé de la source unique ci-dessus. */
+const MAX_CONTENT_CONTAINERS = CONTENT_COLUMN_COUNTS.length;
+
+/** Fabrique un identifiant stable de conteneur ou de bloc (mock : UUID v4). */
+function newContentId(): string {
+  return crypto.randomUUID();
+}
+
+/** Document ProseMirror vide : un paragraphe vide (état initial d'un bloc texte). */
+export function createEmptyRichTextDoc(): RichTextDoc {
+  return { type: "doc", content: [{ type: "paragraph" }] };
+}
+
+/** Bloc de texte riche de démonstration (intertitre `h3` + paragraphe). */
+function createDemoRichTextBlock(
+  heading: string,
+  text: string
+): ContentRichTextBlock {
+  return {
+    id: newContentId(),
+    kind: "rich-text",
+    doc: {
+      type: "doc",
+      content: [
+        {
+          type: "heading",
+          attrs: { level: 3 },
+          content: [{ type: "text", text: heading }],
+        },
+        { type: "paragraph", content: [{ type: "text", text }] },
+      ],
+    },
+  };
+}
+
+/**
+ * Fabrique une colonne **prête à écrire** : un bloc de texte vide, et rien
+ * d'autre.
+ *
+ * Le type par défaut d'une colonne est donc le **texte** : ajouter une colonne
+ * ne demande aucun choix préalable, et supprimer tous ses blocs la laisse
+ * repartir d'un champ de saisie (voir `ContentColumnsEditor`). C'est la raison
+ * pour laquelle l'éditeur n'affiche plus de boutons « Texte / Photo / Icône ».
+ */
+export function createContentContainer(weight = 1): ContentContainer {
+  return {
+    id: newContentId(),
+    weight,
+    blocks: [createContentRichTextBlock()],
+  };
+}
+
+/** Fabrique un bloc de texte riche vide (prêt à recevoir la saisie). */
+export function createContentRichTextBlock(): ContentRichTextBlock {
+  return { id: newContentId(), kind: "rich-text", doc: createEmptyRichTextDoc() };
+}
+
+/**
+ * Fabrique un contenu « Contenu en colonnes » par défaut : **deux colonnes
+ * d'égale largeur**, chacune amorcée par un intertitre et un paragraphe.
+ *
+ * La section n'est donc jamais vide à l'ajout : le photographe comprend
+ * immédiatement *où* écrire. Retourne une **nouvelle instance** à chaque appel
+ * (aucune référence partagée entre deux modules de la page — la même exigence
+ * que `createModuleContent`).
+ */
+export function createContentColumnsContent(): ContentColumnsContent {
+  return {
+    type: "content",
+    variant: "columns",
+    heading: "",
+    // Zone d'en-tête masquée par défaut : la section s'ajoute « nue », et le
+    // photographe n'active que ce dont il a besoin.
+    header: {
+      showH2: false,
+      showH3: false,
+      h3: "",
+      showText: false,
+      text: "",
+      align: "left",
+    },
+    containers: [
+      {
+        id: newContentId(),
+        weight: 1,
+        blocks: [
+          createDemoRichTextBlock(
+            "Votre titre",
+            "Écrivez ici votre premier paragraphe…"
+          ),
+        ],
+      },
+      {
+        id: newContentId(),
+        weight: 1,
+        blocks: [
+          createDemoRichTextBlock(
+            "Votre titre",
+            "Écrivez ici votre second paragraphe…"
+          ),
+        ],
+      },
+    ],
+    layout: { ...DEFAULT_CONTENT_COLUMNS_LAYOUT },
+  };
+}
+
+/**
+ * Répartition des conteneurs en **parts relatives** (fractions de 1).
+ *
+ * Source unique de la répartition : l'éditeur s'en sert pour annoncer les
+ * pourcentages, le rendu public pour composer `grid-template-columns`. Quand
+ * `sameWidth` est vrai, les poids sont **neutralisés** (parts égales) — c'est
+ * exactement la case « Largeur identique » de Word.
+ */
+export function contentContainerFractions(
+  containers: ContentContainer[],
+  sameWidth: boolean
+): number[] {
+  if (containers.length === 0) {
+    return [];
+  }
+  if (sameWidth) {
+    return containers.map(() => 1 / containers.length);
+  }
+  const weights = containers.map((container) =>
+    container.weight > 0 ? container.weight : 1
+  );
+  const total = weights.reduce((sum, weight) => sum + weight, 0);
+  return weights.map((weight) => weight / total);
+}
+
+/* --------------------------------------------------------------------------
+   Résolveur — lecture tolérante du JSONB (aucune migration BDD)
+   -------------------------------------------------------------------------- */
+
+function isContentMaxWidth(value: unknown): value is ContentMaxWidth {
+  return (
+    value === "narrow" ||
+    value === "standard" ||
+    value === "wide" ||
+    value === "full"
+  );
+}
+
+function isContentGap(value: unknown): value is ContentGap {
+  return value === "sm" || value === "md" || value === "lg";
+}
+
+function isContentStackAt(value: unknown): value is ContentStackAt {
+  return value === "sm" || value === "md" || value === "lg";
+}
+
+function isContentTextAlign(value: unknown): value is ContentTextAlign {
+  return (
+    value === "left" ||
+    value === "center" ||
+    value === "right" ||
+    value === "justify"
+  );
+}
+
+function isContentIconSize(value: unknown): value is ContentIconSize {
+  return value === "sm" || value === "md" || value === "lg";
+}
+
+function isContentVerticalAlign(
+  value: unknown
+): value is ContentColumnsLayout["verticalAlign"] {
+  return value === "stretch" || value === "start" || value === "center";
+}
+
+function isContentHeaderAlign(value: unknown): value is ContentHeaderAlign {
+  return value === "left" || value === "center";
+}
+
+/** Garde : tableau — évite tout `any` implicite d'`Array.isArray`. */
+function isUnknownArray(value: unknown): value is unknown[] {
+  return Array.isArray(value);
+}
+
+/**
+ * Résout la **zone d'en-tête**.
+ *
+ * **Rétrocompatibilité stricte** : sans objet `header` stocké — donc pour tout
+ * contenu enregistré avant l'étape 12.2 — on reproduit le rendu précédent : le
+ * H2 apparaissait si et seulement si `heading` était renseigné, et il n'existait
+ * ni H3 ni texte. Aucune page existante ne change d'apparence.
+ */
+function resolveContentHeader(
+  raw: unknown,
+  heading: string
+): ContentHeaderContent {
+  const h2Fallback = heading.trim() !== "";
+  if (!isRecord(raw)) {
+    return {
+      showH2: h2Fallback,
+      showH3: false,
+      h3: "",
+      showText: false,
+      text: "",
+      // Absent sur un contenu antérieur : aligné à gauche, le rendu historique.
+      align: "left",
+    };
+  }
+  return {
+    showH2: typeof raw.showH2 === "boolean" ? raw.showH2 : h2Fallback,
+    showH3: typeof raw.showH3 === "boolean" ? raw.showH3 : false,
+    h3: readString(raw.h3, ""),
+    showText: typeof raw.showText === "boolean" ? raw.showText : false,
+    text: readString(raw.text, ""),
+    align: isContentHeaderAlign(raw.align) ? raw.align : "left",
+  };
+}
+
+/** Normalise les réglages de mise en page, jeton par jeton. */
+function resolveContentColumnsLayout(raw: unknown): ContentColumnsLayout {
+  const record = isRecord(raw) ? raw : {};
+  return {
+    maxWidth: isContentMaxWidth(record.maxWidth)
+      ? record.maxWidth
+      : DEFAULT_CONTENT_COLUMNS_LAYOUT.maxWidth,
+    gap: isContentGap(record.gap)
+      ? record.gap
+      : DEFAULT_CONTENT_COLUMNS_LAYOUT.gap,
+    sameWidth:
+      typeof record.sameWidth === "boolean"
+        ? record.sameWidth
+        : DEFAULT_CONTENT_COLUMNS_LAYOUT.sameWidth,
+    separator:
+      typeof record.separator === "boolean"
+        ? record.separator
+        : DEFAULT_CONTENT_COLUMNS_LAYOUT.separator,
+    stackAt: isContentStackAt(record.stackAt)
+      ? record.stackAt
+      : DEFAULT_CONTENT_COLUMNS_LAYOUT.stackAt,
+    verticalAlign: isContentVerticalAlign(record.verticalAlign)
+      ? record.verticalAlign
+      : DEFAULT_CONTENT_COLUMNS_LAYOUT.verticalAlign,
+  };
+}
+
+/** Lit un document ProseMirror stocké, avec repli sur un document vide. */
+function resolveRichTextDoc(raw: unknown): RichTextDoc {
+  if (isRecord(raw) && raw.type === "doc") {
+    const rawContent: unknown = raw.content;
+    if (isUnknownArray(rawContent)) {
+      const nodes: RichTextNode[] = [];
+      for (const node of rawContent) {
+        if (isRecord(node)) {
+          nodes.push(node);
+        }
+      }
+      return { type: "doc", content: nodes };
+    }
+  }
+  return createEmptyRichTextDoc();
+}
+
+/** Lit un bloc, ou `null` si son `kind` est inconnu (bloc écarté). */
+function resolveContentBlock(raw: unknown): ContentBlock | null {
+  if (!isRecord(raw)) {
+    return null;
+  }
+  const id =
+    typeof raw.id === "string" && raw.id !== "" ? raw.id : newContentId();
+
+  switch (raw.kind) {
+    case "rich-text":
+      return { id, kind: "rich-text", doc: resolveRichTextDoc(raw.doc) };
+    case "image":
+      return {
+        id,
+        kind: "image",
+        media: readArtSource(raw, "media", { url: "", alt: "" }),
+        width: raw.width === "full" ? "full" : "auto",
+        align: isContentTextAlign(raw.align) ? raw.align : "left",
+      };
+    case "icon":
+      return {
+        id,
+        kind: "icon",
+        name: readString(raw.name, ""),
+        size: isContentIconSize(raw.size) ? raw.size : "md",
+        align: isContentTextAlign(raw.align) ? raw.align : "left",
+      };
+    case "spacer":
+      return {
+        id,
+        kind: "spacer",
+        size: isContentGap(raw.size) ? raw.size : "md",
+      };
+    default:
+      return null;
+  }
+}
+
+/** Lit la liste des blocs d'un conteneur (blocs illisibles écartés). */
+function resolveContentBlocks(raw: unknown): ContentBlock[] {
+  const list = isUnknownArray(raw) ? raw : [];
+  const blocks: ContentBlock[] = [];
+  for (const entry of list) {
+    const block = resolveContentBlock(entry);
+    if (block !== null) {
+      blocks.push(block);
+    }
+  }
+  return blocks;
+}
+
+/** Lit un conteneur, ou `null` s'il n'est pas exploitable. */
+function resolveContentContainer(raw: unknown): ContentContainer | null {
+  if (!isRecord(raw)) {
+    return null;
+  }
+  const weight =
+    typeof raw.weight === "number" &&
+    Number.isFinite(raw.weight) &&
+    raw.weight > 0
+      ? raw.weight
+      : 1;
+  return {
+    id: typeof raw.id === "string" && raw.id !== "" ? raw.id : newContentId(),
+    weight,
+    // Un éventuel `indentLeft` / `indentRight` stocké avant le retrait du
+    // réglage est **ignoré** : la colonne reprend toute sa piste, sans que le
+    // contenu ait à être migré.
+    blocks: resolveContentBlocks(raw.blocks),
+  };
+}
+
+/**
+ * Lit la liste des conteneurs en rétablissant l'invariant **1 à 4**.
+ *
+ * Deux cas dégénérés sont réparés plutôt que propagés : un contenu sans
+ * conteneur lisible repart sur **deux colonnes vides** (la section doit rester
+ * éditable, jamais se présenter comme un bloc mort), et un contenu qui en
+ * comporte davantage est **tronqué** au maximum autorisé.
+ */
+function resolveContentContainers(raw: unknown): ContentContainer[] {
+  const list = isUnknownArray(raw) ? raw : [];
+  const containers: ContentContainer[] = [];
+  for (const entry of list) {
+    const container = resolveContentContainer(entry);
+    if (container !== null && containers.length < MAX_CONTENT_CONTAINERS) {
+      containers.push(container);
+    }
+  }
+  if (containers.length === 0) {
+    return [createContentContainer(), createContentContainer()];
+  }
+  return containers;
+}
+
+/**
+ * Résout un contenu « Contenu en colonnes » stocké (JSONB) vers une forme
+ * **complète** — même patron que `resolveGalleryContent` et
+ * `resolveCtaBannerContent` : un contenu partiel, ancien ou abîmé ne provoque
+ * jamais d'erreur de rendu, chaque champ retombe sur son défaut.
+ */
+export function resolveContentColumnsContent(
+  raw: unknown
+): ContentColumnsContent {
+  const record = isRecord(raw) ? raw : {};
+  const heading = readString(record.heading, "");
+  return {
+    type: "content",
+    variant: "columns",
+    heading,
+    header: resolveContentHeader(record.header, heading),
+    containers: resolveContentContainers(record.containers),
+    layout: resolveContentColumnsLayout(record.layout),
+  };
+}
+
+/* --------------------------------------------------------------------------
+   Lecture d'une section de contenu pour le SEO de partage
+   --------------------------------------------------------------------------
+   Une section de contenu peut être **le seul contenu** d'une page : sans ces
+   deux extracteurs, une telle page n'aurait ni description ni image de
+   prévisualisation sur les réseaux. Ils vivent dans le domaine (et non dans
+   `public-page.ts`) parce qu'ils manipulent la structure du contenu ; le
+   résolveur garantit les invariants avant lecture.
+   -------------------------------------------------------------------------- */
+
+/** Collecte le texte en ligne d'un nœud (texte, saut de ligne, liens imbriqués). */
+function collectRichTextInline(node: RichTextNode, out: string[]): void {
+  if (node.type === "text" && typeof node.text === "string") {
+    out.push(node.text);
+    return;
+  }
+  if (node.type === "hardBreak") {
+    out.push(" ");
+    return;
+  }
+  const content = node.content;
+  if (isUnknownArray(content)) {
+    for (const child of content) {
+      if (isRecord(child)) {
+        collectRichTextInline(child, out);
+      }
+    }
+  }
+}
+
+/**
+ * Texte brut d'un document ProseMirror (intertitres, paragraphes, listes).
+ * Les blocs sont joints par une espace : le résultat est destiné à une
+ * **description** (méta), jamais à un rendu — le HTML n'est pas consulté.
+ */
+export function richTextDocToPlainText(doc: RichTextDoc): string {
+  const blocks: string[] = [];
+  for (const node of doc.content ?? []) {
+    const inline: string[] = [];
+    collectRichTextInline(node, inline);
+    const text = inline.join("").trim();
+    if (text !== "") {
+      blocks.push(text);
+    }
+  }
+  return blocks.join(" ");
+}
+
+/** Images portées par une section de contenu (blocs photo non vides). */
+export function contentSectionImageSources(
+  content: ContentColumnsContent
+): MediaField[] {
+  const sources: MediaField[] = [];
+  for (const container of content.containers) {
+    for (const block of container.blocks) {
+      if (block.kind === "image" && block.media.url !== "") {
+        sources.push(block.media);
+      }
+    }
+  }
+  return sources;
+}
+
+/** Texte d'une section de contenu : titre éventuel, puis texte des blocs. */
+export function contentSectionPlainText(
+  content: ContentColumnsContent
+): string {
+  const parts: string[] = [];
+  const heading = content.heading.trim();
+  if (heading !== "") {
+    parts.push(heading);
+  }
+  for (const container of content.containers) {
+    for (const block of container.blocks) {
+      if (block.kind === "rich-text") {
+        const text = richTextDocToPlainText(block.doc);
+        if (text !== "") {
+          parts.push(text);
+        }
+      }
+    }
+  }
+  return parts.join(" ");
+}
+
 /**
  * Contenu éditable d'un module, **discriminé par `type`** (mêmes valeurs que
  * `PageModuleType`). Chaque famille expose ses propres champs (spec §8).
@@ -2185,6 +3011,7 @@ export type ModuleContent =
       items: ServiceItem[];
     }
   | CtaBannerContent
+  | ContentColumnsContent
   | ({ type: "gallery" } & GalleryContent)
   | {
       type: "faq";
@@ -2737,6 +3564,15 @@ export const moduleCatalog: ModuleCatalogEntry[] = [
     description: "Présentez le photographe avec une photo et un texte.",
   },
   {
+    id: "content-columns",
+    type: "content",
+    variant: "columns",
+    label: "Contenu en colonnes",
+    category: "Contenu libre",
+    description:
+      "Écrivez et mettez en forme votre contenu — titres, gras, listes, liens, images et icônes — réparti en 1 à 4 colonnes qui s’empilent sur téléphone.",
+  },
+  {
     id: "services",
     type: "services",
     label: "Cartes de prestations",
@@ -2903,6 +3739,8 @@ export function createModuleContent(
         phone: "+33 6 00 00 00 00",
         address: "Paris, France",
       };
+    case "content":
+      return createContentColumnsContent();
   }
 }
 

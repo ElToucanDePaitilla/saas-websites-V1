@@ -99,6 +99,15 @@ const PagesStoreContext = React.createContext<PagesStoreValue | undefined>(
   undefined
 );
 
+/** Délai d'inactivité avant d'écrire en base après une mutation (ms). */
+const SYNC_DEBOUNCE_MS = 200;
+
+/** Premier délai de reprise après une écriture refusée (ms). */
+const RETRY_BASE_MS = 2000;
+
+/** Délai de reprise maximal (ms) — le délai double à chaque échec. */
+const RETRY_MAX_MS = 30000;
+
 /**
  * État initial **vide** (Étape 10.1) : le seed n'est plus un défaut implicite —
  * il est fourni **explicitement** par le serveur (`loadInitialData`) quand la
@@ -133,31 +142,62 @@ export function PagesStoreProvider({
       : createInitialState()
   );
 
-  // Persistance des mutations Pages/Modules (Étape 5.3) — BDD disponible.
-  // Diffère l'état local courant vs l'état précédent et appelle l'API
-  // granulaire correspondante (création/métadonnées/suppression de page,
-  // remplacement des modules d'une page).
-  const pagesReady = React.useRef(false);
-  const previousPagesRef = React.useRef<SitePage[]>([]);
+  /**
+   * Persistance des mutations Pages/Modules (Étape 5.3) — BDD disponible.
+   *
+   * L'état local reste la source de vérité **immédiate** de l'interface ;
+   * l'écriture en base est **différée** (après la dernière mutation) puis
+   * exécutée **en série** (l'ordre compte : une page se crée avant d'accueillir
+   * ses modules).
+   *
+   * **Correctif de robustesse (étape 12.1).** Les références de comparaison ne
+   * sont avancées qu'après un **succès complet**. Auparavant elles l'étaient
+   * *avant* l'écriture différée, et la boucle s'arrêtait à la première erreur :
+   * une écriture refusée (BDD momentanément injoignable, serveur de
+   * développement en recompilation, coupure réseau) n'était donc **jamais
+   * rejouée**, et la modification était perdue **en silence**, sans que
+   * l'utilisateur puisse le savoir. Désormais la synchronisation reprend
+   * d'elle-même, avec un délai qui double jusqu'à `RETRY_MAX_MS`.
+   */
+  const previousPagesRef = React.useRef<SitePage[] | null>(null);
   const previousModulesRef = React.useRef<Record<string, PageModule[]>>({});
+  const stateRef = React.useRef(state);
+  const runSyncRef = React.useRef<() => Promise<void>>(async () => {});
+  const retryTimerRef = React.useRef<number | null>(null);
+  const retryDelayRef = React.useRef(RETRY_BASE_MS);
+  const syncRunningRef = React.useRef(false);
+  const syncPendingRef = React.useRef(false);
 
+  // État le plus récent, lu par la synchronisation différée (dont la closure
+  // est figée à sa création). Déclaré avant l'effet de débounce pour être
+  // à jour lorsque celui-ci se déclenche.
   React.useEffect(() => {
-    if (!persistenceEnabled) {
+    stateRef.current = state;
+  }, [state]);
+
+  const runSync = React.useCallback(async (): Promise<void> => {
+    if (syncRunningRef.current) {
+      // Une synchronisation est déjà en cours : on note qu'il faudra repasser,
+      // pour ne jamais laisser une modification sans écriture.
+      syncPendingRef.current = true;
       return;
     }
+    syncRunningRef.current = true;
+
+    const current = stateRef.current;
     const previousPages = previousPagesRef.current;
-    const previousModules = previousModulesRef.current;
-    if (!pagesReady.current) {
+    if (previousPages === null) {
       // Premier rendu (hydratation/seed) : rien à persister.
-      pagesReady.current = true;
-      previousPagesRef.current = state.pages;
-      previousModulesRef.current = state.modulesByPage;
+      previousPagesRef.current = current.pages;
+      previousModulesRef.current = current.modulesByPage;
+      syncRunningRef.current = false;
       return;
     }
+    const previousModules = previousModulesRef.current;
 
     const ops: Array<() => Promise<void>> = [];
     const previousById = new Map(previousPages.map((page) => [page.id, page]));
-    const nextById = new Map(state.pages.map((page) => [page.id, page]));
+    const nextById = new Map(current.pages.map((page) => [page.id, page]));
 
     // Pages supprimées.
     for (const page of previousPages) {
@@ -167,12 +207,12 @@ export function PagesStoreProvider({
       }
     }
 
-    for (const page of state.pages) {
+    for (const page of current.pages) {
       const old = previousById.get(page.id);
       // Pages créées → création puis modules (même vides, pour créer la page).
       if (!old) {
         const pageId = page.id;
-        const modules = state.modulesByPage[pageId] ?? [];
+        const modules = current.modulesByPage[pageId] ?? [];
         ops.push(() =>
           persistCreatePage(page).then(() =>
             persistUpdateModules(pageId, modules)
@@ -200,33 +240,88 @@ export function PagesStoreProvider({
       }
       // Modules d'une page modifiés (contenu, ordre, présence).
       const oldModules = previousModules[page.id] ?? [];
-      const newModules = state.modulesByPage[page.id] ?? [];
+      const newModules = current.modulesByPage[page.id] ?? [];
       if (JSON.stringify(oldModules) !== JSON.stringify(newModules)) {
         const pageId = page.id;
         ops.push(() => persistUpdateModules(pageId, newModules));
       }
     }
 
-    previousPagesRef.current = state.pages;
-    previousModulesRef.current = state.modulesByPage;
+    /** Écriture réussie : l'état visé devient la nouvelle référence. */
+    const markSynced = () => {
+      previousPagesRef.current = current.pages;
+      previousModulesRef.current = current.modulesByPage;
+      retryDelayRef.current = RETRY_BASE_MS;
+    };
+
+    /** Écriture refusée : on reprend plus tard, **sans avancer la référence**. */
+    const scheduleRetry = () => {
+      if (retryTimerRef.current !== null) {
+        return;
+      }
+      const delay = retryDelayRef.current;
+      retryDelayRef.current = Math.min(delay * 2, RETRY_MAX_MS);
+      retryTimerRef.current = window.setTimeout(() => {
+        retryTimerRef.current = null;
+        void runSyncRef.current();
+      }, delay);
+    };
 
     if (ops.length === 0) {
+      markSynced();
+    } else {
+      let failed = false;
+      for (const op of ops) {
+        try {
+          await op();
+        } catch (error) {
+          console.error("Persistance pages :", error);
+          failed = true;
+          break;
+        }
+      }
+      if (failed) {
+        scheduleRetry();
+      } else {
+        markSynced();
+      }
+    }
+
+    syncRunningRef.current = false;
+
+    // Une passe a été demandée pendant celle-ci : on la rejoue immédiatement.
+    if (syncPendingRef.current) {
+      syncPendingRef.current = false;
+      void runSyncRef.current();
+    }
+  }, []);
+
+  // Rappel le plus récent, lu par la minuterie de reprise (dont la closure est
+  // figée) — mis à jour **dans un effet**, jamais pendant le rendu.
+  React.useEffect(() => {
+    runSyncRef.current = runSync;
+  }, [runSync]);
+
+  React.useEffect(() => {
+    if (!persistenceEnabled) {
       return;
     }
     const timer = window.setTimeout(() => {
-      void (async () => {
-        for (const op of ops) {
-          try {
-            await op();
-          } catch (error) {
-            console.error("Persistance pages :", error);
-            return; // interruption à la première erreur (journalisée)
-          }
-        }
-      })();
-    }, 200);
+      void runSyncRef.current();
+    }, SYNC_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
   }, [state, persistenceEnabled]);
+
+  // Aucune minuterie de reprise ne doit survivre au démontage du provider.
+  React.useEffect(
+    () => () => {
+      if (retryTimerRef.current !== null) {
+        window.clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
+    },
+    []
+  );
 
   const value = React.useMemo<PagesStoreValue>(() => {
     const { pages, modulesByPage } = state;

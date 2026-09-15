@@ -58,6 +58,12 @@ export const moduleTypeEnum = pgEnum("module_type", [
   "gallery",
   "faq",
   "contact",
+  // Étape 12.1 — « Contenu en colonnes ». Contrairement aux **variantes** d'une
+  // famille existante (galerie 11.1, bandeau 11.27), qui vivent uniquement dans
+  // le JSONB `content`, une **nouvelle famille** exige d'étendre cet enum
+  // Postgres : d'où une migration `ALTER TYPE … ADD VALUE`, la première depuis
+  // la création du schéma pour un module.
+  "content",
 ]);
 
 /** Animations d'entrée d'un module (ModuleAnimation). */
