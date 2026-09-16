@@ -1,5 +1,6 @@
 import { MediaImage } from "@/components/common/MediaImage";
 import { BannerBackground } from "@/components/modules/banner/BannerBackground";
+import { CardsModule } from "@/components/modules/cards/CardsModule";
 import { ContentColumnsModule } from "@/components/modules/content/ContentColumnsModule";
 import { GalleryManager } from "@/components/modules/gallery/GalleryManager";
 import { BaseHero } from "@/components/modules/hero/BaseHero";
@@ -264,6 +265,8 @@ export function PageModuleRenderer({
       return <ContactModule module={module} />;
     case "content":
       return <ContentColumnsModule module={module} />;
+    case "cards":
+      return <CardsModule module={module} />;
   }
 }
 

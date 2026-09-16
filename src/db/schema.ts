@@ -64,6 +64,9 @@ export const moduleTypeEnum = pgEnum("module_type", [
   // Postgres : d'où une migration `ALTER TYPE … ADD VALUE`, la première depuis
   // la création du schéma pour un module.
   "content",
+  // Étape 13.1 — « Cards » : deuxième famille ajoutée après la création du
+  // schéma, même conséquence — migration `ALTER TYPE … ADD VALUE`.
+  "cards",
 ]);
 
 /** Animations d'entrée d'un module (ModuleAnimation). */

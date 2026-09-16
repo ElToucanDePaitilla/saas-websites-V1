@@ -31,6 +31,16 @@ function aspectClassFor(ratio: string): string {
       return "aspect-[4/3]";
     case "9:16":
       return "aspect-[9/16]";
+    case "4:5":
+      // Cartes (Étape 13.1) : le ratio du gabarit, portrait modéré.
+      return "aspect-[4/5]";
+    case "1:1":
+      // Cartes carrées (Étape 13.2) : la vignette d'aperçu doit montrer le
+      // format choisi, pas un format indifférencié.
+      return "aspect-square";
+    case "3:2":
+      // Cartes paysage (Étape 13.2) — le format d'appareil photo par défaut.
+      return "aspect-[3/2]";
     default:
       return "aspect-video";
   }

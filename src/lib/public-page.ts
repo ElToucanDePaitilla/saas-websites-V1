@@ -20,6 +20,7 @@ import { resolvePublicPhotographerId } from "@/lib/supabase/session";
 import {
   bannerImageSources,
   buildSeedModules,
+  cardsImageSources,
   contentSectionImageSources,
   contentSectionPlainText,
   galleryImageSources,
@@ -28,6 +29,7 @@ import {
   heroSliderImageSources,
   heroStaticArtSources,
   heroVideoImageSources,
+  resolveCardsContent,
   resolveContentColumnsContent,
   resolveCtaBannerContent,
   resolveGalleryContent,
@@ -36,6 +38,7 @@ import {
   resolveHeroParallaxContent,
   resolveHeroSliderContent,
   resolveHeroVideoContent,
+  richTextDocToPlainText,
   seedPages,
   type ArtSource,
   type HeroContent,
@@ -117,6 +120,14 @@ function collectImageUrls(modules: PageModule[]): string[] {
         urls.push(source.url);
       }
     }
+    if (mod.content.type === "cards") {
+      // Section de cartes (Étape 13.1) : même raison que pour le contenu en
+      // colonnes — une page peut n'être faite que de cartes, et leurs photos
+      // méritent alors les mêmes métadonnées EXIF que les autres.
+      for (const source of cardsImageSources(resolveCardsContent(mod.content))) {
+        urls.push(source.url);
+      }
+    }
   }
   return urls;
 }
@@ -160,11 +171,32 @@ export function publicDescription(modules: PageModule[]): string {
     if (content.type === "cta-banner" && content.subheading.trim()) {
       return content.subheading;
     }
+    if (content.type === "cards") {
+      // Une section de cartes peut être le seul texte de la page : son
+      // introduction, à défaut son sous-titre, alimente alors le partage.
+      const cards = resolveCardsContent(content);
+      const text = cards.intro.trim() || cards.subtitle.trim();
+      if (text) {
+        return text;
+      }
+      // Cartes éditoriales (13.3) : leur contenu vit dans les **corps**, pas
+      // dans l'en-tête. Sans cette lecture, une page faite uniquement de ces
+      // cartes n'aurait aucune description de partage. On prend le premier
+      // corps non vide, dans l'ordre d'affichage.
+      if (cards.variant === "editorial") {
+        for (const card of cards.cards) {
+          const body = richTextDocToPlainText(card.body).trim();
+          if (body) {
+            return body;
+          }
+        }
+      }
+    }
   }
   return "Portfolio photographe professionnel.";
 }
 
-/** Image OpenGraph : 1re image hero/about/galerie. */
+/** Image OpenGraph : 1re image hero/about/galerie/cartes. */
 export function publicOgImage(modules: PageModule[]): string | null {
   for (const mod of modules) {
     const content = mod.content;
@@ -185,6 +217,10 @@ export function publicOgImage(modules: PageModule[]): string | null {
       const first = contentSectionImageSources(
         resolveContentColumnsContent(content)
       )[0];
+      if (first) return first.url;
+    }
+    if (content.type === "cards") {
+      const first = cardsImageSources(resolveCardsContent(content))[0];
       if (first) return first.url;
     }
   }

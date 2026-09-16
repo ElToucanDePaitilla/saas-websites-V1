@@ -36,6 +36,8 @@ const moduleTypeSchema = z.enum([
   "contact",
   // Étape 12.1 — « Contenu en colonnes ».
   "content",
+  // Étape 13.1 — « Cards ».
+  "cards",
 ]);
 
 /** Animations d'entrée (ModuleAnimation). */
@@ -332,6 +334,152 @@ export const galleryContentSchema = z.discriminatedUnion("variant", [
   galleryStaticContentSchema,
   galleryDynamicContentSchema,
   galleryPortfolioContentSchema,
+]);
+
+/* --------------------------------------------------------------------------
+   Schémas de CONTENU Cards (Étapes 13.1 → 13.3) — validation de persistance.
+   Miroir des types du domaine (src/lib/pages.ts). Les quatre variantes
+   (portrait / square / landscape / editorial) partagent un socle commun
+   extensible, réuni par une **union discriminée par `variant`** (13.2) : la
+   variante éditoriale n'ajoute que la forme de ses cartes. Les effets de
+   survol, la bordure et les réglages apparus après coup sont **optionnels**,
+   comme pour la galerie : un contenu enregistré sans eux reste valide et le
+   résolveur du domaine complète champ par champ.
+   -------------------------------------------------------------------------- */
+
+const cardsColumnsSchema = z.union([
+  z.literal(2),
+  z.literal(3),
+  z.literal(4),
+  z.literal(5),
+  z.literal(6),
+]);
+const cardsAlignSchema = z.enum(["left", "center"]);
+const cardsPhotoFormatSchema = z.enum(["portrait", "square", "landscape"]);
+
+const cardsHoverEffectsSchema = z.object({
+  zoom: z.number().optional(),
+  shine: z.boolean().optional(),
+  saturate: z.boolean().optional(),
+  glow: z.boolean().optional(),
+});
+
+/**
+ * Bouton d'une carte : **son contenu seulement**.
+ *
+ * Le style (`primary` / `secondary` / `outline`) est un réglage de **section**
+ * (`style.ctaStyle`) — trois boutons d'aspects différents dans une même rangée
+ * se liraient comme trois éléments de nature différente. Les contenus
+ * enregistrés en 13.1 portent encore un `cta.style` : il n'est plus écrit, plus
+ * lu, et reste sans effet (le résolveur du domaine l'ignore).
+ */
+const cardCtaSchema = z.object({
+  label: z.string(),
+  href: z.string(),
+});
+
+const cardItemSchema = z.object({
+  id: z.string().min(1),
+  media: artSourceSchema,
+  title: z.string(),
+  text: z.string(),
+  cta: cardCtaSchema,
+});
+
+/**
+ * Document ProseMirror d'un corps de carte éditoriale (Étape 13.3).
+ *
+ * Miroir **minimal** de `RichTextDoc` : la clé `type: "doc"` et un tableau de
+ * nœuds. La structure profonde n'est pas revalidée ici — le domaine la lit par
+ * liste blanche (`resolveEditorialBody`) et le rendu par liste blanche aussi
+ * (`RichTextRenderer`). Ce schéma décrit la forme, pas le contenu.
+ */
+const richTextDocSchema = z.object({
+  type: z.literal("doc"),
+  content: z.array(z.unknown()).optional(),
+});
+
+/** Carte éditoriale : photo, corps riche, bouton (pas de titre ni texte). */
+const editorialCardItemSchema = z.object({
+  id: z.string().min(1),
+  media: artSourceSchema,
+  body: richTextDocSchema,
+  cta: cardCtaSchema,
+});
+
+/** Contenu du module `cards` — exporté comme les autres familles, pour servir
+ *  de miroir lisible du domaine.
+ *
+ *  `.optional()` sur `landscapeRatio`, `bodyRadius` et `bodyBorderWidth` : ces
+ *  réglages sont apparus **après** les premières cartes enregistrées (13.1 et
+ *  13.2). Les rendre obligatoires invaliderait des contenus existants ;
+ *  facultatifs, ils sont complétés à la lecture par `resolveCardsContent`
+ *  (même technique que `hoverEffects` en 11.23 et `album.hidden` en 11.20).
+ *
+ *  `variant: "classic"` — la valeur historique du format portrait — n'est plus
+ *  produite, mais reste **lue** : le résolveur du domaine la traduit en
+ *  `"portrait"`. Le schéma décrit donc ce que l'application écrit, pas ce
+ *  qu'elle a pu écrire.
+ */
+const cardsSharedSchema = z.object({
+  type: z.literal("cards"),
+  heading: z.string(),
+  subtitle: z.string(),
+  intro: z.string(),
+  layout: z.object({
+    columns: cardsColumnsSchema,
+    align: cardsAlignSchema,
+    landscapeRatio: z.enum(["3:2", "4:3", "16:9"]).optional(),
+    /** Cadrage photo de la variante `editorial` (13.3) — optionnel : aucun
+     *  contenu antérieur ne le porte, le résolveur applique « portrait ». */
+    editorialFormat: cardsPhotoFormatSchema.optional(),
+  }),
+  style: z.object({
+    radius: z.number(),
+    shadow: galleryShadowLevelSchema,
+    border: galleryBorderSchema,
+    bodyRadius: z.number().optional(),
+    bodyBorderWidth: z.number().optional(),
+    /** Style des boutons de la section (13.2.b) — optionnel : les contenus
+     *  antérieurs n'ont que le style par carte, désormais ignoré. */
+    ctaStyle: heroCtaStyleSchema.optional(),
+    /** Affichage des boutons de la section (13.3) — optionnel : absent des
+     *  contenus antérieurs, les boutons restaient affichés, donc défaut `true`. */
+    ctaShow: z.boolean().optional(),
+    hover: cardsHoverEffectsSchema.optional(),
+  }),
+  cards: z.array(cardItemSchema),
+});
+
+const cardsPortraitContentSchema = cardsSharedSchema.extend({
+  variant: z.literal("portrait"),
+});
+
+const cardsSquareContentSchema = cardsSharedSchema.extend({
+  variant: z.literal("square"),
+});
+
+const cardsLandscapeContentSchema = cardsSharedSchema.extend({
+  variant: z.literal("landscape"),
+});
+
+/**
+ * Variante `editorial` (Étape 13.3) : même socle, mais des cartes dont le corps
+ * est un document riche — `cards` est donc **redéfini**, et non complété.
+ * L'union discriminée par `variant` reste la même qu'avant : on ajoute une
+ * branche, on ne change pas de mécanique.
+ */
+const cardsEditorialContentSchema = cardsSharedSchema.extend({
+  variant: z.literal("editorial"),
+  cards: z.array(editorialCardItemSchema),
+});
+
+/** Union des contenus Cards validée (portrait / square / landscape / editorial). */
+export const cardsContentSchema = z.discriminatedUnion("variant", [
+  cardsPortraitContentSchema,
+  cardsSquareContentSchema,
+  cardsLandscapeContentSchema,
+  cardsEditorialContentSchema,
 ]);
 
 /** Identifiant UUID (côté client : crypto.randomUUID()). */

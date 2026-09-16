@@ -8,6 +8,12 @@ import Image from "next/image";
  * `<img>` natif pour les URL non autorisées (dégradation sûre — jamais
  * bloquante). Zéro `any`.
  *
+ * Le redimensionnement des photos **Supabase** n'est pas demandé ici : il est
+ * déclaré **globalement** dans `next.config.ts` (`images.loaderFile`, voir
+ * [`image-loader.ts`](../../lib/image-loader.ts)). Un `loader` ne peut pas être
+ * passé en prop depuis un composant serveur — `next/image` est un composant
+ * client, et une fonction ne franchit pas cette frontière.
+ *
  * Usage : conteneur parent dimensionné + `fill`, OU `width`/`height`
  * intrinsèques.
  * ============================================================================
@@ -71,6 +77,8 @@ export function MediaImage({
       height={fill ? undefined : height}
       priority={priority}
       quality={quality}
+      /* Aucune prop `loader` : voir l'en-tête — le redimensionnement est
+         déclaré dans `next.config.ts` (`images.loaderFile`). */
       placeholder={blurDataUrl ? "blur" : "empty"}
       blurDataURL={blurDataUrl ?? undefined}
     />

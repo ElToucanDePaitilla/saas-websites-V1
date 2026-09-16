@@ -2,6 +2,7 @@ import {
   BadgeDollarSign,
   CircleHelp,
   Columns3,
+  IdCard,
   LayoutGrid,
   Mail,
   Megaphone,
@@ -29,6 +30,7 @@ const moduleIcons: Record<PageModuleType, LucideIcon> = {
   faq: CircleHelp,
   contact: Mail,
   content: Columns3,
+  cards: IdCard,
 };
 
 export function ModuleIcon({

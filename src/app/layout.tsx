@@ -72,6 +72,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html
       lang="fr"
+      /* Le site défile en douceur (`scroll-behavior: smooth`, ancres
+         compensées de l'étape 11.16). Next a besoin de le savoir pour ne pas
+         l'appliquer pendant ses propres transitions de route — sans cet
+         attribut, un changement de page hérite du défilement animé et
+         l'arrivée sur la nouvelle page « glisse » au lieu de se poser. */
+      data-scroll-behavior="smooth"
       className={`${fontAdmin.variable} ${fontBody.variable} ${fontHeading.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>

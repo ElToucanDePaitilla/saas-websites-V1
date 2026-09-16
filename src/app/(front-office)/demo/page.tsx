@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { PublicModulesList } from "@/components/modules/PublicModules";
 import {
+  createCardsContent,
   createCtaBannerContent,
   createGalleryAlbum,
   createGalleryDynamicContent,
@@ -9,6 +10,10 @@ import {
   createGalleryStaticContent,
   createHeroStaticContent,
   createModule,
+  type CardsColumns,
+  type CardsLayoutSettings,
+  type CardsStyleSettings,
+  type CardsVariant,
   type GalleryImage,
   type PageModule,
 } from "@/lib/pages";
@@ -67,6 +72,90 @@ function makeDemoImages(seed: string, count: number): GalleryImage[] {
     width: 900,
     height: 700,
   }));
+}
+
+/**
+ * Un module Cards de démonstration, pour une variante donnée.
+ *
+ * Quatre détails sont **volontaires** :
+ *   - le paysage est enregistré avec `columns: 4` : c'est la démonstration que
+ *     la normalisation du domaine (2 colonnes en paysage) s'applique aussi à un
+ *     contenu écrit à la main, et pas seulement à ce que produit l'éditeur ;
+ *   - ce même module reçoit un arrondi et un filet de bloc nettement marqués
+ *     (18 px / 4 px) et un style de bouton **différent** (« contours ») : les
+ *     réglages ajoutés en 13.2 se voient à l'œil nu, et le fait que les trois
+ *     boutons de la section changent **ensemble** démontre que le style est bien
+ *     un réglage de section, et non de carte ;
+ *   - avec `longFirstCta`, la première carte reçoit un libellé à rallonge : c'est
+ *     le cas qui éprouve le retour à la ligne du bouton et l'alignement bas des
+ *     boutons quand les libellés n'ont pas le même nombre de lignes ;
+ *   - avec `ctaShow: false` (section carrée), la section ne contient **aucun**
+ *     bouton alors que les libellés et destinations sont bien enregistrés :
+ *     l'interrupteur de 13.3 est donc démontré, et il l'est sur une section qui
+ *     n'est pas celle du nouveau contenu éditorial.
+ */
+function demoCardsModule(
+  sequence: number,
+  variant: CardsVariant,
+  heading: string,
+  subtitle: string,
+  longFirstCta = false,
+  ctaShow = true,
+  columns?: CardsColumns
+): PageModule {
+  const base = createCardsContent(variant);
+  const entry = createModule("cards", sequence, variant);
+  // En paysage, la valeur `4` est écrite **exprès** : le résolveur doit la
+  // ramener à 2. Ailleurs, la colonne demandée prime, sinon celle de la fabrique.
+  const layout: CardsLayoutSettings = {
+    ...base.layout,
+    columns: variant === "landscape" ? 4 : (columns ?? base.layout.columns),
+  };
+  const style: CardsStyleSettings = {
+    ...base.style,
+    border: { enabled: true, width: 2, color: "#EAE5E5" },
+    hover: { ...base.style.hover, zoom: 106, shine: true, saturate: true },
+    ctaShow,
+    ...(variant === "landscape"
+      ? { bodyRadius: 18, bodyBorderWidth: 4, ctaStyle: "outline" }
+      : {}),
+  };
+
+  // Le corps d'une carte diffère selon la variante : on branche sur `base`
+  // (union discriminée) plutôt que de forcer un type commun.
+  if (base.variant === "editorial") {
+    entry.content = {
+      ...base,
+      heading,
+      subtitle,
+      layout,
+      style,
+      cards: base.cards,
+    };
+    return entry;
+  }
+
+  entry.content = {
+    ...base,
+    heading,
+    subtitle,
+    layout,
+    style,
+    cards: longFirstCta
+      ? base.cards.map((card, index) =>
+          index === 0
+            ? {
+                ...card,
+                cta: {
+                  ...card.cta,
+                  label: "Découvrir l’accompagnement des mariages et des portraits",
+                },
+              }
+            : card
+        )
+      : base.cards,
+  };
+  return entry;
 }
 
 function buildDemoModules(): PageModule[] {
@@ -180,6 +269,52 @@ function buildDemoModules(): PageModule[] {
     ctaHref: "#contact",
   };
 
+  // ---- Cards (Étapes 13.1 → 13.3) : un module par variante ----
+  // Seul le bouton est cliquable : la démo le montre avec une bordure de cadre
+  // activée et des effets de survol poussés (brillance + saturation), c'est-à-
+  // dire le maximum de ce que le module sait faire. Les visuels de chaque format
+  // viennent de la fabrique, au bon ratio : la démonstration doit montrer le
+  // cadrage que le module produira réellement.
+  const cardsPortrait = demoCardsModule(
+    7,
+    "portrait",
+    "Cards — portrait (4:5)",
+    "Trois par ligne, photos verticales : le format du gabarit d’origine."
+  );
+  const cardsSquare = demoCardsModule(
+    8,
+    "square",
+    "Cards — carré (1:1), boutons masqués",
+    "Photos carrées, trois par ligne : portraits serrés, détails, objets.",
+    // `longFirstCta` sans objet ici ; `ctaShow: false` : la section présente ses
+    // cartes sans bouton, alors que libellés et destinations restent enregistrés.
+    false,
+    false
+  );
+  const cardsLandscape = demoCardsModule(
+    9,
+    "landscape",
+    "Cards — paysage (3:2, deux par ligne)",
+    "Photos horizontales ; l’arrondi et le filet du bloc ont été augmentés pour être visibles.",
+    // Un premier libellé volontairement long : il passe sur deux lignes, et son
+    // bouton reste aligné par le bas sur ceux des autres cartes de la ligne.
+    true
+  );
+  // 4ᵉ variante (13.3) : le corps de chaque carte est un document de texte
+  // riche (sous-titre H3, paragraphe, liste à puces, liste numérotée — fournis
+  // par la fabrique). Six colonnes **exprès** : c'est le seul réglage qui prouve
+  // le palier `xl` des classes de grille et le `sizes` multi-paliers, et c'est
+  // aussi le cas le plus étroit pour juger de la lisibilité d'un texte structuré.
+  const cardsEditorial = demoCardsModule(
+    10,
+    "editorial",
+    "Cards — texte structuré (6 par ligne)",
+    "Le corps de chaque carte est un texte mis en forme ; le cadre photo se règle à part, sans toucher aux textes.",
+    false,
+    true,
+    6
+  );
+
   // Démo HeroSlider (variante "slider") — 3 slides pré-chargées par défaut.
   // Placé EN PREMIER pour valider le héro plein écran (nav → bas de l'écran).
   const heroSlider = createModule("hero", 1, "slider");
@@ -188,6 +323,10 @@ function buildDemoModules(): PageModule[] {
     heroSlider,
     hero,
     about,
+    cardsPortrait,
+    cardsSquare,
+    cardsLandscape,
+    cardsEditorial,
     galleryStatic,
     galleryDynamic,
     galleryPortfolio,

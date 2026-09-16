@@ -14,6 +14,7 @@ import {
 import { MediaImage } from "@/components/common/MediaImage";
 import { Button } from "@/components/ui/button";
 import { exifChipsFromData } from "@/lib/media-exif";
+import { supabaseImageUrl } from "@/lib/media-url";
 import type { GalleryImage, GalleryLightboxSettings } from "@/lib/pages";
 import { cn } from "@/lib/utils";
 
@@ -35,8 +36,9 @@ import { cn } from "@/lib/utils";
  *     → fit ;
  *   - **déplacement au clic maintenu** (pointer events + écouteurs fenêtre),
  *     borné aux limites de l'image, **sans scroll** (molette neutralisée) ;
- *   - **préchargement des images voisines** (n−1 / n+1) pour une navigation
- *     fluide, et qualité d'image explicite (80).
+ *   - **préchargement de la photo suivante** (une seule, servie par le CDN de
+ *     transformation) pour une navigation fluide, et qualité d'image explicite
+ *     (80).
  * ============================================================================
  */
 
@@ -60,6 +62,23 @@ type ZoomLevel = 0 | 1 | 2;
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
+
+/**
+ * Largeur annoncée de la photo affichée (`sizes`). Au-delà, l'œil ne voit plus
+ * la différence, et le CDN produirait des WebP de plusieurs mégaoctets.
+ */
+const LIGHTBOX_IMAGE_SIZES = "(max-width: 1024px) 100vw, 1600px";
+
+/**
+ * Largeur demandée pour la photo **suivante**. 1920 est la première largeur que
+ * `next/image` propose au-dessus de 1600 px : c'est donc celle que le navigateur
+ * choisit pour l'image affichée, et précharger **exactement cette variante**
+ * fait qu'à la navigation suivante elle est déjà dans le cache.
+ */
+const LIGHTBOX_PRELOAD_WIDTH = 1920;
+
+/** Délai avant de précharger la suivante (ms) : l'image affichée passe d'abord. */
+const LIGHTBOX_PRELOAD_DELAY_MS = 200;
 
 export function LightboxModal({
   open,
@@ -221,28 +240,43 @@ export function LightboxModal({
   }, [open, go, onClose]);
 
   /**
-   * Précharge les images voisines (n−1 / n+1) dès que l'index change :
-   * la navigation du diaporama est ainsi quasi instantanée.
+   * Précharge la photo **suivante** dès que l'index change : la navigation du
+   * diaporama est ainsi quasi instantanée.
+   *
+   * Deux défauts de la version précédente sont corrigés ici, et c'est eux qui
+   * faisaient « figer » le diaporama :
+   *   - elle préchargeait **les deux voisines** (n−1 *et* n+1) : la précédente
+   *     ne sert à rien quand on avance, et deux téléchargements simultanés
+   *     disputaient la connexion à l'image affichée ;
+   *   - elle utilisait l'URL **d'origine** de la photo (`images[…].url`), soit
+   *     **2,81 Mo** pièce : chaque appui sur une flèche déclenchait ~5,6 Mo de
+   *     téléchargements, saturait la liaison et donnait l'impression que le
+   *     diaporama se bloquait. On passe désormais par le **CDN de
+   *     transformation** (`supabaseImageUrl`), qui sert le WebP à la largeur
+   *     d'affichage — quelques centaines de Ko.
+   *
+   * Le délai laisse partir l'image affichée en premier : le préchargement ne
+   * doit jamais lui prendre sa bande passante.
    */
   React.useEffect(() => {
     if (!open || total <= 1) {
       return;
     }
-    const neighbors = Array.from(
-      new Set([(safeIndex + 1) % total, (safeIndex - 1 + total) % total])
-    );
-    const preloaded = neighbors.map((neighborIndex) => {
+    const nextImage = images[(safeIndex + 1) % total];
+    if (!nextImage?.url) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
       const preload = new window.Image();
       preload.decoding = "async";
-      preload.src = images[neighborIndex]?.url ?? "";
-      return preload;
-    });
-    return () => {
-      preloaded.forEach((preload) => {
-        preload.onload = null;
-        preload.onerror = null;
+      // Une URL qui n'est pas une image Supabase (visuel de démonstration)
+      // ressort inchangée de `supabaseImageUrl`.
+      preload.src = supabaseImageUrl(nextImage.url, {
+        width: LIGHTBOX_PRELOAD_WIDTH,
+        quality: 80,
       });
-    };
+    }, LIGHTBOX_PRELOAD_DELAY_MS);
+    return () => window.clearTimeout(timer);
   }, [open, safeIndex, total, images]);
 
   /** Neutralise la molette en mode zoomé (déplacement au clic, pas au scroll). */
@@ -486,7 +520,7 @@ export function LightboxModal({
                 fill
                 priority
                 quality={80}
-                sizes="100vw"
+                sizes={LIGHTBOX_IMAGE_SIZES}
                 className="pointer-events-none select-none object-contain"
               />
             </div>

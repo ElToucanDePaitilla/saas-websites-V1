@@ -193,7 +193,11 @@ export type PageModuleType =
   | "gallery"
   | "faq"
   | "contact"
-  | "content";
+  | "content"
+  // Étape 13.1 — « Cards ». Nouvelle famille (et non variante d'une famille
+  // existante) : elle exige donc d'étendre l'enum Postgres `module_type` et le
+  // schéma Zod, en plus de cette union.
+  | "cards";
 
 /** Animation d'entrée d'un module (spec §7.2-B ; sélecteur en 3.4). */
 export type ModuleAnimation =
@@ -1612,7 +1616,8 @@ export type GalleryContent =
 export type ModuleVariant =
   | HeroVariant
   | GalleryModuleVariant
-  | ContentVariant;
+  | ContentVariant
+  | CardsVariant;
 
 /** Libellés français des variantes de galerie (catalogue / éditeur). */
 export const galleryVariantLabels: Record<GalleryModuleVariant, string> = {
@@ -3152,6 +3157,7 @@ export type ModuleContent =
     }
   | CtaBannerContent
   | ContentColumnsContent
+  | CardsContent
   | ({ type: "gallery" } & GalleryContent)
   | {
       type: "faq";
@@ -3620,6 +3626,994 @@ export function bannerImageSources(content: CtaBannerContent): ArtSource[] {
   return [];
 }
 
+/* ==========================================================================
+   RUBRIQUE « CARDS » (Étapes 13.1 & 13.2)
+   --------------------------------------------------------------------------
+   Une liste de cartes photo + titre + texte + bouton, présentée en 2, 3 ou 4
+   colonnes (la ligne suivante se forme naturellement).
+
+   Trois partis pris structurants :
+
+   1. **La carte n'est jamais cliquable** — seul le bouton porte un lien. Une
+      carte entièrement cliquable envelopperait le titre et le texte dans un
+      lien unique, ce qui interdit tout autre élément interactif à l'intérieur
+      et fait dépendre le clic de la zone la plus large de la page. Le bouton
+      est une cible explicite, atteignable au clavier, et son libellé dit où
+      l'on va.
+   2. **Pas d'élévation au survol** : elle suggérait un clic qui n'existe pas.
+      Les effets de survol retenus sont portés par l'**image** (zoom, brillance,
+      saturation, liseré) — décoratifs, sans promesse d'interaction. `parallax`
+      est également écarté : un déplacement vertical n'a pas de sens sur une
+      vignette de cette taille.
+   3. **Trois formats, une seule structure** (13.2) : portrait (4:5), carré
+      (1:1) et paysage (3:2, 4:3 ou 16:9, **2 cartes par ligne**). Le format ne
+      change que le ratio de la photo et la largeur de colonne ; le
+      chevauchement du bloc clair sur la photo — la **signature** du module —
+      reste identique dans les trois cas.
+
+   Ce qui se règle : les arrondis et le filet des **deux** éléments (cadre de la
+   photo, bloc de texte), l'ombre, la bordure du cadre et les effets de survol.
+   Ce qui ne se règle pas : le chevauchement, et la **couleur** du filet du bloc,
+   qui prend l'accent du thème — elle suit donc le mode sombre sans réglage.
+   ========================================================================== */
+
+/**
+ * Formats **photo** d'une carte (Étape 13.2).
+ *
+ * Les trois diffèrent par le **ratio de la photo** et, pour le paysage, par le
+ * **nombre de cartes par ligne** — jamais par la structure : le bloc clair qui
+ * chevauche la photo reste la signature du module, identique dans les trois cas.
+ *
+ * C'est le **format** au sens où l'utilisateur l'entend, et non la variante : la
+ * quatrième variante (`editorial`, étape 13.3) n'est pas un cadrage — elle porte
+ * d'ailleurs le sien dans son `layout.editorialFormat`. Confondre les deux
+ * notions était exactement ce qui empêchait de lire une section éditoriale comme
+ * une carte : une variante n'est pas un format.
+ */
+export type CardsPhotoFormat = "portrait" | "square" | "landscape";
+
+/**
+ * Variantes de la rubrique Cards.
+ *
+ * Les trois formats historiques portent leur cadrage **dans leur `variant`**
+ * (les contenus déjà enregistrés n'ont donc rien à changer) ; `editorial` est la
+ * seule dont le corps est un document de texte riche et dont le cadrage photo se
+ * règle à part (`layout.editorialFormat`).
+ */
+export type CardsVariant = CardsPhotoFormat | "editorial";
+
+/**
+ * Variante par défaut — c'est aussi le format historique, celui du gabarit
+ * d'origine (photo 4:5).
+ */
+export const DEFAULT_CARDS_VARIANT: CardsVariant = "portrait";
+
+/**
+ * Cadrage photo par défaut.
+ *
+ * Sert aux contenus dont la variante est `editorial` (le cadrage y est un
+ * réglage de layout, pas la variante) et aux cartes d'exemple : la photo reste
+ * verticale 4:5 tant que l'utilisateur n'en décide pas autrement.
+ */
+export const DEFAULT_CARDS_PHOTO_FORMAT: CardsPhotoFormat = "portrait";
+
+/**
+ * Alias de lecture du format historique.
+ *
+ * La rubrique n'exposait qu'un format, stocké `"classic"`. Plutôt que de
+ * réécrire les contenus déjà enregistrés — une migration de données pour un
+ * simple changement de vocabulaire —, le résolveur traduit `"classic"` en
+ * `"portrait"`. Même technique que « masonry » → « static » (11.1).
+ */
+const CARDS_LEGACY_VARIANTS: Record<string, CardsVariant> = {
+  classic: "portrait",
+};
+
+/** Garde : cadrage photo valide. */
+export function isCardsPhotoFormat(value: unknown): value is CardsPhotoFormat {
+  return value === "portrait" || value === "square" || value === "landscape";
+}
+
+/** Garde : variante de carte valide (les trois cadrages, plus `editorial`). */
+export function isCardsVariant(value: unknown): value is CardsVariant {
+  return isCardsPhotoFormat(value) || value === "editorial";
+}
+
+/**
+ * Lit la variante d'un contenu stocké, alias historique compris.
+ * Toute valeur inconnue retombe sur `portrait` — l'ancien comportement.
+ */
+export function readCardsVariant(value: unknown): CardsVariant {
+  const legacy =
+    typeof value === "string" ? CARDS_LEGACY_VARIANTS[value] : undefined;
+  if (legacy !== undefined) {
+    return legacy;
+  }
+  return isCardsVariant(value) ? value : DEFAULT_CARDS_VARIANT;
+}
+
+/**
+ * Cadrage photo réellement appliqué à une section.
+ *
+ * C'est la fonction pivot de l'étape 13.3 : les trois formats historiques ont
+ * leur cadrage dans la variante, `editorial` dans son layout. Tout le rendu
+ * (ratio de la photo, verrouillage des colonnes) passe par ici — jamais par un
+ * test direct sur la variante, qui confondrait « éditorial » et « paysage ».
+ */
+export function cardsPhotoFormat(
+  variant: CardsVariant,
+  editorialFormat: CardsPhotoFormat
+): CardsPhotoFormat {
+  return variant === "editorial" ? editorialFormat : variant;
+}
+
+/**
+ * Ordre d'affichage des **formats photo** (sélecteur de l'éditeur).
+ *
+ * `editorial` en est volontairement absent : la variante éditoriale se choisit
+ * **au catalogue**, comme on ajoute une section. Changer de variante depuis
+ * l'éditeur détruirait les corps de texte riche (la forme des cartes change) —
+ * un réglage destructif n'a rien à faire dans une liste déroulante.
+ */
+export const cardsPhotoFormatOrder: CardsPhotoFormat[] = [
+  "portrait",
+  "square",
+  "landscape",
+];
+
+/**
+ * Ordre complet des variantes (libellés, catalogue, documentation).
+ * Il contient les trois cadrages **et** `editorial`.
+ */
+export const cardsVariantOrder: CardsVariant[] = [
+  "portrait",
+  "square",
+  "landscape",
+  "editorial",
+];
+
+/** Libellés français des variantes. */
+export const cardsVariantLabels: Record<CardsVariant, string> = {
+  portrait: "Portrait",
+  square: "Carré",
+  landscape: "Paysage",
+  editorial: "Texte structuré",
+};
+
+/** Explications affichées sous chaque option du sélecteur de format. */
+export const cardsVariantDescriptions: Record<CardsVariant, string> = {
+  portrait: "Photos verticales (4:5) : le format du gabarit d’origine.",
+  square: "Photos carrées (1:1) : portraits serrés, détails, objets.",
+  landscape:
+    "Photos horizontales, 2 cartes par ligne : chaque image garde de la présence.",
+  editorial:
+    "Le corps de la carte est un texte mis en forme : sous-titres, listes, gras, liens.",
+};
+
+/**
+ * Proportions proposées pour le format paysage.
+ *
+ * Stockées sous la forme lisible « 3:2 » — celle des libellés et des ratios
+ * d'appareil photo — puis converties en syntaxe CSS par `CARDS_RATIO_CSS` :
+ * `aspect-ratio` n'accepte pas les deux-points.
+ */
+export const CARDS_LANDSCAPE_RATIOS = ["3:2", "4:3", "16:9"] as const;
+
+/** Proportion de photo du format paysage — dérivée de la liste ci-dessus. */
+export type CardsLandscapeRatio = (typeof CARDS_LANDSCAPE_RATIOS)[number];
+
+/** Proportion par défaut du paysage : le format d'appareil photo. */
+export const DEFAULT_CARDS_LANDSCAPE_RATIO: CardsLandscapeRatio = "3:2";
+
+/** Libellés français des proportions paysage. */
+export const cardsLandscapeRatioLabels: Record<CardsLandscapeRatio, string> = {
+  "3:2": "3:2 — appareil photo (défaut)",
+  "4:3": "4:3 — quatre tiers",
+  "16:9": "16:9 — panoramique",
+};
+
+/** Garde : proportion paysage valide. */
+export function isCardsLandscapeRatio(
+  value: unknown
+): value is CardsLandscapeRatio {
+  return value === "3:2" || value === "4:3" || value === "16:9";
+}
+
+/** Ratio stocké (« 3:2 ») → valeur CSS de `aspect-ratio` (« 3 / 2 »). */
+const CARDS_RATIO_CSS: Record<string, string> = {
+  "4:5": "4 / 5",
+  "1:1": "1 / 1",
+  "3:2": "3 / 2",
+  "4:3": "4 / 3",
+  "16:9": "16 / 9",
+};
+
+/** Ratios fixes des formats qui n'en proposent qu'un. */
+const CARDS_FIXED_RATIOS: Record<"portrait" | "square", string> = {
+  portrait: "4:5",
+  square: "1:1",
+};
+
+/**
+ * Ratio de la photo d'un **format**, en **valeur CSS** — c'est ce que le rendu
+ * pose dans `aspect-ratio`. Le paysage lit son réglage, les deux autres ont un
+ * ratio fixe.
+ *
+ * La signature prend le cadrage (`CardsPhotoFormat`) et non la variante : une
+ * section `editorial` a, elle aussi, une photo — le cadrage vient alors de
+ * `cardsPhotoFormat(...)`. L'ancienne signature « variante = format » rendait
+ * cette lecture impossible.
+ */
+export function cardsMediaRatio(
+  photoFormat: CardsPhotoFormat,
+  landscapeRatio: CardsLandscapeRatio
+): string {
+  const label = cardsEditorRatio(photoFormat, landscapeRatio);
+  return CARDS_RATIO_CSS[label] ?? CARDS_RATIO_CSS["4:5"];
+}
+
+/**
+ * Ratio d'un format **dans la notation des libellés** (« 4:5 », « 3:2 ») :
+ * c'est la forme attendue par `ArtSourceField` pour sa vignette d'aperçu et par
+ * le sélecteur de proportions.
+ */
+export function cardsEditorRatio(
+  photoFormat: CardsPhotoFormat,
+  landscapeRatio: CardsLandscapeRatio
+): string {
+  return photoFormat === "landscape"
+    ? landscapeRatio
+    : CARDS_FIXED_RATIOS[photoFormat];
+}
+
+/**
+ * Nombres de cartes par ligne **proposés** pour une section.
+ *
+ * Le paysage n'en accepte qu'un (2) ; les trois autres variantes en proposent
+ * de 2 à 4, et `editorial` monte à 6 — un corps de texte structuré se lit bien
+ * dans une colonne étroite, contrairement à une photo 4:5 qui n'y serait plus
+ * une photo. C'est donc la liste des valeurs que l'éditeur affiche.
+ */
+export function cardsColumnOptions(
+  variant: CardsVariant,
+  photoFormat: CardsPhotoFormat
+): CardsColumns[] {
+  if (photoFormat === "landscape") {
+    return [2];
+  }
+  return variant === "editorial" ? [...CARDS_COLUMN_COUNTS] : [2, 3, 4];
+}
+
+/**
+ * Nombre de cartes par ligne réellement appliqué.
+ *
+ * Le **paysage** impose 2 colonnes : à 3 ou 4, une photo horizontale surmontée
+ * d'un bloc de texte devient une vignette trop étroite pour que le titre et le
+ * bouton respirent. La contrainte est appliquée à la lecture **et** à
+ * l'écriture : un contenu réglé sur 4 puis passé en paysage revient à 2, sans
+ * que l'utilisateur ait à y penser.
+ *
+ * Les trois formats photo sont également plafonnés à 4, y compris si une valeur
+ * supérieure a été écrite à la main : seules les sections `editorial` montent à
+ * 6. Le cadrage se lit désormais via `cardsPhotoFormat(...)`, jamais dans la
+ * variante — `editorial` n'est pas un format de photo.
+ */
+export function cardsColumnsFor(
+  variant: CardsVariant,
+  photoFormat: CardsPhotoFormat,
+  requested: CardsColumns
+): CardsColumns {
+  const options = cardsColumnOptions(variant, photoFormat);
+  // Borne par la liste des valeurs permises (aucun `cast` : on ne choisit que
+  // dans une liste déjà typée).
+  let applied: CardsColumns = options[0];
+  for (const option of options) {
+    if (option <= requested) {
+      applied = option;
+    }
+  }
+  return applied;
+}
+
+/**
+ * Vrai si le **cadrage** impose son nombre de colonnes.
+ * L'éditeur masque alors le réglage — un contrôle sans effet serait un piège.
+ */
+export function cardsColumnsLocked(photoFormat: CardsPhotoFormat): boolean {
+  return photoFormat === "landscape";
+}
+
+/** Nombres de cartes par ligne proposés par l'éditeur (desktop). */
+export const CARDS_COLUMN_COUNTS = [2, 3, 4, 5, 6] as const;
+
+/** Nombre de cartes par ligne — type dérivé de la liste ci-dessus. */
+export type CardsColumns = (typeof CARDS_COLUMN_COUNTS)[number];
+
+/**
+ * Alignement horizontal de l'en-tête de section.
+ * Mêmes deux valeurs, et dans le même vocabulaire, que l'en-tête de la section
+ * « Contenu en colonnes » (`ContentHeaderAlign`, étape 12.2) : deux réglages
+ * identiques dans deux sections ne doivent pas se nommer différemment.
+ */
+export type CardsAlign = "left" | "center";
+
+/**
+ * Bouton d'une carte.
+ *
+ * Il ne porte **que son contenu** : libellé et destination, qui appartiennent à
+ * la carte. Le **style** (`primary` / `secondary` / `outline`) est un réglage de
+ * la **section** (`CardsStyleSettings.ctaStyle`) : dans une même rangée, trois
+ * boutons d'aspects différents se liraient comme trois éléments de nature
+ * différente, alors qu'ils ont le même rôle.
+ */
+export interface CardCta {
+  /** Libellé du bouton. */
+  label: string;
+  /** Destination : interne (`/page`, `#ancre`), absolue ou protocole d'action. */
+  href: string;
+}
+
+/** Une carte : photo, titre, texte, bouton. */
+export interface CardItem {
+  id: string;
+  media: ArtSource;
+  /** Titre de la carte — rendu en `<h3>` (jamais un `h2` : l'en-tête le porte). */
+  title: string;
+  /** Texte simple : les sauts de ligne sont préservés au rendu. */
+  text: string;
+  cta: CardCta;
+}
+
+/**
+ * Une carte **éditoriale** : photo, corps en texte riche, bouton (Étape 13.3).
+ *
+ * Ni titre ni texte séparés : le corps est **un seul document** (option validée
+ * en planification), où l'utilisateur met lui-même sous-titres, paragraphes et
+ * listes. Deux conséquences assumées :
+ *   - le **libellé d'accordéon** et le **`alt` de repli** de la photo se
+ *     déduisent du document (`richTextDocToPlainText`) — il n'y a rien d'autre
+ *     à lire ;
+ *   - `cta` reste identique à celui des cartes photo : libellé et destination,
+ *     sans style (le style est un réglage de section, cf. `ctaStyle`).
+ */
+export interface EditorialCardItem {
+  id: string;
+  media: ArtSource;
+  /** Corps de la carte : document ProseMirror (jamais du HTML). */
+  body: RichTextDoc;
+  cta: CardCta;
+}
+
+/**
+ * Effets de survol d'une carte — sous-ensemble **volontairement réduit** de
+ * `GalleryHoverEffects` : ni `lift` (l'élévation suggérait un clic inexistant),
+ * ni `parallax` (sans objet sur une vignette). Les valeurs sont bornées au
+ * domaine, comme pour la galerie, pour qu'aucun contenu hérité ne produise un
+ * rendu aberrant.
+ */
+export interface CardsHoverEffects {
+  /** Zoom de l'image au survol, en pourcentage (100 = aucun zoom). */
+  zoom: number;
+  /** Brillance : reflet diagonal discret qui traverse la photo. */
+  shine: boolean;
+  /** Saturation et contraste progressifs. */
+  saturate: boolean;
+  /** Liseré lumineux, à la couleur d'accent du thème. */
+  glow: boolean;
+}
+
+/** Réglages de mise en page de la section. */
+export interface CardsLayoutSettings {
+  /** Cartes par ligne sur grand écran (2 à 4, jusqu'à 6 en `editorial`). */
+  columns: CardsColumns;
+  /** Alignement de l'en-tête (titre, sous-titre, introduction). */
+  align: CardsAlign;
+  /**
+   * Proportions de la photo du format **paysage** (3:2, 4:3 ou 16:9).
+   * Sans objet pour les deux autres formats photo, qui ont un ratio fixe — le
+   * champ est conservé quand on change de format, pour ne pas perdre le réglage.
+   */
+  landscapeRatio: CardsLandscapeRatio;
+  /**
+   * Cadrage photo de la variante `editorial` (Étape 13.3).
+   *
+   * La variante éditoriale est la seule dont le **corps** n'est pas une photo :
+   * son cadrage ne peut donc pas être porté par `variant` comme celui des trois
+   * formats historiques. Sans objet pour eux (même statut que `landscapeRatio`
+   * hors paysage) — le champ est conservé pour ne pas perdre le réglage.
+   */
+  editorialFormat: CardsPhotoFormat;
+}
+
+/** Apparence des cartes — les mêmes réglages que les vignettes de galerie. */
+export interface CardsStyleSettings {
+  /** Arrondi du **cadre de la photo**, en px. */
+  radius: number;
+  /** Ombre portée (cadre de la photo). */
+  shadow: GalleryShadowLevel;
+  /** Bordure optionnelle du cadre de la photo (épaisseur + couleur). */
+  border: GalleryBorderSettings;
+  /**
+   * Arrondi du **bloc de texte** (le pied de carte), en px.
+   * Réglage distinct de `radius` : ce sont deux éléments, et le gabarit leur
+   * donne deux arrondis différents (12 px pour la photo, 2 px pour le bloc).
+   */
+  bodyRadius: number;
+  /**
+   * Style du filet du bloc de texte, épaisseur réglable.
+   *
+   * Le filet est **toujours présent** (minimum 1 px) et sa couleur est celle de
+   * l'accent du thème : seul ce qui se voit franchement — l'épaisseur — se
+   * règle. La couleur, elle, suit le thème clair/sombre sans intervention.
+   */
+  bodyBorderWidth: number;
+  /**
+   * Style des boutons de **toute la section** (mêmes trois valeurs que le CTA
+   * du Héro). Réglage de section, et non de carte : dans une rangée, trois
+   * boutons d'aspects différents se liraient comme trois éléments de nature
+   * différente, alors qu'ils ont le même rôle.
+   */
+  ctaStyle: HeroCtaStyle;
+  /**
+   * Affichage des boutons de **toute la section** (défaut : affichés).
+   *
+   * Deux raisons d'en faire un interrupteur de section plutôt qu'un champ vide
+   * par carte :
+   *   - une section sans bouton est un choix éditorial légitime (des cartes qui
+   *     présentent, sans renvoyer ailleurs) ;
+   *   - masquer ne **supprime pas** les libellés et destinations, qui restent
+   *     enregistrés : réactiver l'interrupteur les fait réapparaître tels quels.
+   *     C'est un réglage d'affichage, pas un effacement de données.
+   */
+  ctaShow: boolean;
+  /** Effets de survol, portés par la photo. */
+  hover: CardsHoverEffects;
+}
+
+/**
+ * Socle commun aux quatre variantes de cards.
+ *
+ * L'en-tête de section, la mise en page et l'apparence ne dépendent pas de la
+ * nature du corps des cartes : ils sont donc décrits une seule fois, et chaque
+ * variante n'ajoute que ce qui lui est propre (le cadrage, ou le corps riche).
+ */
+interface CardsContentBase {
+  type: "cards";
+  /** Titre de la section — rendu en `<h2>`. */
+  heading: string;
+  /** Sous-titre affiché sous le titre. */
+  subtitle: string;
+  /** Paragraphe d'introduction (sauts de ligne préservés). */
+  intro: string;
+  layout: CardsLayoutSettings;
+  style: CardsStyleSettings;
+}
+
+/** Contenu Cards des trois formats **photo** — le cadrage EST la variante. */
+export interface CardsPhotoContent extends CardsContentBase {
+  variant: CardsPhotoFormat;
+  /**
+   * Les cartes, dans l'ordre d'affichage. Aucun plafond : au-delà du nombre de
+   * colonnes, la ligne suivante se forme d'elle-même.
+   */
+  cards: CardItem[];
+}
+
+/** Contenu Cards **éditorial** — le cadrage vit dans `layout.editorialFormat`. */
+export interface CardsEditorialContent extends CardsContentBase {
+  variant: "editorial";
+  /** Idem : aucun plafond de nombre, seule la grille est bornée. */
+  cards: EditorialCardItem[];
+}
+
+/**
+ * Contenu du module `cards`, toutes variantes confondues.
+ * Union discriminée par `variant` : un `cards[0].title` sur une section
+ * éditoriale ne compile pas, ce qui est exactement la garantie recherchée.
+ */
+export type CardsContent = CardsPhotoContent | CardsEditorialContent;
+
+/** Effets de survol par défaut : sobres (un site publié ne scintille pas tout seul). */
+export const DEFAULT_CARDS_HOVER_EFFECTS: CardsHoverEffects = {
+  zoom: 104,
+  shine: false,
+  saturate: false,
+  glow: false,
+};
+
+/** Mise en page par défaut : 3 colonnes, en-tête centré, paysage en 3:2. */
+export const DEFAULT_CARDS_LAYOUT: CardsLayoutSettings = {
+  columns: 3,
+  align: "center",
+  landscapeRatio: DEFAULT_CARDS_LANDSCAPE_RATIO,
+  editorialFormat: DEFAULT_CARDS_PHOTO_FORMAT,
+};
+
+/**
+ * Apparence par défaut : mêmes valeurs de départ que les vignettes de galerie,
+ * plus les deux réglages du bloc de texte, qui reprennent **exactement** le
+ * gabarit d'origine (arrondi 2 px, filet 2 px).
+ */
+export const DEFAULT_CARDS_STYLE: CardsStyleSettings = {
+  radius: 12,
+  shadow: "normal",
+  border: { enabled: false, width: 1, color: "#EAE5E5" },
+  bodyRadius: 2,
+  bodyBorderWidth: 2,
+  ctaStyle: "primary",
+  ctaShow: true,
+  hover: { ...DEFAULT_CARDS_HOVER_EFFECTS },
+};
+
+/** Ordre d'affichage des nombres de colonnes (éditeur). */
+export const cardsColumnOrder: CardsColumns[] = [2, 3, 4, 5, 6];
+
+/** Libellés français des nombres de colonnes. */
+export const cardsColumnLabels: Record<CardsColumns, string> = {
+  2: "2 par ligne",
+  3: "3 par ligne",
+  4: "4 par ligne",
+  5: "5 par ligne",
+  6: "6 par ligne",
+};
+
+/** Ordre d'affichage des alignements d'en-tête (éditeur). */
+export const cardsAlignOrder: CardsAlign[] = ["center", "left"];
+
+/** Libellés français des alignements d'en-tête. */
+export const cardsAlignLabels: Record<CardsAlign, string> = {
+  center: "Centré",
+  left: "Aligné à gauche",
+};
+
+/**
+ * Dimensions des visuels de démonstration, par **cadrage**.
+ * Un carré ne se montre pas avec une photo 4:5 : la démonstration doit illustrer
+ * le cadrage choisi, sinon on juge un format que le module ne produira jamais.
+ */
+const CARDS_DEMO_MEDIA: Record<
+  CardsPhotoFormat,
+  { width: number; height: number }
+> = {
+  portrait: { width: 800, height: 1000 },
+  square: { width: 900, height: 900 },
+  landscape: { width: 1200, height: 800 },
+};
+
+/** Fabrique une carte d'exemple (placeholders picsum, seed stable, bon ratio). */
+export function createCardItem(
+  demoIndex = 0,
+  photoFormat: CardsPhotoFormat = DEFAULT_CARDS_PHOTO_FORMAT
+): CardItem {
+  const demo = CARDS_DEMO[demoIndex] ?? CARDS_DEMO[0];
+  const size = CARDS_DEMO_MEDIA[photoFormat];
+  return {
+    id: crypto.randomUUID(),
+    media: {
+      url: `https://picsum.photos/seed/${demo.seed}-${photoFormat}/${size.width}/${size.height}`,
+      alt: `${demo.title} — visuel de la carte`,
+    },
+    title: demo.title,
+    text: demo.text,
+    // Le style du bouton n'est pas porté par la carte : il se règle pour la
+    // section entière (`style.ctaStyle`).
+    cta: { label: demo.ctaLabel, href: demo.href },
+  };
+}
+
+/**
+ * Textes des cartes d'exemple (seeds picsum stables, aucun document partagé).
+ *
+ * `bullets` et `steps` n'alimentent que les cartes **éditoriales** (étape 13.3) :
+ * le corps d'exemple doit montrer les deux natures de liste que la barre d'outils
+ * propose, sans quoi la démonstration ne prouverait rien.
+ */
+const CARDS_DEMO = [
+  {
+    seed: "cards-mariage",
+    title: "Mariage",
+    text: "Des images sincères, de la préparation à la soirée, pour raconter votre journée telle qu’elle s’est vécue.",
+    ctaLabel: "Voir les mariages",
+    href: "/portfolio",
+    bullets: [
+      "Préparatifs, cérémonie et soirée couverts",
+      "Galerie privée livrée en ligne",
+    ],
+    steps: [
+      "Rendez-vous pour parler de votre journée",
+      "Reportage le jour J",
+      "Sélection et retouches des images",
+    ],
+  },
+  {
+    seed: "cards-portrait",
+    title: "Portrait",
+    text: "Une séance en extérieur ou en studio, pour un portrait qui vous ressemble — seul, en couple ou en famille.",
+    ctaLabel: "Voir les portraits",
+    href: "/prestations",
+    bullets: [
+      "Extérieur ou studio, au choix",
+      "Conseils de tenue avant la séance",
+    ],
+    steps: [
+      "Échange sur le style recherché",
+      "Séance d’une heure environ",
+      "Livraison des images retouchées",
+    ],
+  },
+  {
+    seed: "cards-entreprise",
+    title: "Entreprise",
+    text: "Portraits d’équipe, reportages et images de marque, pensés pour vos supports de communication.",
+    ctaLabel: "Découvrir l’accompagnement",
+    href: "/a-propos",
+    bullets: [
+      "Sur site ou dans vos locaux",
+      "Cession de droits adaptée à vos supports",
+    ],
+    steps: [
+      "Cadrage du besoin avec vos équipes",
+      "Prise de vue sur une ou deux journées",
+      "Banque d’images prête à publier",
+    ],
+  },
+] as const;
+
+/** Bloc de liste d'exemple (à puces ou numérotée) : une liste de paragraphes. */
+function editorialList(
+  kind: "bulletList" | "orderedList",
+  items: readonly string[]
+): RichTextNode {
+  return {
+    type: kind,
+    content: items.map((item) => ({
+      type: "listItem",
+      content: [{ type: "paragraph", content: [{ type: "text", text: item }] }],
+    })),
+  };
+}
+
+/**
+ * Corps d'exemple d'une carte éditoriale : sous-titre H3, paragraphe, liste à
+ * puces et liste numérotée.
+ *
+ * Un **document neuf** est construit à chaque appel (aucun objet partagé entre
+ * deux cartes) : c'est ce qui garantit qu'éditer une carte, ou la dupliquer, ne
+ * modifie jamais le corps d'une autre.
+ */
+function createEditorialBody(
+  demo: (typeof CARDS_DEMO)[number]
+): RichTextDoc {
+  return {
+    type: "doc",
+    content: [
+      {
+        type: "heading",
+        attrs: { level: 3 },
+        content: [{ type: "text", text: demo.title }],
+      },
+      {
+        type: "paragraph",
+        content: [{ type: "text", text: demo.text }],
+      },
+      editorialList("bulletList", demo.bullets),
+      editorialList("orderedList", demo.steps),
+    ],
+  };
+}
+
+/**
+ * Fabrique une carte **éditoriale** d'exemple (photo + corps riche + bouton).
+ * Le cadrage de la photo suit `layout.editorialFormat`, comme au rendu.
+ */
+export function createEditorialCardItem(
+  demoIndex = 0,
+  photoFormat: CardsPhotoFormat = DEFAULT_CARDS_PHOTO_FORMAT
+): EditorialCardItem {
+  const demo = CARDS_DEMO[demoIndex] ?? CARDS_DEMO[0];
+  const size = CARDS_DEMO_MEDIA[photoFormat];
+  return {
+    id: crypto.randomUUID(),
+    media: {
+      url: `https://picsum.photos/seed/${demo.seed}-${photoFormat}/${size.width}/${size.height}`,
+      alt: `${demo.title} — visuel de la carte`,
+    },
+    body: createEditorialBody(demo),
+    cta: { label: demo.ctaLabel, href: demo.href },
+  };
+}
+
+/**
+ * Fabrique un contenu Cards complet (3 cartes d'exemple) pour une variante.
+ *
+ * Le cadrage décide du ratio des visuels **et** du nombre de colonnes : le
+ * paysage, qui n'en accepte que deux, produit donc un contenu déjà conforme à
+ * ce que la grille appliquera. La variante `editorial` suit la même règle, mais
+ * construit ses cartes avec un **corps riche** au lieu d'un titre et d'un texte.
+ */
+export function createCardsContent(
+  variant: CardsVariant = DEFAULT_CARDS_VARIANT
+): CardsContent {
+  const photoFormat = cardsPhotoFormat(variant, DEFAULT_CARDS_PHOTO_FORMAT);
+  const layout: CardsLayoutSettings = {
+    ...DEFAULT_CARDS_LAYOUT,
+    columns: cardsColumnsFor(
+      variant,
+      photoFormat,
+      DEFAULT_CARDS_LAYOUT.columns
+    ),
+  };
+  const style: CardsStyleSettings = {
+    ...DEFAULT_CARDS_STYLE,
+    border: { ...DEFAULT_CARDS_STYLE.border },
+    hover: { ...DEFAULT_CARDS_STYLE.hover },
+  };
+  const heading = "Mes univers";
+  const subtitle = "Trois façons de travailler ensemble";
+  const intro =
+    "Chaque projet commence par une rencontre. Voici les trois terrains sur lesquels je vous accompagne le plus souvent.";
+
+  if (variant === "editorial") {
+    return {
+      type: "cards",
+      variant: "editorial",
+      heading,
+      subtitle,
+      intro,
+      layout,
+      style,
+      cards: CARDS_DEMO.map((_, index) =>
+        createEditorialCardItem(index, photoFormat)
+      ),
+    };
+  }
+  return {
+    type: "cards",
+    variant,
+    heading,
+    subtitle,
+    intro,
+    layout,
+    style,
+    cards: CARDS_DEMO.map((_, index) => createCardItem(index, photoFormat)),
+  };
+}
+
+/** Garde : nombre de colonnes valide (2 à 6, le maximum d'`editorial`). */
+function isCardsColumns(value: unknown): value is CardsColumns {
+  return (
+    value === 2 || value === 3 || value === 4 || value === 5 || value === 6
+  );
+}
+
+/**
+ * Garde : niveau d'ombre valide.
+ * Les niveaux sont ceux de la galerie — la carte en réutilise l'échelle, il n'y
+ * a donc pas de seconde liste à tenir à jour.
+ */
+function isGalleryShadowLevel(value: unknown): value is GalleryShadowLevel {
+  return (
+    value === "none" ||
+    value === "light" ||
+    value === "medium" ||
+    value === "normal" ||
+    value === "strong"
+  );
+}
+
+/**
+ * Résout une carte stockée (JSONB) vers une carte complète.
+ *
+ * **Ne ressuscite jamais un texte de démonstration** : un champ vidé par
+ * l'utilisateur doit rester vide. La tolérance porte sur la *forme* (champ
+ * absent, mauvais type), jamais sur le *contenu*.
+ */
+function resolveCardItem(
+  raw: unknown,
+  photoFormat: CardsPhotoFormat = DEFAULT_CARDS_PHOTO_FORMAT
+): CardItem {
+  if (!isRecord(raw)) {
+    return createCardItem(0, photoFormat);
+  }
+  const ctaRaw = isRecord(raw.cta) ? raw.cta : {};
+  return {
+    id: readString(raw.id, crypto.randomUUID()),
+    media: readArtSource(raw, "media", { url: "", alt: "" }),
+    title: readString(raw.title, ""),
+    text: readString(raw.text, ""),
+    cta: resolveCardCta(ctaRaw),
+  };
+}
+
+/** Lit le bouton d'une carte (commun aux deux formes de carte). */
+function resolveCardCta(ctaRaw: Record<string, unknown>): CardCta {
+  return {
+    label: readString(ctaRaw.label, ""),
+    href: readString(ctaRaw.href, ""),
+    // `ctaRaw.style` (contenus de 13.1) n'est plus lu : le style est devenu un
+    // réglage de section. Le champ reste dans le JSONB sans être interprété —
+    // aucune migration, et le rendu est identique puisque tous les boutons
+    // enregistrés étaient en `primary`.
+  };
+}
+
+/**
+ * Lit un corps de carte éditoriale stocké.
+ *
+ * Un corps absent ou mal formé rend un document **vide sans paragraphe**
+ * (`content: []`) et non le document à un paragraphe vide de
+ * `createEmptyRichTextDoc()` : un paragraphe vide produirait un `<p><br></p>` de
+ * hauteur résiduelle dans une carte qui n'a rien à dire. `RichTextRenderer`
+ * n'émet rien pour un document sans nœuds — c'est exactement le comportement
+ * voulu ici.
+ */
+function resolveEditorialBody(raw: unknown): RichTextDoc {
+  if (isRecord(raw) && raw.type === "doc" && isUnknownArray(raw.content)) {
+    const nodes: RichTextNode[] = [];
+    for (const node of raw.content) {
+      if (isRecord(node)) {
+        nodes.push(node);
+      }
+    }
+    return { type: "doc", content: nodes };
+  }
+  return { type: "doc", content: [] };
+}
+
+/**
+ * Résout une carte éditoriale stockée : photo, corps riche, bouton.
+ *
+ * Comme pour les cartes photo, **aucun texte de démonstration n'est
+ * ressuscité** : un corps vidé reste vide.
+ */
+function resolveEditorialCardItem(raw: unknown): EditorialCardItem {
+  if (!isRecord(raw)) {
+    return createEditorialCardItem();
+  }
+  const ctaRaw = isRecord(raw.cta) ? raw.cta : {};
+  return {
+    id: readString(raw.id, crypto.randomUUID()),
+    media: readArtSource(raw, "media", { url: "", alt: "" }),
+    body: resolveEditorialBody(raw.body),
+    cta: resolveCardCta(ctaRaw),
+  };
+}
+
+/** Normalise les effets de survol d'une carte (repli champ par champ). */
+function resolveCardsHoverEffects(raw: unknown): CardsHoverEffects {
+  const record = isRecord(raw) ? raw : {};
+  const defaults = DEFAULT_CARDS_HOVER_EFFECTS;
+  return {
+    zoom: readBoundedNumber(record.zoom, defaults.zoom, 100, 118),
+    shine: typeof record.shine === "boolean" ? record.shine : defaults.shine,
+    saturate:
+      typeof record.saturate === "boolean"
+        ? record.saturate
+        : defaults.saturate,
+    glow: typeof record.glow === "boolean" ? record.glow : defaults.glow,
+  };
+}
+
+/**
+ * Résout un contenu Cards stocké (JSONB) vers un contenu complet.
+ *
+ * Aucune donnée héritée ne peut produire d'exception : un contenu tronqué,
+ * d'un ancien format ou même un `null` rend un objet lisible — le rendu décide
+ * ensuite de ne rien afficher s'il n'y a rien à afficher.
+ *
+ * Normalisations à connaître :
+ *   - **le format** : `"classic"` (contenus de l'étape 13.1) devient
+ *     `"portrait"`, et toute valeur inconnue retombe sur le format par défaut ;
+ *   - **le cadrage** : les trois formats photo le portent dans `variant`,
+ *     `editorial` dans `layout.editorialFormat` — `cardsPhotoFormat()` réunit
+ *     les deux, et tout le reste du résolveur raisonne sur le cadrage ;
+ *   - **les colonnes** : le paysage n'en accepte que deux, et les formats photo
+ *     plafonnent à quatre, quelle que soit la valeur stockée — la contrainte est
+ *     appliquée ici, pas seulement dans l'éditeur, pour qu'un contenu écrit
+ *     avant le changement de variante reste cohérent ;
+ *   - **les réglages du bloc de texte** (arrondi, épaisseur du filet), absents
+ *     des contenus de 13.1, prennent leurs valeurs de gabarit (2 px / 2 px)
+ *     sans migration de données ;
+ *   - **`ctaShow` et `editorialFormat`** sont apparus en 13.3 : absents des
+ *     contenus antérieurs, ils prennent leurs défauts (boutons affichés, photo
+ *     portrait) — champs **optionnels** dans le schéma Zod, donc aucun contenu
+ *     existant n'est invalidé (même technique que `hoverEffects` en 11.23).
+ */
+export function resolveCardsContent(raw: unknown): CardsContent {
+  if (!isRecord(raw)) {
+    return createCardsContent();
+  }
+  const layoutRaw = isRecord(raw.layout) ? raw.layout : {};
+  const styleRaw = isRecord(raw.style) ? raw.style : {};
+  const cardsRaw = Array.isArray(raw.cards) ? raw.cards : [];
+  const variant = readCardsVariant(raw.variant);
+  const editorialFormat = isCardsPhotoFormat(layoutRaw.editorialFormat)
+    ? layoutRaw.editorialFormat
+    : DEFAULT_CARDS_LAYOUT.editorialFormat;
+  const photoFormat = cardsPhotoFormat(variant, editorialFormat);
+
+  const heading = readString(raw.heading, "");
+  const subtitle = readString(raw.subtitle, "");
+  const intro = readString(raw.intro, "");
+  const layout: CardsLayoutSettings = {
+    columns: cardsColumnsFor(
+      variant,
+      photoFormat,
+      isCardsColumns(layoutRaw.columns)
+        ? layoutRaw.columns
+        : DEFAULT_CARDS_LAYOUT.columns
+    ),
+    align: layoutRaw.align === "left" ? "left" : DEFAULT_CARDS_LAYOUT.align,
+    landscapeRatio: isCardsLandscapeRatio(layoutRaw.landscapeRatio)
+      ? layoutRaw.landscapeRatio
+      : DEFAULT_CARDS_LAYOUT.landscapeRatio,
+    editorialFormat,
+  };
+  const style: CardsStyleSettings = {
+    radius: readBoundedNumber(styleRaw.radius, DEFAULT_CARDS_STYLE.radius, 0, 40),
+    shadow: isGalleryShadowLevel(styleRaw.shadow)
+      ? styleRaw.shadow
+      : DEFAULT_CARDS_STYLE.shadow,
+    border: resolveGalleryBorder(styleRaw.border),
+    bodyRadius: readBoundedNumber(
+      styleRaw.bodyRadius,
+      DEFAULT_CARDS_STYLE.bodyRadius,
+      0,
+      200
+    ),
+    bodyBorderWidth: readBoundedNumber(
+      styleRaw.bodyBorderWidth,
+      DEFAULT_CARDS_STYLE.bodyBorderWidth,
+      1,
+      24
+    ),
+    ctaStyle: isHeroCtaStyle(styleRaw.ctaStyle)
+      ? styleRaw.ctaStyle
+      : DEFAULT_CARDS_STYLE.ctaStyle,
+    // Un contenu antérieur à 13.3 n'a pas la clé : les boutons restaient
+    // affichés, le défaut préserve exactement le rendu existant.
+    ctaShow:
+      typeof styleRaw.ctaShow === "boolean"
+        ? styleRaw.ctaShow
+        : DEFAULT_CARDS_STYLE.ctaShow,
+    hover: resolveCardsHoverEffects(styleRaw.hover),
+  };
+
+  if (variant === "editorial") {
+    return {
+      type: "cards",
+      variant: "editorial",
+      heading,
+      subtitle,
+      intro,
+      layout,
+      style,
+      cards: cardsRaw.map((card) => resolveEditorialCardItem(card)),
+    };
+  }
+  return {
+    type: "cards",
+    variant,
+    heading,
+    subtitle,
+    intro,
+    layout,
+    style,
+    cards: cardsRaw.map((card) => resolveCardItem(card, photoFormat)),
+  };
+}
+
+/**
+ * Images non vides portées par la section — sert à la collecte des images d'une
+ * page (métadonnées EXIF) et à l'image de partage OpenGraph : une page peut
+ * n'être faite que de cartes, leurs photos comptent donc autant que les autres.
+ */
+export function cardsImageSources(content: CardsContent): ArtSource[] {
+  // Vue commune aux deux formes de carte : seule la photo compte ici.
+  const cards: ReadonlyArray<{ media: ArtSource }> = content.cards;
+  return cards.map((card) => card.media).filter((source) => source.url !== "");
+}
+
 /**
  * Module de page — mappe 1:1 vers la future table `page_modules`
  * (la position dans le tableau = ordre vertical = colonne `position` ;
@@ -3713,6 +4707,46 @@ export const moduleCatalog: ModuleCatalogEntry[] = [
     description: "Présentez le photographe avec une photo et un texte.",
   },
   {
+    id: "cards",
+    type: "cards",
+    variant: "portrait",
+    label: "Cards — portrait",
+    category: "Présentation",
+    description:
+      "Cartes à photos verticales (4:5), de 2 à 4 par ligne. Seul le bouton est cliquable.",
+  },
+  {
+    id: "cards-square",
+    type: "cards",
+    variant: "square",
+    label: "Cards — carré",
+    category: "Présentation",
+    description:
+      "Cartes à photos carrées (1:1), de 2 à 4 par ligne : portraits serrés, détails, objets.",
+  },
+  {
+    id: "cards-landscape",
+    type: "cards",
+    variant: "landscape",
+    label: "Cards — paysage",
+    category: "Présentation",
+    description:
+      "Cartes à photos horizontales, 2 par ligne, en 3:2, 4:3 ou 16:9. Chaque image garde de la présence.",
+  },
+  {
+    // Étape 13.3 — la seule entrée par laquelle on entre dans la variante
+    // `editorial`. Elle n'est pas proposée dans le sélecteur de format de
+    // l'éditeur : changer de variante détruirait les corps de texte riche, un
+    // réglage destructif n'a donc rien à faire dans une liste déroulante.
+    id: "cards-editorial",
+    type: "cards",
+    variant: "editorial",
+    label: "Cards — texte structuré",
+    category: "Présentation",
+    description:
+      "Cartes dont le corps est un texte mis en forme (sous-titres, listes, gras, liens), de 2 à 6 par ligne.",
+  },
+  {
     id: "content-columns",
     type: "content",
     variant: "columns",
@@ -3782,7 +4816,7 @@ export const moduleCatalog: ModuleCatalogEntry[] = [
 /**
  * Crée un contenu par défaut **riche** pour un type de module donné (Étape 3.4).
  * Retourne une **nouvelle instance** à chaque appel (aucune référence partagée).
- * `switch` exhaustif sur les 7 familles (le TS interdit toute branche manquante).
+ * `switch` exhaustif sur les familles (le TS interdit toute branche manquante).
  *
  * Rubrique Héro (7.1) : la famille `hero` produit ici sa variante `static`
  * (seule implémentée) ; les futures variantes étendront ce point sans modifier
@@ -3839,6 +4873,12 @@ export function createModuleContent(
     case "cta-banner":
       // Étape 11.27 — défaut demandé : parallaxe, hauteur standard, CTA activé.
       return createCtaBannerContent();
+    case "cards":
+      // Étape 13.2 — trois formats (portrait / carré / paysage) : la fabrique
+      // pose le ratio des visuels d'exemple et le nombre de colonnes du format.
+      return createCardsContent(
+        isCardsVariant(variant) ? variant : DEFAULT_CARDS_VARIANT
+      );
     case "gallery":
       return {
         type: "gallery",

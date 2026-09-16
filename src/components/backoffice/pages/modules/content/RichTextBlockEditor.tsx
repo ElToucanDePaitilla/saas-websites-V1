@@ -9,6 +9,7 @@ import { EDITOR_TYPE } from "../editor-type";
 import {
   createRichTextExtensions,
   RICH_TEXT_CONTENT_CLASS,
+  type RichTextStyleValue,
 } from "./rich-text-config";
 import { RichTextToolbar } from "./RichTextToolbar";
 
@@ -78,12 +79,22 @@ type RichTextBlockEditorProps = {
   onChange: (doc: RichTextDoc) => void;
   /** Nom accessible de la zone d'édition (ex. « Colonne 2 — texte »). */
   label: string;
+  /**
+   * Styles de bloc à offrir dans la barre d'outils (défaut : tous).
+   *
+   * Sert à **retirer** un niveau là où il n'a pas de sens — dans une carte, le
+   * « Titre » (H2) est celui de la section, pas celui de la carte (13.3). Le
+   * filtre ne change que ce que la barre propose : un document qui en contient
+   * déjà un reste lisible et éditable (`RichTextRenderer` le rend).
+   */
+  allowedStyles?: RichTextStyleValue[];
 };
 
 export function RichTextBlockEditor({
   doc,
   onChange,
   label,
+  allowedStyles,
 }: RichTextBlockEditorProps) {
   /**
    * `onChange` le plus récent, lu depuis les phases différées (minuterie,
@@ -184,7 +195,7 @@ export function RichTextBlockEditor({
 
   return (
     <div className="grid gap-2">
-      <RichTextToolbar editor={editor} />
+      <RichTextToolbar editor={editor} allowedStyles={allowedStyles} />
       <div className="rich-content-surface">
         <EditorContent editor={editor} />
       </div>

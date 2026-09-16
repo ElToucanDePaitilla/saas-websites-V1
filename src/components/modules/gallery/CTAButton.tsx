@@ -25,9 +25,15 @@ import type { GalleryCtaSettings } from "@/lib/pages";
 type CTAButtonProps = {
   cta: GalleryCtaSettings;
   className?: string;
+  /**
+   * Taille du bouton. `lg` (défaut) est la taille du CTA de pied de galerie ou
+   * de Héro ; la carte (Étape 13.1) demande un bouton plus discret, `sm`, sans
+   * qu'il faille réécrire ici la discrimination des destinations.
+   */
+  size?: "sm" | "default" | "lg";
 };
 
-export function CTAButton({ cta, className }: CTAButtonProps) {
+export function CTAButton({ cta, className, size = "lg" }: CTAButtonProps) {
   const label = cta.label.trim();
   const href = cta.href.trim();
   if (!cta.show || label === "" || href === "") {
@@ -45,7 +51,7 @@ export function CTAButton({ cta, className }: CTAButtonProps) {
 
   return (
     <div className={className}>
-      <Button asChild size="lg" variant={variant}>
+      <Button asChild size={size} variant={variant}>
         {isAbsoluteUrl ? (
           <a href={href} target="_blank" rel="noopener noreferrer">
             {label}

@@ -7,6 +7,7 @@ import type {
 } from "@/lib/pages";
 
 import { ModuleAboutEditor } from "./ModuleAboutEditor";
+import { ModuleCardsEditor } from "./ModuleCardsEditor";
 import { ModuleContactEditor } from "./ModuleContactEditor";
 import { ModuleCtaBannerEditor } from "./ModuleCtaBannerEditor";
 import { ModuleFaqEditor } from "./ModuleFaqEditor";
@@ -25,7 +26,7 @@ import { ModuleServicesEditor } from "./ModuleServicesEditor";
  * ----------------------------------------------------------------------------
  * Sélectionne le formulaire de contenu adapté à la famille du module. Le
  * `switch` discrime directement sur `content.type` (union discriminé) : chaque
- * branche narrow l'objet et le TS garantit la couverture des 7 familles.
+ * branche narrow l'objet et le TS garantit la couverture des familles.
  * Centralise la correspondance `PageModuleType` ↔ éditeur (comme `ModuleIcon`
  * pour les icônes) et évite tout import UI dans `src/lib/pages.ts`.
  *
@@ -119,6 +120,11 @@ export function ModuleContentEditor({
           content={content}
           onChangeContent={onChangeContent}
         />
+      );
+    case "cards":
+      // Étape 13.1 — famille sans variante : le routeur n'a rien à discriminer.
+      return (
+        <ModuleCardsEditor content={content} onChangeContent={onChangeContent} />
       );
   }
 }

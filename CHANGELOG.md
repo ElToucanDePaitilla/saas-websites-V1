@@ -11,6 +11,204 @@ NOTICE D'UTILISATION DU FICHIER CHANGELOG.MD
 
 ---
 
+## 2026-09-15 – 18:20 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Étape 13.3 — Cards « texte structuré » (variante `editorial`) : 4ᵉ variante, corps en texte riche, 2 à 6 colonnes, interrupteur de boutons.**
+- **Quatrième variante de `cards`, aucune migration** : le contenu vit dans le JSONB, `module_type` reste `cards` et l'énumération Postgres n'est pas touchée. La variante s'ajoute comme branche de l'union discriminée existante (portrait / square / landscape / editorial) au lieu d'ouvrir une famille — 4 points d'intégration au lieu de 13.
+- **Deux axes enfin séparés : variante et cadrage photo.** `CardsPhotoFormat` (portrait / square / landscape) est le format ; `CardsVariant = CardsPhotoFormat | "editorial"` est la nature de la section. `cardsPhotoFormat(variant, editorialFormat)` devient la fonction pivot : les trois formats historiques portent leur cadrage dans leur variante, `editorial` dans `layout.editorialFormat`. `cardsMediaRatio` / `cardsEditorRatio` prennent désormais un **cadrage**, et `cardsColumnsFor` / `cardsColumnsLocked` / `cardsColumnOptions` raisonnent sur lui.
+- **`editorial` est inatteignable depuis le sélecteur de format de l'éditeur** (exigence de correction, pas de cosmétique) : le sélecteur ne propose que les trois cadrages via `cardsPhotoFormatOrder` et, sur une section éditoriale, n'écrit que `layout.editorialFormat` — la variante ne change donc jamais et les corps riches ne peuvent pas être détruits. La variante s'obtient par l'entrée de catalogue `cards-editorial`, comme un Hero Slider ne devient pas un Hero Vidéo.
+- **Corps de carte = un seul document riche** : `EditorialCardItem = { id, media, body: RichTextDoc, cta }`, ni titre ni texte séparés. Le libellé d'accordéon et l'`alt` de repli de la photo se **déduisent** du document (`richTextDocToPlainText`, tronqué sur un mot entier) — sans quoi toutes les cartes sans `alt` porteraient le même libellé générique. Le rendu passe par `RichTextRenderer` (liste blanche, jamais de `dangerouslySetInnerHTML`).
+- **Barre d'outils bornée dans une carte** : `RichTextBlockEditor` / `RichTextToolbar` gagnent une prop **optionnelle** `allowedStyles` (défaut : toutes, le module « Contenu en colonnes » ne change pas d'un pixel). Dans une carte : Texte normal / Sous-titre (H3) / Petit titre (H4) — le **H2 est retiré**, la carte vit dans une section dont l'en-tête le porte déjà. La lecture reste tolérante : un H2 écrit à la main est toujours rendu et la liste déroulante retombe sur « Texte normal » au lieu de s'afficher vide.
+- **2 à 6 cartes par ligne** : `CARDS_COLUMN_COUNTS` passe à `[2,3,4,5,6]`, mais les trois formats photo restent **plafonnés à 4** (au-delà, une photo 4:5 dans moins de 200 px n'est plus une photo) ; seul `editorial` monte à 6. La grille n'atteint 5 et 6 qu'en `xl` (`lg:grid-cols-4 xl:grid-cols-5|6`).
+- **`sizes` de la photo en trois paliers** et non deux : `(min-width: 1280px) 100/colonnes vw, (min-width: 1024px) 100/min(colonnes,4) vw, (min-width: 640px) 50vw, 100vw`. La grille plafonnant à 4 colonnes en `lg`, ce palier vaut `min(colonnes, 4)` : un `sizes` fixe à 25vw sous-dimensionnerait les images des sections à 2 et 3 colonnes, et un `sizes` en deux paliers les sous-dimensionnerait à 5 et 6.
+- **Boutons de section activables/désactivables** : `style.ctaShow` (défaut **affiché**, donc rendu inchangé pour tous les contenus existants). Le sélecteur de style n'est proposé que si l'affichage est actif — un réglage sans objet est un piège. Masquer **n'efface rien** : libellés et destinations restent enregistrés, réactiver les restitue (même précédent que `cta.style` ignoré en 13.2.b : un réglage d'affichage n'est pas un effacement de données).
+- **Une seule instance Tiptap à la fois** : seule la carte dépliée monte son éditeur, six cartes coûtent donc un éditeur. Le `flush` au démontage (déjà en place en 12.1) fait que replier une carte après une frappe ne perd rien.
+- **Aucune reprise de données** : `editorialFormat` et `ctaShow` sont **optionnels** dans le schéma Zod et complétés par le résolveur (`resolveCardsContent` reste total : corps absent → `{ type: "doc", content: [] }`, jamais de texte de démonstration ressuscité). Le schéma gagne la branche `editorial` (avec un miroir minimal de `RichTextDoc`) et des colonnes 5 et 6.
+- **SEO de partage** : `publicDescription` lit désormais, pour une page ne contenant que des cartes éditoriales, le texte brut du premier corps non vide — sans quoi une telle page n'aurait aucune description.
+
+### Écarts assumés au plan (et pourquoi)
+- **`:is()` au lieu de `:where()`** dans les règles `.cards-card__rich` du plan : `:where()` ramène la spécificité de la sélection interne à zéro, donc `.cards-card__rich :where(h3)` (0,1,0) **perd** contre `.rich-content h3` (0,1,1) déclaré plus haut — les tailles de section resteraient appliquées. `:is(...)` prend la spécificité d'un élément (0,1,1), à égalité, et l'ordre du fichier tranche.
+- **`text-align: left` sur `.cards-card__rich`** : le pied de carte est centré (`text-align: center` du gabarit), mais des listes centrées détachent leurs puces de leur texte. Le bloc reste centré dans la carte ; c'est son contenu qui s'aligne à gauche.
+- **`sizes` du palier `lg` en `min(colonnes, 4)`** plutôt que 25vw fixe (voir ci-dessus).
+- **Démo à 6 colonnes sur la section éditoriale** : c'est le seul moyen de prouver le palier `xl` et le `sizes` multi-paliers en HTML, et le cas le plus étroit pour juger la lisibilité.
+
+### Mesures et vérifications
+- `npx tsc --noEmit` → **0** ; `npm run lint` → **0 erreur, 0 avertissement**.
+- `/demo` → **200**, **quatre** sections Cards (`cards-7` à `cards-10`), **3 cartes chacune** : `data-format` = `portrait` / `square` / `landscape` / `editorial` 3 fois par section ; ratios `4 / 5`, `1 / 1` et `3 / 2` posés 3 fois chacun.
+- **Section éditoriale** : 3 corps `rich-content cards-card__rich`, 3 `h3`, 3 `ul`, 3 `ol`, 15 `li` (2 puces + 3 étapes par carte), 3 boutons — et **un seul `h2`** (l'en-tête de section), donc aucun titre issu d'une carte.
+- **Interrupteur de boutons prouvé sur une autre section** : la section **carrée** ne contient **0 bouton** alors que portrait en compte 3 et que sa première ligne de contenu est identique — c'est bien un réglage d'affichage de section.
+- **Contrainte du paysage conservée** : la section paysage porte `lg:grid-cols-2` et **aucun `lg:grid-cols-4`**, alors que le contenu de démo est enregistré avec `columns: 4` exprès.
+- **5 et 6 colonnes uniquement demandées** : `xl:grid-cols-6` présent (section éditoriale, réglée à 6) et `xl:grid-cols-5` **absent**.
+- **Audit de titrage** : `h1` = 1 ; `h2` = 1 par section Cards (l'en-tête), aucun `h2` dans un corps de carte.
+- **`sizes` servi** : section éditoriale (6 colonnes) `(min-width: 1280px) 17vw, (min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw` ; section paysage (2 colonnes) `50vw` à tous les paliers.
+- **CSS compilé contrôlé** (chunk 135 519 caractères) : les quatre règles `.cards-card__rich` sont émises (`:is(h2, h3)`, `h4`, `:is(p, li)`, `:is(ul, ol)`) **après** `.content-header__h3, .rich-content h3, .module-h3 { font-size: var(--h3-size) }` (index 121 704 contre 126 928) — l'ordre qui fait gagner le rétrécissement de portée. `.rich-content` hors carte est inchangé.
+- **`/demo` n'est pas un test d'intégration complet** : il court-circuite `public-page.ts`. La lecture du corps éditorial par `publicDescription` **n'a donc pas été exercée par ces contrôles** — elle a été contrôlée par relecture du code (premier corps non vide, après introduction et sous-titre).
+- **Reste à confirmer dans le navigateur** (non mesurable en ligne de commande) : hauteurs de pieds égales avec des corps de longueurs différentes, boutons alignés en bas, texte riche lisible dans une carte à 6 colonnes, listes indentées, bascule de cadrage sans perte de texte, repli d'une carte juste après une frappe sans perte.
+
+### Fichiers créés ou modifiés
+- Créé : `src/components/modules/cards/EditorialCardItem.tsx`.
+- Modifiés : `src/lib/pages.ts` (`CardsPhotoFormat` / `CardsVariant`, `cardsPhotoFormat`, ratios et colonnes par cadrage, `editorialFormat` / `ctaShow`, `EditorialCardItem`, fabriques, résolveur, catalogue `cards-editorial`), `src/lib/schemas/persistence.ts` (branche `editorial`, `richTextDocSchema`, `editorialFormat` / `ctaShow` optionnels, colonnes 5-6), `src/components/modules/cards/CardsModule.tsx` (colonnes 5-6, aiguillage, `sizes`), `.../cards/CardItem.tsx` (cadrage + `ctaShow`, `cardImageSizes` exporté), `src/app/globals.css` (§ `.cards-card__rich`), `src/components/backoffice/pages/modules/content/RichTextBlockEditor.tsx` et `.../RichTextToolbar.tsx` (`allowedStyles`), `src/components/backoffice/pages/modules/ModuleCardsEditor.tsx`, `src/lib/public-page.ts`, `src/app/(front-office)/demo/page.tsx`.
+- BDD : **aucune migration** — `module_type` inchangé, `editorialFormat` et `ctaShow` facultatifs, aucun contenu existant invalidé.
+
+### Prochaine étape prévue
+Recette navigateur (hauteurs de pieds, lisibilité à 6 colonnes, listes, bascule de cadrage sans perte, repli après frappe), puis `npm run build` **serveur de développement arrêté**.
+
+---
+
+## 2026-09-15 – 15:00 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Étape 13.2.b — Cards : style de bouton commun à la section et libellé multiligne.**
+- **Le style du bouton devient un réglage de section.** Il était réglé carte par carte, ce qui pouvait donner trois boutons d'aspects différents dans une même rangée — trois éléments de même rôle lus comme trois natures différentes. `CardCta` se réduit donc à `{ label, href }`, et le style vit dans `style.ctaStyle` (défaut `primary`, mêmes trois valeurs que le CTA du Héro). **Libellé et destination restent carte par carte** : c'est leur contenu, et deux cartes ne mènent pas au même endroit.
+- **Aucune migration** : les contenus enregistrés portent encore un `cta.style` par carte, que le résolveur **cesse de lire** (champ surnuméraire inoffensif en JSONB) ; `style.ctaStyle`, absent des contenus antérieurs, est **optionnel** dans le schéma Zod et complété à la lecture. Tous les boutons déjà enregistrés étant en `primary`, le rendu ne change pas d'un pixel.
+- **Éditeur** : le sélecteur « Style » disparaît du sous-formulaire de chaque carte (qui garde photo, titre, texte, libellé, destination) et un sous-bloc **« Bouton des cartes »** apparaît dans « Disposition et apparence », avec la phrase de portée qui rappelle ce qui est commun et ce qui reste par carte.
+- **Retour à la ligne automatique du libellé** : le bouton du thème porte `whitespace-nowrap` et une hauteur fixe (`h-8`), qui couperaient un libellé long sur une carte étroite. Les deux sont neutralisés **uniquement dans les cartes** (`white-space: normal`, `height: auto` + `min-height: 2rem` pour qu'un libellé d'une ligne garde la hauteur du thème) — dans un héro ou une galerie, un libellé sur une seule ligne reste souhaitable.
+- **Marges symétriques, les deux demandées** : le **texte** dans le bouton (`padding: 0.5rem 1rem`, gauche = droite) et le **bouton** dans son bloc (`padding-inline: var(--cards-cta-inset, 0.25rem)`) — même quand un libellé long occupe toute la largeur disponible, il ne touche jamais les bords du bloc. Complété par `text-wrap: balance` (deux lignes de longueur comparable) et `overflow-wrap: anywhere` (garde-fou : aucun mot ne déborde).
+- **Interaction avec l'alignement bas** (13.2) : un libellé sur deux lignes rend le bouton plus haut, mais `margin-top: auto` continue de plaquer son **bas** sur celui des autres cartes de la ligne — l'espace excédentaire se loge au-dessus.
+
+### Mesures et vérifications
+- `npx tsc --noEmit` → **0** ; `npm run lint` → **0 erreur, 0 avertissement**.
+- `/demo` → **200**. **Le style commun est prouvé sur le rendu** : la section paysage, réglée en « contours », contient **3 cartes et exactement 3 boutons en style contours, 0 en style principal** — les trois changent donc ensemble. La démonstration porte aussi un **libellé long** (« Découvrir l'accompagnement des mariages et des portraits ») pour éprouver le retour à la ligne.
+- **CSS servi contrôlé** (chunk compilé) : `white-space: normal`, `text-wrap: balance`, `overflow-wrap: anywhere`, `height: auto`, `min-height: 2rem`, `padding: .5rem 1rem`, `line-height: 1.35` sur le bouton ; `padding-inline: var(--cards-cta-inset, .25rem)` sur son conteneur.
+- **Reste à confirmer dans le navigateur** : un libellé long se répartit sur deux lignes sans débordement, marges gauche/droite du texte identiques, bouton centré et détaché des bords du bloc, bas des boutons alignés dans une ligne.
+
+### Fichiers créés ou modifiés
+- Modifiés : `src/lib/pages.ts` (`CardCta` sans style, `style.ctaStyle`, fabriques et résolveur), `src/lib/schemas/persistence.ts` (`cardCtaSchema` sans style, `ctaStyle` optionnel), `src/app/globals.css` (§ MODULE « CARDS » : retour à la ligne, marges symétriques), `src/components/modules/cards/CardItem.tsx`, `.../CardsModule.tsx`, `src/components/backoffice/pages/modules/ModuleCardsEditor.tsx` (sous-bloc « Bouton des cartes »), `src/app/(front-office)/demo/page.tsx`, `plans/ROADMAP-13.2-cards-formats.md` (§8, amendement).
+- BDD : **aucune migration** — le style par carte est ignoré, le style de section est facultatif.
+
+### Prochaine étape prévue
+Recette navigateur (retour à la ligne du bouton, marges symétriques, bas des boutons alignés, trois formats), puis `npm run build` **serveur arrêté** — dernière étape de 13.x.
+
+---
+
+## 2026-09-15 – 12:55 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Étape 13.2 — Cards : pieds de carte alignés, bloc de texte réglable et trois formats.**
+- **Pieds de carte de hauteur uniforme** : l'article est l'item de la grille, il était donc déjà étiré à la hauteur de la ligne ; c'est le **bloc clair** qui ne suivait pas. Il passe en `flex: 1 1 auto` (`auto`, et non `0` : une base à zéro aurait compressé le texte) et en conteneur colonne.
+- **Bouton plaqué au bas du pied** : `margin-top: auto` sur le bouton — l'espace excédentaire se loge **entre le texte et le bouton**, jamais sous lui. Une ligne de cartes a donc ses boutons alignés sur le bas du pied le plus haut.
+- **Équilibre vertical** : `padding-block: var(--cards-inset)` (0,9375 rem), **une seule valeur** pour la marge au-dessus du titre et celle sous le bouton — deux valeurs séparées finiraient par diverger.
+- **Photo pleine** : `object-fit: cover` est désormais **structurel** (`.cards-card__frame :where(img)`), avec `width`/`height` à 100 %. La garantie ne dépend plus d'une classe utilitaire : elle vaut donc aussi pour le repli `<img>` natif des URL non optimisables, où le vide apparaissait.
+- **Le bloc de texte devient réglable** : arrondi (0 à 200 px, **défaut 2 px**) et épaisseur du filet (1 à 24 px, **défaut 2 px**). La **couleur** du filet reste l'accent du thème — elle suit donc le mode sombre sans réglage ; la plage démarre à 1 px, le filet est toujours présent.
+- **Trois formats au lieu d'un** : **portrait** (4:5, l'existant), **carré** (1:1) et **paysage** (3:2, 4:3 ou 16:9 au choix — défaut 3:2), ce dernier à **2 cartes par ligne**. Le format ne change que le ratio et la largeur de colonne : le chevauchement du bloc clair, signature du module, reste identique dans les trois cas.
+- **La contrainte du paysage est appliquée à la lecture et à l'écriture** (`cardsColumnsFor`) : un contenu réglé sur 4 puis passé en paysage revient à 2 tout seul. Le contrôle « Cartes par ligne » disparaît alors de l'éditeur — un réglage sans effet serait un piège.
+- **Aucune migration de données** : `variant: "classic"` (contenus de 13.1) est **traduit en `"portrait"` à la lecture** (même technique que « masonry » → « static », 11.1), et les trois nouveaux champs sont **optionnels** dans le schéma Zod (`bodyRadius`, `bodyBorderWidth`, `landscapeRatio`), complétés par le résolveur — la même méthode que `hoverEffects` (11.23) et `album.hidden` (11.20).
+
+### Mesures et vérifications
+- `npx tsc --noEmit` → **0** ; `npm run lint` → **0 erreur, 0 avertissement**.
+- `/demo` → **200**, avec **un module par format** : 3 sections de 3 cartes, `data-format` présent 3 fois par format, ratios `4 / 5`, `1 / 1` et `3 / 2` posés 3 fois chacun, **1 `h1`** et **9 `h3`** (un par carte).
+- **Normalisation du paysage prouvée sur le rendu** : la section paysage est enregistrée **exprès** avec `columns: 4` et le HTML ne contient **aucun `lg:grid-cols-4`**, seulement `lg:grid-cols-2`.
+- Le bloc du module paysage reçoit **18 px d'arrondi et 4 px de filet** : les deux réglages ajoutés se voient donc à l'œil nu dans la recette.
+- **CSS réellement servi contrôlé** (chunk compilé, 134 Ko) : `aspect-ratio: var(--cards-media-ratio, 4 / 5)`, `object-fit: cover` structurel, `flex: auto` (minification de `flex: 1 1 auto`), `margin-top: auto` sur le bouton, `border: var(--cards-body-border-width, 2px)` et `border-radius: var(--cards-body-radius, 2px)` — replis du gabarit inclus.
+- **Reste à confirmer dans le navigateur** (non mesurable en ligne de commande) : hauteurs de pieds égales dans une ligne, boutons alignés en bas, absence de vide dans les cadres, et rendu des trois formats.
+
+### Fichiers créés ou modifiés
+- Créé : [`plans/ROADMAP-13.2-cards-formats.md`](plans/ROADMAP-13.2-cards-formats.md).
+- Modifiés : `src/lib/pages.ts` (formats, ratios, colonnes contraintes, trois nouveaux réglages, résolveur, catalogue à trois entrées), `src/lib/schemas/persistence.ts` (union discriminée + champs optionnels), `src/app/globals.css` (§ MODULE « CARDS » : pied élastique, bouton en bas, marges symétriques, `object-fit`, arrondi et filet pilotés par variables), `src/components/modules/cards/CardItem.tsx`, `.../CardsModule.tsx`, `src/components/backoffice/pages/modules/ModuleCardsEditor.tsx`, `.../ArtSourceField.tsx` (ratios `1:1`, `3:2`), `src/app/(front-office)/demo/page.tsx`.
+- BDD : **aucune migration** — les nouveaux réglages sont facultatifs et l'ancien format est traduit à la lecture.
+
+### Prochaine étape prévue
+Recette navigateur des trois formats (hauteurs de pieds, boutons en bas, cadres pleins), puis `npm run build` **serveur de développement arrêté** — dernière étape restante de l'étape 13.
+
+---
+
+## 2026-09-15 – 11:45 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Étape 13.1 — Module « Cards » : cartes photo + titre + texte + bouton, de 2 à 4 par ligne.**
+- **Nouvelle famille `cards`** (variante unique `classic`), avec un gabarit figé : photo au ratio 4:5, puis un bloc clair qui **chevauche** son bas à 88 % de largeur. Le chevauchement est la **signature** du module — il ne se règle pas. Seuls rayon, ombre, bordure et effets de survol sont réglables, et ils s'appliquent au **cadre de la photo**, exactement comme les vignettes de galerie (mêmes fonctions de style, mêmes jetons).
+- **La carte n'est jamais cliquable — décision de conception assumée.** Seul le bouton porte une destination. Une carte entièrement cliquable aurait fait dépendre le clic de la zone la plus large de la page et interdit tout autre élément interactif à l'intérieur. Conséquence directe : l'**élévation au survol a été retirée** (elle promettait un clic qui n'existe pas), et les effets retenus portent sur la **photo** — zoom, brillance, saturation, liseré. `parallax` est également écarté (sans objet sur une vignette). Le focus du bouton déclenche les mêmes effets qu'un survol, pour qu'un parcours clavier ne soit pas « mort ».
+- **Réglages** : cartes par ligne (**2 / 3 / 4** — réglage imposé, pas de valeur libre), alignement de l'en-tête (centré / aligné à gauche), et en-tête à trois niveaux : titre `h2`, sous-titre, introduction. Texte de carte **simple, retours à la ligne conservés** (`white-space: pre-line`) — pas de texte riche : le module reste simple, conformément au cahier des charges révisé.
+- **Responsive** : réglage = grand écran ; tablette 2 colonnes, téléphone 1 colonne **quelle que soit la valeur choisie**. Typographie fluide (`clamp`) **plafonnée par les jetons du site** (`--h3-size`) — pas de seconde échelle de titres. Titres de cartes en `h3` (jamais `h2` : l'en-tête le porte), un seul `h1` par page.
+- **Les cinq points muets ont été traités explicitement** — ce sont ceux qui ne se signalent pas à la compilation (leçon de la famille « Contenu en colonnes ») : `moduleTypeEnum` (Postgres), `moduleTypeSchema` (Zod — l'oublier donne un **HTTP 400 à l'enregistrement**), `PageModuleRenderer` (l'oublier donne une **section invisible**), `ModuleContentEditor` (l'oublier donne un **éditeur vide**), `moduleCatalog`, plus `collectImageUrls` / `publicOgImage` / `publicDescription` (SEO d'une page faite uniquement de cartes). Les commentaires qui **comptaient** les familles (« 7 familles », déjà faux) ont été corrigés.
+
+### Mesures
+- Poids et vitesse : inchangés — les photos de cartes passent par `MediaImage` et le loader CDN existant (**0 requête `_next/image`**, transformation ≤ 2560 px).
+- Rendu réel de `/demo` (module Cards ajouté à la page de démonstration, qui ne dépend pas de la BDD) : **3 cartes** rendues, **1 `h1`**, **9 `h2`**, **3 `h3`** (les titres de cartes), variables de survol `--hv-zoom/--hv-filter` posées par carte, bordure de cadre `2px #EAE5E5`, rayon 12, `sizes` de photo `33vw` en 3 colonnes.
+- **Migration** : générée puis **appliquée après validation explicite** (voir ci-dessous) — l'énumération Postgres `module_type` accepte désormais `cards`.
+
+### Fichiers créés ou modifiés
+- Créés : [`src/lib/cards-effects.ts`](src/lib/cards-effects.ts) (survol → variables CSS), [`src/components/modules/cards/CardsModule.tsx`](src/components/modules/cards/CardsModule.tsx) et [`CardItem.tsx`](src/components/modules/cards/CardItem.tsx) (rendu public), [`src/components/backoffice/pages/modules/ModuleCardsEditor.tsx`](src/components/backoffice/pages/modules/ModuleCardsEditor.tsx) (éditeur en 3 zones), [`plans/ROADMAP-13.1-module-cards.md`](plans/ROADMAP-13.1-module-cards.md), migration [`drizzle/0007_slow_sabra.sql`](drizzle/0007_slow_sabra.sql).
+- Modifiés : `src/lib/pages.ts` (domaine complet : types, gardes, résolveur tolérant, fabriques, catalogue), `src/lib/schemas/persistence.ts`, `src/db/schema.ts`, `src/components/backoffice/pages/ModuleIcon.tsx` (`IdCard`), `.../modules/ModuleContentEditor.tsx`, `.../modules/ArtSourceField.tsx` (ratio `4:5`), `src/components/modules/PublicModules.tsx`, `src/components/modules/gallery/CTAButton.tsx` (taille `sm` optionnelle, défaut `lg` inchangé), `src/app/globals.css` (§ MODULE « CARDS »), `src/lib/public-page.ts`, `src/app/(front-office)/demo/page.tsx`.
+- **BDD : une migration, appliquée après validation** — `ALTER TYPE "public"."module_type" ADD VALUE 'cards'` (`drizzle/0007_slow_sabra.sql`, généré par `drizzle-kit`). C'est le seul geste non réversible de l'étape. Sans elle, l'enregistrement d'une page contenant un module Cards échoue : le symptôme observé est un **HTTP 500** (`invalid input value for enum module_type: "cards"`), **et non un 400** — le 400 signalerait un échec de `moduleTypeSchema`, qui était donc déjà correct. La requête insérant **tous** les modules d'une page en une instruction, l'échec annulait l'enregistrement de la page entière (aucune donnée modifiée, page enregistrée intacte).
+- **Contrôle après application** : `select enumlabel from pg_enum where typname = 'module_type'` → `hero, about, services, cta-banner, gallery, faq, contact, content, cards`.
+
+### Vérifications
+- `npx tsc --noEmit` → **0** ; `npm run lint` → **0 erreur, 0 avertissement** ; `/`, `/demo`, `/portfolio` → **200** après ajout de la famille ; énumération Postgres relue en base après migration.
+- **Reste à faire** : `npm run build` **serveur de développement arrêté** (`.next` partagé — le serveur occupait le port 3000 pendant cette passe).
+- **Reste à confirmer dans le navigateur** : enregistrer une page contenant un module Cards (le point qui échouait), puis bascule 4 / 3 / 2 / 1 colonnes, survol souris vs tactile, neutralisation `prefers-reduced-motion`, focus clavier **uniquement sur le bouton**.
+
+### Prochaine étape prévue
+Créer un module Cards dans le constructeur et **enregistrer la page** (l'enregistrement était le dernier point bloqué), puis `npm run build` serveur arrêté.
+
+---
+
+## 2026-09-15 – 10:10 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Diaporama de galerie lent et saccadé — le préchargement des voisines téléchargeait les photos en original.**
+- **Symptôme rapporté** : dans le diaporama (clic sur une photo de galerie), le chargement est très lent et semble figer par moments ; tout était fluide avant les travaux de fin de semaine. Hypothèse avancée : une régression du formatage WebP 80 %.
+- **Verdict : ce n'est pas une régression du WebP 80 %**, ni des titres H2/H3/H4, ni du « Hero Rideau » — aucun de ces travaux ne touche au chemin de chargement des images. La correction WebP/80 mesure **2,81 Mo → 252 Ko** à 640 px : elle est saine.
+- **Cause réelle, mesurée** : le préchargement du diaporama ([`LightboxModal`](src/components/modules/gallery/LightboxModal.tsx)) portait sur **les deux voisines** et utilisait l'URL **d'origine** de la photo, pas la version transformée. Sur cette liaison (**~450 Ko/s** mesuré vers Supabase, l'original met **6,9 s** à descendre), chaque appui sur une flèche déclenchait **~5,6 Mo** de téléchargements qui saturaient la connexion **et retardaient l'image affichée** — d'où l'impression de figement. Défaut **préexistant**, rendu visible par l'arrivée de nombreuses photos de plusieurs mégaoctets.
+- **Correction, trois changements ciblés** : **(1)** une seule photo préchargée — la **suivante** — au lieu des deux voisines ; **(2)** préchargée via le **CDN de transformation** (`supabaseImageUrl`, 1920 px WebP q80) au lieu de l'original, et **1920 est exactement la variante que le navigateur affiche**, donc l'image est déjà en cache à la navigation suivante ; **(3)** préchargement différé de **200 ms** pour que l'image affichée parte en premier, et `sizes` du diaporama plafonné à 1600 px (`(max-width: 1024px) 100vw, 1600px`) au lieu de `100vw`.
+- **Plafond de largeur dans le loader** (`media-url.ts`) : `MAX_TRANSFORM_WIDTH = 2560`. Next réclame des variantes jusqu'à **3840 px** (écrans 4K) que le CDN facture en octets pour un gain invisible ; au-delà de 2560 les entrées du `srcset` pointent vers la même variante. Vérifié dans le `srcset` réellement produit : **`width=2560` présent, `width=3840` absent**.
+- **Avant / après, par navigation dans le diaporama** : **5,6 Mo → 0,77 Mo** (−86 %), et l'image affichée passe d'un JPEG de 2,81 Mo à un **WebP 774 Ko** servi par le CDN. Le poids restant est celui de la connexion (~450 Ko/s ≈ 1,7 s), pas du code.
+- **Vérifications** : `npx tsc --noEmit` → 0 ; `npm run lint` → **0 erreur, 0 avertissement** ; mesures directes des URL (original 2,81 Mo / 6 854 ms ; transformée 1920 = 774 Ko ; transformée 3840 = 1 174 Ko, désormais inutilisée) ; `srcset` contrôlé sur une photo Supabase placée **temporairement** dans `/demo`, puis retirée. **Reste à confirmer dans le navigateur** : parcourir une galerie à la souris et au clavier, et vérifier la fluidité ainsi que l'absence de `object/public` en préchargement dans l'onglet Réseau.
+- **Piste si ce n'est pas encore assez fluide** : ramener la largeur du diaporama de 1920 à 1280 px (~400 Ko, soit ~0,9 s sur cette liaison) — un seul nombre à changer dans `LightboxModal`. Réversible, sans migration.
+
+### Fichiers modifiés
+- `src/components/modules/gallery/LightboxModal.tsx` (préchargement de la seule suivante, via le CDN, différé ; `sizes` plafonné ; en-tête).
+- `src/lib/media-url.ts` (plafond `MAX_TRANSFORM_WIDTH = 2560`).
+- BDD : **aucune** migration, aucun contenu modifié.
+
+### Prochaine étape prévue
+Recette humaine du diaporama (souris, flèches, Échap, zoom, plein écran) puis, si la fluidité est confirmée, `npm audit` et `npm run build` serveur arrêté.
+
+---
+
+## 2026-09-15 – 00:16 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Panne d'affichage des photos — le CDN de transformation Supabase remplace l'optimiseur de Next.**
+- **Symptôme** : toutes les photos du portfolio en **HTTP 500**, la console du serveur répétant `GET /_next/image?…&q=80 500` puis `⨯ upstream image response timed out for …supabase.co/…`, avec des dizaines de `TimeoutError`.
+- **Cause, mesurée** : l'optimiseur d'images de Next **télécharge l'original, côté serveur**, une fois **par largeur demandée**. Une photo du portfolio pèse **2,81 Mo** : ce téléchargement dépasse le délai interne de l'optimiseur (7 s), il abandonne et répond 500. Trente photos × plusieurs largeurs, et la page n'affiche plus rien.
+- **Ce que le projet prévoyait déjà** : le plan du stockage média (étape 6.1) l'écrit noir sur blanc — « URL CDN Supabase avec transformations (`width`/`height`/`quality`/`format`) → `next/image` ne retravaille pas les octets ». Le montage manquait.
+- **Correction — le CDN de transformation entre dans la boucle.** Nouveau [`media-url.ts`](src/lib/media-url.ts) : `supabaseImageUrl()` réécrit une URL publique Supabase en URL de transformation (`/storage/v1/render/image/public/…?width=…&format=webp&quality=…`). Nouveau [`image-loader.ts`](src/lib/image-loader.ts) : le `loader` qui l'utilise, **déclaré globalement** dans `next.config.ts` (`images.loader: "custom"` + `images.loaderFile`). Plus aucune image ne passe par `/_next/image`, et le montage vaut pour **tout** le site (galeries, Lightbox, contenu, back-office) sans exception à maintenir.
+- **Incident corrigé pendant la vérification, et règle à retenir.** La première version passait le loader en **prop** à `next/image` depuis un composant serveur : erreur d'exécution immédiate — « **Functions cannot be passed directly to Client Components** ». `next/image` est un composant **client**, une fonction ne franchit pas cette frontière ; `loaderFile` est le mécanisme prévu pour cela. La correction a aussi supprimé la prop devenue inutile dans `MediaImage` (et les deux exports qu'elle utilisait, pour ne pas laisser de code mort).
+- **Gain mesuré, même photo** : original **2,81 Mo** (JPEG) → transformée **252 Ko** (WebP 640 px), **11 fois moins**, servie par le CDN Supabase et **sans passage par `/_next/image`**.
+- **Vérifications** : `npx tsc --noEmit` → 0 ; `npm run lint` → **0 erreur, 0 avertissement** ; `srcset` réellement produit contrôlé en plaçant **temporairement** une photo Supabase dans `/demo` (**32 URL `render/image` portant `width=…&format=webp&quality=80`**, **0 requête `_next/image`**), puis retirée ; `/` et `/demo` servis en **200**, sans l'erreur de fonction ; les visuels de démonstration (picsum), dont l'URL n'est pas transformable, sont renvoyés **tels quels** par le loader. **Reste à confirmer dans le navigateur** : les photos de `/mon-portfolio` s'affichent et la console n'affiche plus ni 500 ni « upstream image response timed out ».
+- **Réversible sans migration** : les URL stockées en base ne changent pas — la transformation est appliquée **à l'affichage**.
+
+### Fichiers créés ou modifiés
+- Créés : `src/lib/media-url.ts` (transformation d'URL) et `src/lib/image-loader.ts` (loader global).
+- Modifiés : `next.config.ts` (`images.loader` / `loaderFile`), `src/components/common/MediaImage.tsx` (en-tête : le redimensionnement n'est plus une prop), et — de la passe précédente — `src/app/layout.tsx`, `src/components/backoffice/pages/ModuleDndList.tsx`.
+- BDD : **aucune** migration, aucun contenu modifié.
+
+### Prochaine étape prévue
+Recharger `/mon-portfolio` : les photos doivent s'afficher nettement plus vite, sans erreur en console. Puis `npm audit` et `npm run build` serveur arrêté.
+
+---
+
+## 2026-09-15 – 00:07 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Trois correctifs tirés des logs de recette** — qualité d'image, défilement lissé, accordéon du back-office.
+- **Qualité d'image : la liste `qualities` manquait dans `next.config.ts`.** Next 16 n'autorise qu'**une** qualité (75) tant que la liste n'est pas déclarée ; or trois composants demandent explicitement `quality={80}` (`GalleryItem`, `LightboxModal`, photos du contenu en colonnes) et `MediaImage` utilise 75 par défaut. Chaque image servie produisait donc un avertissement et repartait en 75 — sur un site de photographe, la compression ne doit pas se voir. La liste déclare maintenant **`[75, 80]`** : les deux qualités réellement demandées par le code, et rien d'autre. Mesure sur `/demo` : **119 URL en `q=80`** (galeries) et **10 en `q=75`** (chemins par défaut) — preuve que les deux sont nécessaires, et qu'aucune troisième valeur ne circule.
+- **`data-scroll-behavior="smooth"` sur `<html>`.** Le site défile en douceur (ancres compensées sous le Header fixe, étape 11.16). Sans cet attribut, Next applique aussi ce défilement animé à ses **propres transitions de route** : l'arrivée sur une nouvelle page « glisse » au lieu de se poser, et Next le signalait. Ajouté dans le layout racine, avec l'explication en commentaire.
+- **Accordéon du back-office : état contrôlé dès le premier rendu.** `ModuleDndList` gardait `openModuleId` en `string | undefined` : Radix recevait `value={undefined}` (accordéon **non contrôlé**) au premier rendu, puis une chaîne dès l'ouverture d'un module (accordéon **contrôlé**). React interdit ce changement de nature en cours de vie d'un composant — avertissement en console et état interne de Radix désynchronisé. L'état est désormais une **chaîne** dont `""` signifie « aucun module déplié » : contrôlé du début à la fin.
+- **Ce qui restait du log n'appelait aucune correction** : `Couldn't load fs/zlib` et le drapeau Turbopack sont du bruit de développement volontairement configuré (`turbopackFileSystemCacheForDev: false`, documenté dans `next.config.ts`) ; les `TimeoutError` sont des requêtes abandonnées pendant les rechargements, à ne surveiller que si une image cesse de s'afficher.
+- **Vérifications** : `npx tsc --noEmit` → 0 ; `npm run lint` → **0 erreur, 0 avertissement** ; serveur de développement redémarré sur la nouvelle configuration et pages servies (`/demo`, `/` → 200). **À faire côté utilisateur** : `npm audit` (GitHub signale **1 vulnérabilité modérée** sur la branche par défaut) et un `npm run build` **serveur arrêté**, non relancé ici.
+
+### Fichiers modifiés
+- `next.config.ts` (`images.qualities`), `src/app/layout.tsx` (`data-scroll-behavior`), `src/components/backoffice/pages/ModuleDndList.tsx` (état contrôlé de l'accordéon).
+- BDD : **aucune** migration.
+
+### Prochaine étape prévue
+`npm audit` puis mise à jour du paquet signalé, et build de production serveur arrêté.
+
+---
+
 ## 2026-09-14 – 20:59 (heure locale America/Bogota)
 
 ### Tâche exécutée

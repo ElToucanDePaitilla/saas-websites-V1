@@ -977,6 +977,214 @@
 }
 
 /* ==========================================================================
+   MODULE « CARDS » — cartes photo + texte + bouton (Étapes 13.1 & 13.2)
+   --------------------------------------------------------------------------
+   Le GABARIT est la signature du module : la photo, puis un bloc clair qui
+   **chevauche** son bas, à 88 % de largeur. Le chevauchement (`--cards-overlap`)
+   ne se règle pas — c'est lui qui fait la carte.
+
+   Ce qui SE règle — ratio de la photo (par format), arrondi et épaisseur du
+   filet des deux éléments (cadre et bloc de texte), ombre, bordure du cadre,
+   effets de survol — arrive par variables CSS posées sur la carte, avec ici
+   des **replis** qui reproduisent le gabarit d'origine. Ce qui ne se règle pas :
+   la couleur du filet, prise à l'accent du thème (elle suit donc le mode
+   sombre sans réglage).
+
+   Deux mécaniques d'alignement vivent ici et nulle part ailleurs :
+     · les pieds de carte ont la **même hauteur** dans une ligne (l'article est
+       étiré par la grille, le bloc prend la hauteur restante) ;
+     · le **bouton est plaqué au bas** du pied, l'espace en trop se loge avant
+       lui, jamais sous lui.
+
+   Typographie : tailles **fluides** (`clamp`) mais **plafonnées par les jetons
+   du site** (`--h3-size`) — la carte s'adapte à sa largeur sans créer une
+   seconde échelle de titres qui divergerait du reste du site.
+   ========================================================================== */
+
+.cards-card {
+  /* Profondeur du chevauchement du bloc sur la photo (signature du gabarit). */
+  --cards-overlap: 2.5rem;
+  /* Marge haute du titre ET marge basse sous le bouton : une seule valeur, donc
+     deux marges qui ne peuvent pas diverger (équilibre vertical, étape 13.2). */
+  --cards-inset: 0.9375rem;
+
+  display: flex;
+  flex-direction: column;
+  /* L'article EST l'item de la grille : il s'étire déjà à la hauteur de la
+     ligne. L'écrire rend l'intention explicite et survit à un changement de
+     disposition de la grille. */
+  height: 100%;
+}
+
+/* Cadre de la photo — même rôle que `.hv-frame` d'une vignette de galerie.
+   Le RATIO vient du format choisi (`--cards-media-ratio`, posé par le
+   composant) : 4:5 en portrait, 1:1 en carré, 3:2 / 4:3 / 16:9 en paysage. */
+.cards-card__frame {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: var(--cards-media-ratio, 4 / 5);
+  background-color: var(--surface-color);
+}
+
+/* La photo REMPLIT son cadre, par construction : la règle vaut aussi pour le
+   repli `<img>` natif des URL non optimisables, où aucune classe utilitaire
+   n'est appliquée. Sans elle, ce repli laisserait des bandes vides. */
+.cards-card__frame :where(img) {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Bloc de texte — chevauche la photo, centré horizontalement.
+   `flex: 1 1 auto` (et non `1`, qui vaut `1 1 0%`) : le bloc prend la hauteur
+   restante sans jamais compresser son texte. */
+.cards-card__body {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  width: 88%;
+  margin: calc(-1 * var(--cards-overlap)) auto 0;
+  padding: var(--cards-inset) 0.75rem;
+  background-color: var(--surface-color);
+  /* Filet : épaisseur réglable, couleur prise au thème (elle suit donc le mode
+     sombre). Le repli à 2 px reproduit le gabarit d'origine. */
+  border: var(--cards-body-border-width, 2px) solid var(--accent-color);
+  border-radius: var(--cards-body-radius, 2px);
+  text-align: center;
+}
+
+.cards-card__title {
+  font-family: var(--font-heading);
+  font-size: clamp(1.125rem, 0.95rem + 0.7vw, var(--h3-size));
+  line-height: 1.35;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.cards-card__text {
+  margin-top: 0.5rem;
+  /* `pre-line` : les retours à la ligne saisis dans l'éditeur sont respectés. */
+  white-space: pre-line;
+  font-size: clamp(0.8125rem, 0.78rem + 0.15vw, 0.9375rem);
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.cards-card__cta {
+  /* Le bouton est PLAQUÉ AU BAS du pied : `margin-top: auto` absorbe l'espace
+     restant AVANT lui. Quelle que soit la longueur du texte, les boutons d'une
+     même ligne s'alignent donc sur le bas du bloc le plus haut (étape 13.2). */
+  margin-top: auto;
+  /* …sans jamais coller au texte quand celui-ci occupait déjà toute la place. */
+  padding-top: 0.875rem;
+  /* Marge latérale IDENTIQUE à l'intérieur du bloc : même lorsqu'un libellé long
+     occupe toute la largeur disponible, le bouton ne touche jamais les bords. */
+  padding-inline: var(--cards-cta-inset, 0.25rem);
+  font-size: clamp(0.65rem, 0.6rem + 0.15vw, 0.75rem);
+}
+
+/* Le libellé du bouton reprend la typographie du gabarit (capitales espacées) ;
+   ses couleurs, elles, restent celles des variantes du thème. */
+.cards-card__cta :where(a, button) {
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  line-height: 1.35;
+  /* RETOUR À LA LIGNE AUTOMATIQUE. Le bouton du thème porte `whitespace-nowrap`
+     et une hauteur fixe : sans ces deux neutralisations, un libellé long serait
+     coupé ou déborderait sur une carte étroite. Elles sont **limitées aux
+     cartes** — dans un héro ou une galerie, un libellé sur une seule ligne reste
+     souhaitable, et rien n'y change. */
+  white-space: normal;
+  height: auto;
+  /* Un libellé d'une seule ligne garde la hauteur « sm » du thème (2 rem). */
+  min-height: 2rem;
+  /* Marges gauche/droite du TEXTE, identiques et fixes. */
+  padding: 0.5rem 1rem;
+  /* `balance` répartit deux lignes de longueur comparable plutôt qu'une longue
+     suivie d'une courte. Sans support, le retour à la ligne reste normal. */
+  text-wrap: balance;
+  /* Garde-fou : un mot plus long que le bouton se coupe au lieu de déborder. */
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+/* En-tête de la section — tailles fluides, mêmes jetons que le reste du site. */
+.cards-section__subtitle {
+  margin-top: 0.75rem;
+  font-family: var(--font-heading);
+  font-size: clamp(0.95rem, 0.9rem + 0.3vw, 1.125rem);
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.cards-section__intro {
+  margin-top: 0.75rem;
+  white-space: pre-line;
+  font-size: clamp(0.9rem, 0.86rem + 0.25vw, 1.0625rem);
+  line-height: 1.7;
+  color: var(--text-muted);
+}
+
+/* --------------------------------------------------------------------------
+   CORPS EN TEXTE RICHE D'UNE CARTE (Étape 13.3)
+   --------------------------------------------------------------------------
+   `.rich-content` donne au texte riche l'échelle d'une **section** : le H3 y
+   vaut `--h3-size`, le H4 `--h4-size`, les paragraphes 0.9375 rem — des tailles
+   pensées pour une colonne pleine largeur. Dans une carte (200 à 400 px de
+   large), elles écraseraient la photo et le bouton : la portée est donc
+   **rétrécie** ici, sur les seules cartes éditoriales.
+
+   Deux précautions de spécificité, sans lesquelles ces règles ne serviraient à
+   rien :
+     · `.rich-content h3` (0,1,1) est déclaré plus haut : il faut au moins la
+       même spécificité ET venir après. On utilise donc `:is(...)` — qui prend
+       la spécificité d'un élément (0,0,1) — et NON `:where(...)`, qui la
+       ramènerait à zéro et perdrait la comparaison ;
+     · le bloc est posé **après** tout le § MODULE « CARDS » : à spécificité
+       égale, c'est l'ordre du fichier qui tranche.
+
+   Ce qui n'est PAS redéfini : la couleur (`--text-muted`) et l'interligne de
+   base, déjà ceux du texte de carte. Le filet, l'ombre et l'arrondi du pied
+   restent ceux de `.cards-card__body`.
+
+   `text-align: left` : le pied de carte est centré (c'est le gabarit photo),
+   mais un document structuré avec des listes ne peut pas l'être — les puces se
+   détacheraient de leur texte. Le bloc reste centré dans la carte ; c'est son
+   contenu qui s'aligne à gauche.
+   -------------------------------------------------------------------------- */
+.cards-card__rich {
+  text-align: left;
+}
+
+/* Titres (le H3 est produit par la barre ; le H2 n'y est plus proposé, mais
+   reste rendu s'il vient d'un contenu écrit à la main) : l'échelle du titre de
+   carte, plafonnée par le jeton H3 du site — pas de seconde échelle. */
+.cards-card__rich :is(h2, h3) {
+  font-size: clamp(1.125rem, 0.95rem + 0.7vw, var(--h3-size));
+  line-height: 1.35;
+}
+
+/* « Petit titre » : un cran sous le sous-titre, toujours au-dessus du texte. */
+.cards-card__rich h4 {
+  font-size: clamp(0.9375rem, 0.88rem + 0.3vw, 1.125rem);
+  line-height: 1.35;
+}
+
+/* Texte courant : strictement l'échelle de `.cards-card__text`. */
+.cards-card__rich :is(p, li) {
+  font-size: clamp(0.8125rem, 0.78rem + 0.15vw, 0.9375rem);
+  line-height: 1.6;
+}
+
+/* Listes : indentation resserrée, calibrée pour une carte étroite. */
+.cards-card__rich :is(ul, ol) {
+  padding-left: 1.1rem;
+  margin-bottom: 0.6rem;
+}
+
+/* ==========================================================================
    Base layer — typographie, fond, sélection
    ========================================================================== */
 @layer base {

@@ -111,12 +111,36 @@ function ToolbarSeparator() {
   );
 }
 
-export function RichTextToolbar({ editor }: { editor: Editor | null }) {
+export function RichTextToolbar({
+  editor,
+  allowedStyles,
+}: {
+  editor: Editor | null;
+  /**
+   * Styles de bloc **autorisés** dans ce contexte. Absent = tous, donc les
+   * appelants existants ne changent pas d'un pixel. Une carte (étape 13.3) le
+   * renseigne pour retirer le « Titre » (H2), qui appartient à l'en-tête de la
+   * section et non à la carte.
+   */
+  allowedStyles?: RichTextStyleValue[];
+}) {
   const [, forceRender] = React.useReducer((count: number) => count + 1, 0);
   const [linkOpen, setLinkOpen] = React.useState(false);
   const [linkValue, setLinkValue] = React.useState("");
   const styleId = React.useId();
   const linkId = React.useId();
+
+  /**
+   * Options réellement proposées. Le filtre ne porte que sur **ce qui est
+   * offert** : un document écrit à la main peut contenir un titre retiré, il
+   * reste lisible — seule sa production est empêchée.
+   */
+  const styleOptions =
+    allowedStyles === undefined
+      ? RICH_TEXT_STYLE_OPTIONS
+      : RICH_TEXT_STYLE_OPTIONS.filter((option) =>
+          allowedStyles.includes(option.value)
+        );
 
   /**
    * La barre doit refléter l'état courant (marque active, style du bloc,
@@ -151,6 +175,17 @@ export function RichTextToolbar({ editor }: { editor: Editor | null }) {
       : editor.isActive("heading", { level: 4 })
         ? "h4"
         : "paragraph";
+
+  /**
+   * Le bloc courant n'est pas toujours une option offerte (un H2 écrit à la main
+   * dans une carte, par exemple). La liste retombe alors sur « Texte normal »
+   * plutôt que de s'afficher vide ; changer le style reste une action explicite.
+   */
+  const selectedStyle: RichTextStyleValue = styleOptions.some(
+    (option) => option.value === currentStyle
+  )
+    ? currentStyle
+    : "paragraph";
 
   const applyStyle = (value: RichTextStyleValue) => {
     if (value === "paragraph") {
@@ -210,13 +245,13 @@ export function RichTextToolbar({ editor }: { editor: Editor | null }) {
         </label>
         <select
           id={styleId}
-          value={currentStyle}
+          value={selectedStyle}
           onChange={(event) =>
             applyStyle(event.target.value as RichTextStyleValue)
           }
           className="border-input focus-visible:border-ring focus-visible:ring-ring/50 h-8 shrink-0 rounded-md border bg-transparent px-2 text-xs font-medium shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px]"
         >
-          {RICH_TEXT_STYLE_OPTIONS.map((option) => (
+          {styleOptions.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>

@@ -39,9 +39,11 @@ type ModuleDndListProps = {
 export function ModuleDndList({ pageId, modules }: ModuleDndListProps) {
   const { moveModule, removeModule, setModuleHidden, updateModule } =
     usePagesStore();
-  const [openModuleId, setOpenModuleId] = React.useState<string | undefined>(
-    undefined
-  );
+  // `""` = aucun module déplié. L'état reste une **chaîne** du premier au
+  // dernier rendu : avec `undefined`, Radix passait d'un accordéon non contrôlé
+  // (premier rendu) à un accordéon contrôlé (dès l'ouverture d'un module), et
+  // React signalait ce changement de nature en cours de vie du composant.
+  const [openModuleId, setOpenModuleId] = React.useState("");
 
   function handleDragEnd(result: DropResult) {
     const { destination, source } = result;
@@ -59,7 +61,7 @@ export function ModuleDndList({ pageId, modules }: ModuleDndListProps) {
 
   function handleRemove(moduleId: string) {
     if (openModuleId === moduleId) {
-      setOpenModuleId(undefined);
+      setOpenModuleId("");
     }
     removeModule(pageId, moduleId);
   }
