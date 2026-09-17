@@ -11,6 +11,212 @@ NOTICE D'UTILISATION DU FICHIER CHANGELOG.MD
 
 ---
 
+## 2026-09-17 – 16:35 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Étape 14.2 — nouveau module « Contact Map » : carte Google Maps embarquée + informations pratiques, disposition permutable.**
+- **Nouvelle famille `contact-map` (D1)** : `PageModuleType`, `moduleTypeEnum` (Postgres), `moduleTypeSchema` (Zod), `moduleCatalog` (catégorie « Contact & cartographie », label « Plan d'accès & informations »), `ModuleIcon` (`MapPin`) et les deux `switch` sans `default` (`ModuleContentEditor`, `PageModuleRenderer`) sont étendus. Migration `drizzle/0010_simple_chat.sql` : `ALTER TYPE "public"."module_type" ADD VALUE 'contact-map';`.
+- **Domaine** : `ContactMapContent` (interface portant son `type`, idiome `ContactContent`), `ContactMapStyleSettings`, cinq unions à catalogue (`mapPosition`, `mapType`, `bgVariant`, `mapFilterStyle`, `overlayIntensity`) avec ordre, libellés et garde ; `DEFAULT_CONTACT_MAP_STYLE`, `DEFAULT_CONTACT_MAP_CONTENT` (forme sans texte) et `createContactMapContent()` (exemple). Résolveur tolérant `resolveContactMapContent` : `readString`/`readColor`/`readBoundedNumber(zoom, 15, 1, 20)`, gardes d'union, `style.frame = resolveContactFrame` (réutilisé de 14.1.c). **Aucun texte de démonstration ressuscité.**
+- **Logique pure** `src/lib/contact-map.ts` : `contactMapAddress` (profil si demandé **et** renseigné, sinon adresse libre), `contactMapEmbedUrl` (`output=embed`, `t=m|k`, D5), `contactMapDirectionsUrl` (`dir/?api=1`).
+- **Adresse du profil résolue au rendu (D3)** : `PublicPage.ownerAddress` + helper `resolveOwnerAddress` dans `public-page.ts`, qui **ne lit la BDD que si** un module `contact-map` porte `useOwnerAddress` (repli `""` sur toute erreur). Tuyau `ownerAddress` jusqu'au rendu par les deux routes, la liste et le routeur (même modèle que `pageSlug`). Seed → `""` (aucun seed ne contient ce module).
+- **Rendu public** `src/components/modules/contact-map/ContactMapModule.tsx` (Server Component) : chapeau H2/H3/`<p>`, puis deux cadres de hauteur égale dont l'ordre suit `mapPosition` — **aucun `h1`**. Adresse vide → placeholder « Adresse non renseignée » (jamais d'iframe vide, qui afficherait le monde) et bouton d'itinéraire absent. Iframe `title`, overlay `aria-hidden`, `rel="noopener noreferrer"`. `RevealHero` pour l'animation d'entrée (`module.animation`, D4).
+- **Cadres (D6)** : `contactFrameCssVars` + `.contact-map__frame` réutilisent les variables `--contact-frame-*` — mêmes replis, un seul réglage pour les deux conteneurs. **Fond de section uni (D7)** : `--contact-map-bg/text/overlay` posées par le composant (`default`/`surface`/`contrast`/`custom`, voile 0/0,15/0,35/0,55) ; `theme-blend` ajoute `contact-map--blend` (overlay en `multiply`).
+- **Éditeur** : `ContactMapEditor.tsx` (5 `EditorZone` : chapeau, disposition, adresse & carte, informations pratiques, apparence), helper `patch` en `??`, champs désactivés sous interrupteur, hint montrant l'adresse du profil via `useOwnerProfile()`, `ColorField` seulement en fond `custom`. `parseBounded` **extrait** de `ModuleContactEditor` vers `form-fields.tsx` (export partagé) — plus de seconde copie.
+- **`/demo`** : `contact-map-13` (fabrique par défaut, adresse profil simulée) et `contact-map-14` (permutation `container3`, alignement gauche, `useOwnerAddress: false`, parking masqué, fond `surface`, `theme-blend`, voile `medium`) ; `DemoPage` passe `ownerAddress`.
+- **CSS** : nouvelle section `MODULE « CONTACT MAP »` hors `@layer`, avant `Base layer`.
+
+### Écarts assumés (et pourquoi)
+- **Un conteneur interne `mx-auto max-w-7xl`** borne le contenu alors que le fond de section reste **pleine largeur** (D7). La structure du plan ne le montrait pas : sans lui, la grille carte/infos s'étalait sur toute la fenêtre. Le fond, lui, ne pouvait pas être borné sans cesser d'être un bandeau.
+- **Le fichier s'appelle `ContactMapEditor.tsx` et le composant `ContactMapEditor`** (nom du plan) : dérogation assumée à la convention `Module*Editor` des autres familles. Le routeur l'importe sous ce nom.
+- **`grayscale(100%)` devient `grayscale()` dans le CSS compilé** (normalisation Lightning CSS) : valeur **équivalente**, l'assertion de recette porte donc sur la règle et non sur la forme littérale.
+- **Le satellite (`t=k`) reste « best effort »** : non documenté en embed sans clé (D5). Si Google l'ignore, seul le plan routier est garanti — le champ est conservé et signalé à l'éditeur.
+- **La bascule `useOwnerAddress` désactive le champ libre seulement si le profil porte une adresse** : sans adresse de profil, le champ doit rester éditable, puisque c'est lui qui sert de repli.
+- **`theme-blend` sans voile reste un simple N&B** : le fondu au fond passe par l'overlay en `multiply` ; c'est documenté dans l'aide du filtre.
+- **La variante « contraste » réexprime `--text-muted` localement** (`color-mix` sur le texte inversé). Le plan ne le prévoyait pas, mais le jeton global restait sombre sur fond d'encre : adresse, intitulés et phrase d'intro auraient été illisibles en mode clair. L'override est **scopé** à `.contact-map--bg-contrast`, le jeton du site est intact.
+- **Comptages HTML par tranche** : la charge RSC de `next dev` duplique les classes en fin de document ; les assertions ont porté sur les tranches `contact-map-13` / `contact-map-14` et sur des sélecteurs complets.
+
+### Mesures et vérifications
+- `npx tsc --noEmit` → **0** ; `npm run lint` → **0 erreur, 0 avertissement**.
+- `npm run db:generate` → `drizzle/0010_simple_chat.sql` (`ALTER TYPE "public"."module_type" ADD VALUE 'contact-map';`) ; `npm run db:migrate` → **appliquée**. Enum contrôlé **en base** (`enum_range(NULL::module_type)` contient `contact-map`, script `tsx` temporaire supprimé après usage).
+- `/demo` → **200**. Tranche `contact-map-13` : `<iframe` = 1, `src` = `google.com/maps?q=…&z=15&t=m&output=embed` (adresse du profil), `.contact-map__map` **avant** `.contact-map__info`, overlay = 1, `contact-map--blend` = 0, Parking/Horaires/Zone d'intervention = 1, itinéraire = 1. Tranche `contact-map-14` : ordre **inversé** (info avant map), `contact-map--blend` = 1, filtre `theme-blend` = 1, **Parking = 0** (toggle faux) mais Horaires/Zone = 1. Page `<h1` = **1** ; aucun `<h1>` dans l'une ou l'autre tranche.
+- **CSS compilé contrôlé** (chunk extrait du HTML puis téléchargé, 143 053 caractères) : `.contact-map__iframe--grayscale, .contact-map__iframe--theme-blend { filter: grayscale() contrast(105%); }`, `.contact-map__overlay { pointer-events: none; … }`, `.contact-map__frame` porte les replis `--contact-frame-border-width, 1px` et `--contact-frame-radius, 2px`, `.contact-map__map--empty` et `mix-blend-mode: multiply` présents.
+- **Éditeur (relecture)** : `case "contact-map"` présent dans `ModuleContentEditor` ; les 5 `EditorZone` et le `SelectField<ContactMapPosition>` sont présents dans `ContactMapEditor.tsx`.
+- **`npm run build` non lancé** : le serveur de développement occupe le port 3000 et `.next` est partagé.
+- **Recette visuelle navigateur** (non mesurable ici) : cadres de hauteur égale en `lg`, pile sur mobile, satellite si `t=k` honoré, voile et filtres, permutation carte/infos, mode clair/sombre.
+
+### Fichiers modifiés
+- `src/lib/pages.ts` (types, catalogues, gardes, défauts, fabrique, résolveur, `PageModuleType`, `ModuleContent`, `moduleCatalog`, `createModuleContent`), `src/lib/contact-map.ts` (créé), `src/db/schema.ts`, `drizzle/0010_simple_chat.sql` + `drizzle/meta/_journal.json` + snapshot (générés), `src/lib/schemas/persistence.ts`, `src/components/backoffice/pages/ModuleIcon.tsx`, `src/components/modules/contact-map/ContactMapModule.tsx` (créé), `src/components/modules/PublicModules.tsx`, `src/lib/public-page.ts`, `src/app/(front-office)/page.tsx`, `src/app/(front-office)/[slug]/page.tsx`, `src/components/backoffice/pages/modules/ContactMapEditor.tsx` (créé), `src/components/backoffice/pages/modules/ModuleContentEditor.tsx`, `src/components/backoffice/pages/modules/ModuleContactEditor.tsx` (import de `parseBounded`), `src/components/backoffice/pages/modules/form-fields.tsx` (`parseBounded` partagé), `src/app/(front-office)/demo/page.tsx`, `src/app/globals.css`, `CHANGELOG.md`.
+
+### Prochaine étape prévue
+Recette visuelle navigateur (égales hauteurs, permutation, filtres et voile, satellite), puis contrôle de l'enregistrement réel d'un module `contact-map` depuis le Dashboard (couverture Zod + enum) et du préremplissage d'adresse depuis le profil.
+
+---
+
+## 2026-09-17 – 15:00 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Étape 14.1.d — Contact, ajustements du rendu public : réseaux intégrés au container 2, séparateurs retirés, formulaire aligné sur la hauteur de C2.**
+- **Séparateurs retirés** : les deux `border-top` posés en 14.1.c (`.contact-info__address:not(:first-child)`, `.contact-info__lines:not(:first-child)`) sont supprimés. L'air entre Identité / Adresse / Coordonnées reste assuré par le seul `gap-12` (3 rem) de la grille, aucune ligne ne coupe plus le bloc.
+- **Réseaux sociaux déplacés dans le container 2** : la barre d'icônes est désormais la **dernière ligne** de C2, sous Téléphone / Mobile / E-mail, rendue par `ContactInfoBlock` (nouvelles props `social` / `socialStyle`). Le container 4 autonome est supprimé — `ContactModule` ne rend plus de `<SocialLinks>` hors de la grille.
+- **Aucune marge haute sur la barre** : le `mt-10` de `SocialLinks` est retiré. L'espacement vient du `gap-12` de la grille `.contact-info`, soit **exactement la même valeur** que celle séparant Adresse et Téléphone ; un `margin-top` s'y serait cumulé (2,5 + 3 rem).
+- **Alignement** : le réglage `style.social.alignment` est **conservé** (il reste éditable), et les deux instances de `/demo` passent à `alignment: "left"` — la barre vit sous des coordonnées alignées à gauche, un centrage y flotterait.
+- **Visibilité** : `hasVisibleContactInfo` gagne un troisième paramètre `hasSocial`. Un bloc qui ne porterait que des icônes reste donc affiché (sinon la barre disparaîtrait silencieusement). Masquer C2 (`showContainer2`) masque aussi les réseaux, qui en font désormais partie.
+- **Message élastique** : `.contact-frame--form` devient une colonne flex, `.contact-form` l'occupe entièrement (`flex: 1`), et le champ Message (`.contact-form__field--message`, `textarea` en `flex-grow`) absorbe l'espace libre. Les deux cadres étant des items de la même grille, ils s'étirent à hauteur égale : le bouton « Envoyer » repose donc sur le bas du cadre C3, au niveau de la dernière ligne affichée en C2 — sans aucun `min-height` en dur, donc sans casse si une ligne de C2 change (adresse retirée, horaires réactivés).
+
+### Écarts assumés (et pourquoi)
+- **Le container 4 disparaît, mais le composant `SocialLinks` reste.** Il n'est pas supprimé, il change de place : le garder comme composant dédié évite d'inliner icônes et styles dans `ContactInfoBlock`, et sa réutilisation est immédiate.
+- **Les réseaux sont masqués avec C2** (décision validée) : c'est la conséquence logique de leur intégration au container des coordonnées. Dans `/demo`, `contact-12` (C2 masqué) n'affiche donc plus aucune icône.
+- **Le réglage d'alignement des réseaux n'est pas retiré** : il reste fonctionnel et éditable ; seule la démonstration le force à gauche. Le retirer aurait été une modification de domaine et d'éditeur au-delà de la demande.
+- **`ContactForm.tsx` est touché** alors que 14.1 le déclarait intouchable — une seule classe CSS ajoutée au champ Message (`contact-form__field--message`). La logique de soumission, l'état, les contrôles et la charge utile sont **inchangés** ; c'est une modification de présentation.
+- **Comptages HTML par tranche** : la charge RSC de `next dev` duplique les classes en fin de document. Les tranches `contact-11` (bornée par `contact-12`) et `contact-12` (bornée par `</section>`) ont donc été utilisées, et la recherche a porté sur `<ul class="contact-social` (et non « `contact-social` », présent aussi dans `contact-social__link` / `__icon`).
+
+### Mesures et vérifications
+- `npx tsc --noEmit` → **0** ; `npm run lint` → **0 erreur, 0 avertissement**.
+- `/demo` → **200**. Tranche `contact-11` : `<h2` = **2**, `<h3` = **1**, `<ul class="contact-social` = **1** et son index est **antérieur** à `contact-frame--form` (la barre est donc bien dans C2, plus après le formulaire) ; `contact-form__field--message` = **1**. Section `contact-12` : `<ul class="contact-social` = **0** (C2 masqué). Page : `<h1` = **1**.
+- **CSS compilé contrôlé** : `.contact-info__address:not(:first-child)` **absent** ; `.contact-frame--form`, `.contact-form__field--message` et les replis `contact-frame-border-width, 1px` **présents**.
+- **`npm run build` non lancé** : le serveur de développement occupe le port 3000 et `.next` est partagé.
+- **Recette visuelle navigateur** (non mesurable ici) : aucun trait horizontal dans le container des coordonnées, icônes à gauche sous les coordonnées, bouton « Envoyer » aligné sur le bas du cadre C2 en `lg`.
+
+### Fichiers modifiés
+- `src/app/globals.css` (suppression des séparateurs, `.contact-frame--form` en colonne flex, `.contact-form` en flex `1`, règles `.contact-form__field--message`), `src/components/modules/contact/SocialLinks.tsx` (`mt-10` retiré, doc-comment), `src/components/modules/contact/ContactInfoBlock.tsx` (props `social`/`socialStyle`, rendu de `SocialLinks`, `hasVisibleContactInfo(info, visibility, hasSocial)`), `src/components/modules/contact/ContactModule.tsx` (container 4 supprimé, `social` transmis, `hasSocial`), `src/components/modules/contact/ContactForm.tsx` (classe du champ Message), `src/app/(front-office)/demo/page.tsx` (`alignment: "left"` pour `contact-12`), `CHANGELOG.md`.
+
+### Prochaine étape prévue
+Recette visuelle navigateur (hauteur des deux cadres en `lg` et sur mobile, barre de réseaux à gauche, mode sombre), puis validation de la persistance du cadre et du préremplissage depuis l'éditeur.
+
+---
+
+## 2026-09-17 – 14:05 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Étape 14.1.c — Contact, refonte visuelle à 4 conteneurs : cadres configurables par module, séparateurs de sous-groupes, retrait de « Informations pratiques » (code conservé).**
+- **Cadres configurables par module (D1)** : `ContactFrameSettings` (`borderWidth`, `borderColorToken`, `borderRadius`) vit dans `ContactStyleSettings.frame`, donc dans le JSONB `content.style.frame` — **aucune migration**, aucun store de design system (il n'en existe pas). C'est le modèle de `CardsStyleSettings.bodyBorderWidth` / `bodyRadius` ; le résolveur `resolveContactFrame` borne `0..8` (épaisseur) et `0..24` (arrondi) avec repli sur `DEFAULT_CONTACT_FRAME`.
+- **Couleur = jeton de thème uniquement (D2)** : `ContactFrameColorToken` (`border-color`, `accent-color`, `accent-color-strong`, `text-color`, `surface-color`), catalogue `contactFrameColorTokenOrder` / `contactFrameColorTokenLabels` dans l'esprit de `bannerThemeTokenLabels`. Pas de pipette, pas d'hex stocké : le cadre suit le mode clair/sombre. Le composant traduit le réglage en variables CSS (`contactFrameCssVars`), la feuille porte la règle et ses replis — même idiome que `CardItem.tsx`.
+- **Un seul réglage pour C2 et C3 (D7)** : `.contact-frame` s'applique à la racine des coordonnées (`ContactInfoBlock`, `frame` passé en **prop** — le composant ne lit jamais `content`) **et** à l'enveloppe du formulaire (`contact-frame--form`, `ContactModule`). Le formulaire reste donc encadré **même quand C2 est masqué**. Défauts : 1 px, `border-color`, 2 px d'arrondi ; `0` = sans cadre (valeur légitime, distincte d'un réglage absent). Bordure seule, **aucun fond** (D8) : la surface nacrée de la page reste visible.
+- **Séparateurs de sous-groupes (D4)** : `.contact-info__address:not(:first-child)` et `.contact-info__lines:not(:first-child)` reçoivent un `border-top: 1px solid var(--border-color)`. Pas de `<hr>`, pas de H3 de sous-groupe, **pas de `padding-top`** (le `gap-12` fournit l'air ; un padding cumulerait).
+- **« Informations pratiques » retiré de la vue, code conservé (D6)** : drapeau de domaine `CONTACT_PRACTICAL_INFO_ENABLED: boolean = false` (typé `boolean` **explicitement** — sinon TS infère le littéral `false`, la condition paraît toujours fausse et le code conservé passerait pour mort). Le sous-bloc de l'éditeur n'est plus rendu et Horaires / Zone d'intervention ne s'affichent plus, mais `ContactInfoSettings.hours` / `.serviceArea`, `showHours` / `showServiceArea`, leurs défauts et leur résolution sont **intacts** — un seul booléen réactive les deux vues, sans perte de donnée.
+- **Deux gardes de rendu** : `hasVisibleContactInfo` ne compte horaires/zone que sous le drapeau (sinon un contenu qui ne renseignait qu'eux aurait fait afficher un cadre quasi vide) ; le `<dl>` n'est rendu **que s'il reste au moins une ligne** (téléphone / mobile / e-mail), sinon un `<dl>` vide et son séparateur orphelin apparaîtraient.
+- **Éditeur** : nouvelle `EditorZone tone="style"` « Cadres des conteneurs » (après « Formulaire ») — épaisseur bornée `0..8` (« 0 = sans cadre. »), jeton de couleur (« Couleur du thème : elle suit le mode clair/sombre. »), arrondi borné `0..24` (« 2 px par défaut. »), via un helper `patchFrameStyle`.
+
+### Écarts assumés au plan (et pourquoi)
+- **Deux `h2` par section contact, déjà assumé en 14.1.b.** Le chapeau et le nom du bloc Identité portent chacun un `h2.module-h2` ; la refonte ne touche pas au titrage. Invariant du site inchangé : **un seul `h1`**, décidé par `PublicModulesList`.
+- **Horaires / Zone d'intervention ne sont plus éditables ni affichés dans ce module.** C'est la conséquence directe de D6 : la donnée reste en JSONB et le code est réactivable, mais un contenu existant qui ne montrait que ces deux rubriques n'affiche plus que son cadre et ses autres lignes.
+- **Le défaut pose un cadre sur les pages déjà publiées.** `borderWidth: 1` est un défaut **de forme**, non une donnée : après mise à jour, tout module contact existant gagne un filet de 1 px. C'est l'effet voulu de la refonte (D3), signalé ici. Aucune donnée perdue.
+- **`patchSocialStyle` propage désormais `...style`.** Avant, il écrivait `{ social }` seul ; depuis que `style` porte aussi `frame`, ce raccourci aurait effacé le cadre à chaque réglage d'icône. Le correctif est inclus plutôt que découvert en recette.
+- **Comptage brut des occurrences `contact-frame` faussé par la charge RSC de Next.** Le HTML de `next dev` embarque le payload de vol, qui **duplique** les classes en fin de document (4 occurrences de `contact-frame--form` au total pour 2 attendues) : les assertions ont donc été faites **par tranche** (`contact-11`, `contact-12`), pas sur la page entière.
+- **CSS non minifié en développement** : les contrôles ont porté sur les formes multi-lignes réelles du chunk servi, identiques en valeur au build.
+
+### Mesures et vérifications
+- `npx tsc --noEmit` → **0** ; `npm run lint` → **0 erreur, 0 avertissement**.
+- `/demo` → **200**. Tranche `contact-11` : `<h2` = **2** (chapeau + nom), `<h3` = **1** (slogan) ; page `<h1` = **1**. `class="contact-info contact-frame` = **1** et `contact-frame--form` = **1** (les deux conteneurs encadrés), `--contact-frame-border-width:1px` = **2** (posé sur C2 **et** le formulaire).
+- Tranche `contact-12` (C2 masqué) : `--contact-frame-radius:12px` = **1** et `--contact-frame-color:var(--accent-color)` = **1** — le cadre distinct est bien **porté par le module**, et il habille le formulaire seul.
+- **« Horaires » = 0** et **« intervention » = 0** sur toute la page : la rubrique n'est plus rendue.
+- **CSS compilé contrôlé** (chunk extrait du HTML puis téléchargé) : `.contact-frame` porte `border: var(--contact-frame-border-width, 1px) solid`, `var(--contact-frame-color, var(--border-color))` et `border-radius: var(--contact-frame-radius, 2px)` ; `.contact-info__address:not(:first-child)` et `.contact-info__lines:not(:first-child)` sont émis.
+- **Éditeur (relecture)** : `CONTACT_PRACTICAL_INFO_ENABLED` vaut `false` et le JSX « Informations pratiques » reste dans la source, sous le drapeau ; aucune sous-zone n'est rendue.
+- **`npm run build` non lancé** : le serveur de développement occupe le port 3000 et `.next` est partagé.
+- **Recette visuelle navigateur** (non mesurable ici) : deux cartes encadrées se faisant écho, séparateurs entre Identité / Adresse / Coordonnées, réglages réactifs dans l'éditeur, cadre absent à épaisseur 0.
+
+### Fichiers modifiés
+- `src/lib/pages.ts` (`ContactFrameColorToken`, `ContactFrameSettings`, `ContactStyleSettings.frame`, `CONTACT_PRACTICAL_INFO_ENABLED`, `contactFrameColorTokenOrder` / `Labels` / `isContactFrameColorToken`, `DEFAULT_CONTACT_FRAME`, `resolveContactFrame`, branchements `createContactContent` / `resolveContactContent`), `src/components/modules/contact/contactFrame.ts` (créé), `src/components/modules/contact/ContactInfoBlock.tsx` (prop `frame`, `contact-frame`, drapeau, garde `<dl>`, `hasVisibleContactInfo`), `src/components/modules/contact/ContactModule.tsx` (enveloppe `contact-frame--form`, prop `frame`), `src/app/globals.css` (§ MODULE « CONTACT » : `.contact-frame`, séparateurs), `src/components/backoffice/pages/modules/ModuleContactEditor.tsx` (zone « Cadres des conteneurs », `patchFrameStyle`, `patchSocialStyle` corrigé, sous-zone « Informations pratiques » sous drapeau), `src/app/(front-office)/demo/page.tsx` (`frame` par module), `CHANGELOG.md`.
+
+### Prochaine étape prévue
+Recette visuelle navigateur des deux cadres et des séparateurs (clair/sombre, épaisseur 0, arrondi), puis validation de la persistance du réglage (`content.style.frame` relu par l'éditeur après rechargement).
+
+---
+
+## 2026-09-16 – 19:55 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Étape 14.1.b — Contact, rendu public : hiérarchie d'identité, espacements doublés, intitulés en gras.**
+- **Hiérarchie** : le nom quitte son `<p class="contact-info__name">` pour un vrai `<h2 class="module-h2">` (échelle de titre de section : 2,34 rem ; 2,81 rem ≥ 640 px ; poids 300) ; le slogan devient `<h3 class="contact-info__slogan">` et reprend **l'échelle que le nom occupait** (`clamp(1.25rem, 1.05rem + 0.8vw, var(--h3-size))`, interligne 1,3, police heading, `--text-muted`) — un cran sous le titre, sans adopter le gabarit `.module-h3` (1,4 rem), trop proche du corps de texte. Nom et slogan forment désormais **un seul bloc Identité** (`grid gap-1`).
+- **Espacements doublés** : entre les blocs Identité / Adresse / Coordonnées, `gap-6` → `gap-12` (1,5 → 3 rem) ; entre les lignes de coordonnées, `.contact-info__lines { gap }` `0,75 → 1,5 rem`.
+- **Intitulés** : `<dt>` (Téléphone, Mobile, E-mail, Horaires, Zone d'intervention) `font-weight: 600 → 700` — à 0,69 rem en capitales espacées et en couleur atténuée, le semi-gras ne tranchait pas assez sur la valeur.
+- **Le `margin-top: -0.75rem` du slogan est supprimé** : ce négatif compensait l'espacement du bloc mais s'appliquait aussi quand le nom était masqué, et dépendait de l'élément précédent. Le `gap-1` du conteneur Identité le remplace, et ce conteneur **n'est rendu que si le nom ou le slogan est visible et non vide** (aucun nœud d'écart vide).
+- **Périmètre respecté** : `hasVisibleContactInfo`, `hasAddress`, `telHref`, la logique de masquage, la grille C2/C3, le formulaire, les réseaux sociaux, l'éditeur back-office, la base et le schéma sont **inchangés** — réglages purement typographiques et de mise en page.
+
+### Écarts assumés au plan (et pourquoi)
+- **Deux `h2` dans la section contact.** Le chapeau (C1) porte déjà un `h2.module-h2` ; le nom étant promu à la même échelle, une section complète en contient **deux** (ordre DOM valide : h2, h2, h3). C'est la demande explicite (nom à l'échelle H2 pleine), pas un effet de bord : l'invariant du site reste « un seul `h1` », décidé par `PublicModulesList`, inchangé. L'assertion de recette « `h2` = 1 par section contact » (entrée 14.1) devient donc fausse et est annotée ci-dessous.
+- **Le slogan garde `--h3-size` en borne haute du `clamp`, mais pas le poids ni l'interlettrage de `.module-h3`.** Il reste un `h3` sémantique (titre du bloc Identité) avec une typographie de slogan : c'est le seul niveau de titre disponible sous le nom sans introduire une taille inédite dans l'échelle du site.
+- **Aucune assertion CSS « minifiée » dans le serveur de développement.** Le chunk servi est **non minifié** en `next dev` (règles multi-lignes) ; les contrôles ont donc porté sur les formes réelles (`gap: 1.5rem`, `font-weight: 700`, `clamp(1.25rem, 1.05rem + .8vw, var(--h3-size))`), la valeur étant identique.
+
+### Mesures et vérifications
+- `npx tsc --noEmit` → **0** ; `npm run lint` → **0 erreur, 0 avertissement**.
+- `/demo` → **200**. Dans la tranche `contact-11` (C2 rempli) : `<h2` = **2** (chapeau + nom), `<h3` = **1** (slogan), `<h2 class="module-h2">` = **2**, `<h3 class="contact-info__slogan">` = **1** ; page entière `<h1` = **1** (le héros).
+- **CSS compilé contrôlé** (chunk de 139 482 caractères, extrait du HTML puis téléchargé) : `.contact-info__lines` porte `gap: 1.5rem`, `.contact-info__lines dt` porte `font-weight: 700`, `.contact-info__slogan` porte `font-family: var(--font-heading)`, `font-size: clamp(1.25rem, 1.05rem + .8vw, var(--h3-size))` et `line-height: 1.3` ; `.contact-info__name` **n'est plus émis**.
+- **Recette visuelle navigateur** (non mesurable ici) : nom à l'échelle du titre de section, slogan intermédiaire, blocs nettement séparés, intitulés franchement gras.
+
+### Fichiers modifiés
+- `src/components/modules/contact/ContactInfoBlock.tsx` (racine `gap-12`, bloc Identité `grid gap-1`, nom `<h2 class="module-h2">`, slogan `<h3 class="contact-info__slogan">`, doc-comment d'en-tête), `src/app/globals.css` (§ MODULE « CONTACT » : suppression de `.contact-info__name`, réécriture de `.contact-info__slogan`, `gap` des lignes, `dt` en 700), `CHANGELOG.md`.
+
+### Prochaine étape prévue
+Recette visuelle navigateur de la section contact, puis reste de la recette 14.1 (soumission réelle avec `service_role` et Resend, `npm run build` serveur arrêté).
+
+---
+
+## 2026-09-16 – 17:30 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Correctif 14.1.a — le bouton « Ajouter un réseau » ne produisait rien.**
+- **Cause racine** : `resolveContactSocial` (`src/lib/pages.ts`) écarte toute entrée dont l'URL est vide — règle **correcte pour le rendu** (un lien sans destination n'a rien à afficher), mais fatale à l'**édition**. L'éditeur dérive sa liste de `resolveContactContent(content)`, mémoïsé sur `content` : le réseau ajouté était bien écrit dans le store, puis **filtré au rendu suivant**, si bien que la liste gardait la même longueur et que le clic semblait sans effet.
+- **Correctif** : le résolveur accepte une option `keepEmptySocialNetworks`, **réservée à l'éditeur**, qui conserve les entrées à URL vide. Le défaut est inchangé : le rendu public continue d'écarter un réseau sans adresse, et `publicDescription` également.
+- **Vérifié par script** (`npx tsx`, script temporaire supprimé après) : sur un contenu portant 3 réseaux + 1 ajout vide → **3** en lecture par défaut, **4** avec l'option, et l'entrée vide est bien celle qui a été ajoutée.
+- **Non-régression** : `npx tsc --noEmit` → 0 ; `npm run lint` → 0/0 ; `/demo` → **200**, toujours 3 liens sociaux rendus par section et un seul `h1`.
+
+### Fichiers modifiés
+- `src/lib/pages.ts` (`ResolveContactContentOptions`, `resolveContactSocial(raw, keepEmpty)`), `src/components/backoffice/pages/modules/ModuleContactEditor.tsx` (résolution avec `keepEmptySocialNetworks`).
+
+---
+
+## 2026-09-16 – 16:30 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Étape 14.1 — Refonte du module « Contact & Localisation » : quatre containers, formulaire BDD-First + Resend, pièces jointes validées, anti-spam, tolérance totale au mode démo.**
+- **Quatre containers** remplacent les trois champs à plat : chapeau (C1), coordonnées masquables ligne par ligne (C2), formulaire (C3), réseaux sociaux (C4). `content.type` reste `"contact"` : aucune migration d'énumération, le contenu vit dans le JSONB.
+- **Le module historique reste lisible** : `resolveContactContent` est **total** et reprend `email → info.email`, `phone → info.landline`, `address → info.address.address1`. Aucune migration de données, aucun contenu existant invalidé.
+- **Le formulaire est le premier chemin d'écriture non authentifié du projet.** Rien d'identitaire ne vient du payload : le serveur résout la page **publiée** par `pageSlug` (D13), en déduit `page_id` + `photographer_id`, puis le destinataire depuis le profil (`contact_form_email`, repli `public_email`, sinon 422 — D12). Le tenant et le destinataire ne sont donc **jamais** transmis par le visiteur.
+- **Cas de la page d'accueil traité** (découverte de planification) : le slug vide n'est pas une clé fiable, la route résout explicitement `is_home = true` quand `pageSlug === ""`. Sans cela, le formulaire de la page d'accueil n'aurait jamais trouvé sa page.
+- **Pièce jointe : plafond serveur `min(maxFileSizeMB, 10)`, catalogue fermé, signature binaire** (magic bytes, jamais `file.type`). Le nom de l'objet est un UUID généré. Le `path` relatif est stocké, **jamais** l'URL publique signée (elle expire). Bucket réutilisé `portfolio-media` sous `contact-attachments/{photographerId}/…` : aucun objet ne pollue la médiathèque, qui liste la table `media` et non les objets du bucket.
+- **Anti-spam** : `_gotcha` rempli ⇒ 200 silencieux (aucune insertion, aucun e-mail) ; limitation de débit **comptée en base** (fenêtre de 10 min, plafond 5 par `ip_hash` salé) — fiable en serverless, contrairement à un compteur mémoire ; Turnstile en composant maison (~40 lignes, rendu explicite) pour éviter une 4ᵉ dépendance.
+- **Mode démo d'abord (A5)** : le widget Turnstile n'est monté que si la clé publique existe, l'e-mail est non bloquant, et la route répond `503` quand Supabase/`DATABASE_URL` manque. `/demo` rend **200** sans aucune variable d'environnement.
+- **Éditeur refondu** en quatre zones : chapeau ; coordonnées & visibilité (interrupteur **maître** puis 8 interrupteurs, les champs masqués restant **visibles mais désactivés** pour pouvoir être corrigés sans les réafficher) ; formulaire (taille, formats en cases à cocher, CGU) ; réseaux sociaux (apparence de section — forme, alignement, mode couleur — puis liste ordonnée avec ajout / duplication / suppression / montée / descente, à la manière de `ModuleCardsEditor`). Le `ColorField` n'apparaît qu'en mode `custom`.
+- **Préremplissage (A1)** : `src/lib/contact-prefill.ts` mappe `OwnerProfile` → objet **pur** `ContactPrefill` avec `import type` uniquement. `pages.ts` n'importe **jamais** `owner-profile.ts` (module `"use client"`). `PagesStoreProvider.addModule` applique ce préremplissage à la création d'un contact ; un profil sans réseaux n'en reçoit aucun (pas de faux liens).
+- **BDD** : table `contact_submissions` (migration `0008`), `accepted_cgu DEFAULT false` — un consentement n'est jamais présumé — et migration RLS `0009` écrite à la main : lecture et suppression propriétaire seulement, **aucune politique INSERT** (l'insertion passe par le service_role / la connexion propriétaire).
+- **Documentation** : `.env.example` complété (`RESEND_FROM_EMAIL`, `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY`, `CONTACT_IP_SALT`) ; `-----PourMémoSQLeditor-CreationTable.md` porte la nouvelle table et ses politiques.
+
+### Écarts assumés au plan (et pourquoi)
+- **Couleur de glyphe « thème » = `--text-color`, et non `--primary`.** `--primary` vaut `--accent-color` (`#e8d8d7`), un rose très clair : un glyphe de 18 px dans cette teinte sur surface nacrée est quasi invisible. L'accent reste porté par le survol et le filet. C'est exactement le piège signalé en découverte.
+- **LinkedIn : SVG local dans la table d'icônes.** Simple Icons **13.15.1 ne publie plus la marque LinkedIn** et Lucide v1 ne porte plus aucune marque — le repli enregistré au plan (§6) n'est donc pas utilisable pour ce glyphe. Le repli est isolé dans le **seul fichier de correspondance**, là où le plan voulait qu'un renommage d'export se corrige en une ligne.
+- **`/demo` ne montre que 2 formes d'icônes, pas 4.** La forme est un réglage **de section** (un seul `shape` par module) : avec les **deux instances** exigées par le plan, seules deux formes peuvent être rendues (rond / arrondi). Les **quatre règles** de forme sont en revanche présentes dans le CSS compilé et contrôlées ; c'est la démonstration de forme « une par instance » qui est impossible, pas le réglage.
+- **`phone` historique → `info.landline`**, littéralement comme au plan. Le champ d'origine ne distingue pas fixe et mobile ; aucune heuristique sur le premier chiffre n'a été introduite (l'hypothèse est documentée dans le résolveur).
+- **`findPublishedContactPage` renvoie la page *et* les réglages du formulaire** (nom différent de `findPublishedPageBySlug`, même responsabilité). Ces réglages (`requireCGU`, extensions, taille) sont nécessaires **avant** de valider la soumission et l'upload ; les recharger dans la route aurait dupliqué la requête.
+- **`disabled` ajouté à `TextField` / `TextAreaField`** (champs partagés) : sans cela, « champs masqués mais grisés » n'était pas réalisable.
+- **Resend par `fetch`, sans SDK** (comme Turnstile) : un envoi unique ne justifie pas une dépendance supplémentaire.
+- **Le lot 1 n'a pas pu rester seul à `tsc` 0.** Remplacer la branche `contact` de `ModuleContent` casse mécaniquement l'ancien rendu inline (il lisait `content.email`) : le typecheck est vert aux **Lots 3 + 4**, livrés dans la même passe. La consigne « ne pas câbler `resolveContactContent` avant le Lot 3 » a été respectée.
+- **Id de champs uniques par instance (`useId`)** : la démonstration monte deux formulaires ; des `id` fixes auraient dupliqué les identifiants et cassé l'association `label`/`for`.
+
+### Mesures et vérifications
+- `npx tsc --noEmit` → **0** ; `npm run lint` → **0 erreur, 0 avertissement**.
+- **Dépendance vérifiée à l'installation** : `@icons-pack/react-simple-icons@13.15.1`, peer `react: ^16.13 || ^17 || ^18 || ^19` (compatible React 19.2.8), import **par icône** `…/icons/SiInstagram` (export par défaut) — jamais le barrel. LinkedIn absent du paquet (cf. écarts).
+- `/demo` → **200** (198 515 caractères). Deux sections contact (`contact-11`, `contact-12`), **un** `<form>` chacune, `name="_gotcha"` présent **exactement 1 fois par formulaire**.
+- **Rendu des containers** : `contact-11` porte `lg:grid-cols-2` (C2 + C3), `tel:` ×2 et `mailto:` ×1 ; `contact-12` n'a **aucun** `tel:`/`mailto:` et porte `mx-auto max-w-2xl` — la preuve du formulaire seul et centré quand C2 est masqué.
+- **Titrage** : `h1` = **1** sur toute la page (le héro), **0** dans les deux sections contact ; `h2` = **1** par section (le chapeau). Aucun style de champ back-office sur la page publique. *(Assertion valable jusqu'à l'étape 14.1.b : le nom du bloc Identité est depuis un second `h2` — voir l'entrée du 16/09 19:55.)*
+- **Identifiants de formulaire** : 14 `id` de champs, **tous distincts** (2 formulaires × 7 champs) — pas de collision d'accessibilité.
+- **CSS compilé contrôlé** (chunk de 139 520 caractères) : `contact-section__subtitle`, `contact-info__preline`, `contact-form__gotcha`, `contact-social__link` et les règles `--circle`, `--square`, `--rounded` sont émises. `--minimal` n'émet **aucune** règle : c'est sa définition (absence d'habillage), pas un oubli.
+- **Route exercée partiellement** (l'environnement local a Supabase + `DATABASE_URL`) : POST vide → **400** (Zod) ; POST valide avec `pageSlug=demo` → **422** « Page inconnue ou non publiée » ; POST valide avec `pageSlug=""` → **422** également (accueil sans module contact). Le passage honeypot → Zod → résolution de page est donc réellement exercé. Turnstile **non configuré** ici (sinon la requête se serait arrêtée en 400 anti-robot).
+- **Non exercé, assumé et signalé** : la **soumission complète** (insertion, upload, e-mail) n'a pas été jouée — elle exige une page publiée portant un module contact **et** une clé `service_role`, absents ici. Elle a été vérifiée **par relecture** (ordre des contrôles, `min(…, 10)`, signature binaire, `path` et non URL).
+- **`publicDescription` (branche contact) : relecture seule.** `/demo` court-circuite `public-page.ts` ; la lecture du chapeau (sous-titre, à défaut titre) n'a donc **pas** été exercée par les contrôles.
+- **RLS jamais exercée** (décision D2) : Supabase Studio agit en `service_role` et la contourne, et aucune UI de consultation n'est livrée. Les politiques sont posées pour la suite, pas testées. `is_read` reste sans lecteur.
+- **`npm run build` non lancé** : le serveur de développement occupe le port 3000 et `.next` est partagé.
+
+### Fichiers créés ou modifiés
+- Créés : `src/lib/contact-prefill.ts`, `src/components/modules/contact/{ContactModule,ContactInfoBlock,ContactForm,SocialLinks,socialIcons,TurnstileWidget}.tsx`, `src/lib/integrations.ts`, `src/lib/supabase/admin.ts`, `src/lib/emails/contact-notification.ts`, `src/app/api/contact/route.ts`, `src/db/repositories/contact-submissions.repository.ts`, `drizzle/0008_gorgeous_rage.sql`, `drizzle/0009_contact_rls.sql`.
+- Modifiés : `src/lib/pages.ts` (§ CONTACT : types, catalogues, format, fabriques, résolveur, catalogue et `createModuleContent`), `src/lib/public-page.ts` (description de partage), `src/components/modules/PublicModules.tsx` (ancien rendu inline supprimé, plomberie `pageSlug`), `src/app/(front-office)/page.tsx` et `[slug]/page.tsx` (`pageSlug`), `src/app/(front-office)/demo/page.tsx` (deux modules contact), `src/components/backoffice/pages/modules/ModuleContactEditor.tsx` (réécriture), `src/components/backoffice/pages/modules/form-fields.tsx` (`disabled`), `src/components/backoffice/PagesStoreProvider.tsx` (préremplissage), `src/app/globals.css` (§ MODULE « CONTACT »), `src/db/schema.ts`, `drizzle/meta/_journal.json`, `.env.example`, `-----PourMémoSQLeditor-CreationTable.md`, `package.json` / `package-lock.json` (dépendance icônes).
+- BDD : table `contact_submissions` + index ; RLS lecture/suppression propriétaire (aucune politique INSERT).
+
+### Prochaine étape prévue
+Recette navigateur (lisibilité des coordonnées, formulaire sur mobile, retour de focus, habillages d'icônes, pièce jointe refusée pour cause de format), puis « soumission réelle » sur une page contact publiée avec `service_role` et Resend configurés, et enfin `npm run build` **serveur de développement arrêté**.
+
+---
+
 ## 2026-09-15 – 18:20 (heure locale America/Bogota)
 
 ### Tâche exécutée

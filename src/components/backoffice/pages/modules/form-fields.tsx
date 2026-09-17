@@ -91,6 +91,31 @@ export function LabelWithTip({ label, htmlFor, tip }: LabelWithTipProps) {
 }
 
 /* --------------------------------------------------------------------------
+   Saisie numérique bornée
+   -------------------------------------------------------------------------- */
+
+/**
+ * Convertit une saisie en entier **borné** (retourne `null` si invalide).
+ *
+ * Vit ici depuis 14.2 : deux éditeurs (contact, contact-map) bornent des
+ * nombres (`0..8`, `0..24`, `1..20`). La laisser locale aurait produit une
+ * seconde copie — et le jour où une borne change, une seule aurait été
+ * corrigée. Le bornage reste **aussi** appliqué côté domaine (`resolve…`) :
+ * cet utilitaire n'est qu'un confort de saisie.
+ */
+export function parseBounded(
+  value: string,
+  min: number,
+  max: number
+): number | null {
+  const parsed = Number.parseInt(value, 10);
+  if (Number.isNaN(parsed)) {
+    return null;
+  }
+  return Math.min(Math.max(parsed, min), max);
+}
+
+/* --------------------------------------------------------------------------
    Textes
    -------------------------------------------------------------------------- */
 
@@ -105,6 +130,12 @@ type TextFieldProps = {
   type?: string;
   mono?: boolean;
   autoComplete?: string;
+  /**
+   * Champ verrouillé. Utilisé par le module Contact (14.1) : un champ masqué
+   * sur le site public reste **éditable en valeur** mais désactivé, pour qu'on
+   * puisse le corriger sans devoir le réafficher d'abord.
+   */
+  disabled?: boolean;
   className?: string;
 };
 
@@ -118,6 +149,7 @@ export function TextField({
   type = "text",
   mono = false,
   autoComplete,
+  disabled = false,
   className,
 }: TextFieldProps) {
   const id = React.useId();
@@ -130,6 +162,7 @@ export function TextField({
         value={value}
         placeholder={placeholder}
         autoComplete={autoComplete}
+        disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
         className={cn(mono && "font-mono")}
       />
@@ -146,6 +179,8 @@ type TextAreaFieldProps = {
   hint?: string;
   tip?: string;
   rows?: number;
+  /** Champ verrouillé (cf. `TextField.disabled`). */
+  disabled?: boolean;
   className?: string;
 };
 
@@ -157,6 +192,7 @@ export function TextAreaField({
   hint,
   tip,
   rows,
+  disabled = false,
   className,
 }: TextAreaFieldProps) {
   const id = React.useId();
@@ -168,6 +204,7 @@ export function TextAreaField({
         value={value}
         placeholder={placeholder}
         rows={rows}
+        disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
       />
       {hint ? <p className={EDITOR_TYPE.hint}>{hint}</p> : null}

@@ -1185,6 +1185,473 @@
 }
 
 /* ==========================================================================
+   MODULE « CONTACT » — coordonnées, formulaire, réseaux (Étape 14.1)
+   --------------------------------------------------------------------------
+   Quatre containers : chapeau, coordonnées, formulaire, réseaux sociaux.
+   La grille C2/C3 est portée par des utilitaires Tailwind dans le composant
+   (`lg:grid-cols-2`, `max-w-2xl mx-auto` quand C2 est masqué) ; les règles
+   ci-dessous ne peignent que ce que les utilitaires ne peuvent pas exprimer :
+   la typographie éditoriale des coordonnées, l'habillage des icônes et les
+   états du formulaire public.
+
+   Deux précautions, comme pour les autres modules :
+     · ces règles sont **hors `@layer`** : elles doivent primer sur les
+       utilitaires Tailwind (même choix que les effets de galerie) ;
+     · la **couleur du glyphe** est une variable (`--contact-social-color`),
+       posée par le composant selon le mode couleur. Le mode « thème » prend
+       `--text-color`, jamais `--primary` — ce dernier vaut `--accent-color`,
+       un rose très clair, quasi invisible en glyphe sur surface nacrée.
+   ========================================================================== */
+
+/* Chapeau — mêmes échelles que l'en-tête des Cards : un titre de section ne
+   doit pas changer de taille d'un module à l'autre. */
+.contact-section__subtitle {
+  margin-top: 0.75rem;
+  font-family: var(--font-heading);
+  font-size: clamp(0.95rem, 0.9rem + 0.3vw, 1.125rem);
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.contact-section__intro {
+  margin-top: 0.75rem;
+  white-space: pre-line;
+  font-size: clamp(0.9rem, 0.86rem + 0.25vw, 1.0625rem);
+  line-height: 1.7;
+  color: var(--text-muted);
+}
+
+/* ---- Cadres des conteneurs 2 et 3 — un seul réglage partagé (14.1.c) ----
+   Le cadre est un réglage **par module** (`content.style.frame`) : le composant
+   pose trois variables (`contactFrameCssVars`), cette règle les consomme avec
+   leurs **replis**. Les replis comptent : un contenu écrit à la main qui ne
+   poserait pas les variables doit rester lisible, et `0px` est une valeur
+   légitime (« sans cadre ») qui doit l'emporter sur le repli — c'est pour cela
+   que la variable porte l'unité et que le repli n'est qu'un défaut de gabarit.
+   Aucun fond : la surface nacrée de la page reste visible (D8), le cadre est
+   une bordure, pas une carte. */
+.contact-frame {
+  border: var(--contact-frame-border-width, 1px) solid
+    var(--contact-frame-color, var(--border-color));
+  border-radius: var(--contact-frame-radius, 2px);
+  padding: 1.25rem;
+}
+
+@media (min-width: 640px) {
+  .contact-frame {
+    padding: 2rem;
+  }
+}
+
+/* ---- Container 2 — coordonnées ----
+   Hiérarchie d'identité : le nom est un vrai titre de section (`.module-h2`,
+   portée par le composant) et le slogan prend **l'échelle que le nom occupait
+   avant** — un cran sous le titre, pas au gabarit `.module-h3` (1,4 rem), trop
+   proche du corps de texte ici. D'où le `clamp` conservé tel quel.
+   L'espacement nom/slogan est porté par le `grid gap-1` du bloc Identité : le
+   `margin-top` négatif d'avant compensait l'espacement du bloc, mais il
+   s'appliquait aussi quand le nom était masqué et se comportait différemment
+   selon l'élément précédent. Le conteneur, lui, n'existe que si l'un des deux
+   est affiché. */
+.contact-info__slogan {
+  font-family: var(--font-heading);
+  font-size: clamp(1.25rem, 1.05rem + 0.8vw, var(--h3-size));
+  line-height: 1.3;
+  color: var(--text-muted);
+}
+
+.contact-info__address {
+  display: grid;
+  gap: 0.15rem;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+  /* Les sauts de ligne d'une adresse saisie en plusieurs lignes sont
+     respectés — comme pour les horaires (D14). */
+  white-space: pre-line;
+}
+
+.contact-info__lines {
+  display: grid;
+  /* Espacement doublé (0,75 → 1,5 rem) : les lignes de coordonnées doivent se
+     lire comme des blocs distincts, pas comme une liste tassée, maintenant que
+     le bloc Identité au-dessus occupe lui-même plus de hauteur. */
+  gap: 1.5rem;
+  margin: 0;
+}
+
+.contact-info__lines dt {
+  font-size: 0.6875rem;
+  /* 700, pas 600 : à 0,69 rem en capitales espacées, le semi-gras se noie dans
+     la couleur atténuée — les intitulés doivent trancher sur la valeur. */
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.contact-info__lines dd {
+  margin: 0.15rem 0 0;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.contact-info__lines a {
+  color: var(--text-color);
+  text-decoration: underline;
+  text-decoration-color: var(--accent-color-strong);
+  text-underline-offset: 3px;
+}
+
+.contact-info__lines a:hover {
+  color: var(--accent-color-strong);
+}
+
+.contact-info__preline {
+  white-space: pre-line;
+}
+
+/* ---- Container 3 — formulaire ----
+   Les cadres C2 et C3 sont des items de la même grille : ils s'étirent donc à
+   une hauteur identique. Pour que « Envoyer » repose sur le **bas** du cadre C3
+   — au niveau de la dernière ligne affichée en C2 — le cadre du formulaire est
+   une colonne flex et le formulaire l'occupe entièrement. Une hauteur fixe
+   aurait été fausse dès qu'une ligne de C2 change (adresse retirée, horaires
+   réactivés), d'où l'étirement dynamique plutôt qu'un `min-height` en dur. */
+.contact-frame--form {
+  display: flex;
+  flex-direction: column;
+}
+
+.contact-form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 1rem;
+  min-height: 0;
+}
+
+/* Message élastique : `flex-grow` garde la hauteur du `rows={6}` comme base et
+   n'absorbe que l'espace restant. Une hauteur fixe aurait soit écrasé le champ
+   sur téléphone, soit laissé le bouton flotter au milieu sur grand écran. */
+.contact-form__field--message {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.contact-form__field--message textarea {
+  flex-grow: 1;
+}
+
+/* Deux colonnes dès 640 px : nom et e-mail vont de pair, le reste occupe la
+   largeur — sans `grid-cols-2` Tailwind, qui forcerait le même gabarit partout. */
+@media (min-width: 640px) {
+  .contact-form__row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+}
+
+.contact-form__field {
+  display: grid;
+  gap: 0.375rem;
+}
+
+.contact-form__hint {
+  font-size: 0.6875rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.contact-form__file {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.contact-form__consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.contact-form__consent input {
+  margin-top: 0.2rem;
+}
+
+/* Champs publics : surface nacrée, filet et encre du thème. Le composant shadcn
+   pose `bg-transparent` ; une règle hors `@layer` à spécificité égale l'emporte
+   (même mécanique que le reste du site public). */
+.contact-form :where(input:not([type="checkbox"]):not([type="file"]), textarea) {
+  background-color: var(--surface-color);
+  border-color: var(--border-color);
+  color: var(--text-color);
+}
+
+.contact-form :where(input, textarea, a, button):focus-visible {
+  outline: 2px solid var(--accent-color-strong);
+  outline-offset: 2px;
+}
+
+/* Champ piège : hors écran, mais **jamais** `display: none` — un robot doit le
+   voir et le remplir, un humain ne doit pas le percevoir. */
+.contact-form__gotcha {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+.contact-form__success {
+  font-size: 0.875rem;
+  color: var(--text-color);
+}
+
+.contact-form__error {
+  font-size: 0.875rem;
+  color: var(--destructive);
+}
+
+/* ---- Container 4 — réseaux sociaux ---- */
+.contact-social__link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--contact-social-color, var(--text-color));
+  transition:
+    color 200ms var(--ease-silk, ease),
+    background-color 200ms var(--ease-silk, ease),
+    border-color 200ms var(--ease-silk, ease);
+}
+
+/* Habillage neutre : surface + filet du thème, jamais la couleur de la marque
+   (un fond officiel avec l'icône officielle se confondrait). */
+.contact-social__link--circle,
+.contact-social__link--square,
+.contact-social__link--rounded {
+  width: 2.5rem;
+  height: 2.5rem;
+  background-color: var(--surface-color);
+  border: 1px solid var(--border-color);
+}
+
+.contact-social__link--circle {
+  border-radius: 9999px;
+}
+
+.contact-social__link--square {
+  border-radius: 0;
+}
+
+.contact-social__link--rounded {
+  border-radius: 0.5rem;
+}
+
+.contact-social__link:hover {
+  border-color: var(--accent-color-strong);
+}
+
+/* Le glyphe suit la variable ; en mode « officielle », la couleur est portée
+   par l'attribut `fill` de l'icône et cette règle n'a pas d'effet. */
+.contact-social__icon {
+  color: var(--contact-social-color, var(--text-color));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .contact-social__link {
+    transition: none;
+  }
+}
+
+/* ==========================================================================
+   MODULE « CONTACT MAP » — carte et informations pratiques (Étape 14.2)
+   --------------------------------------------------------------------------
+   Deux conteneurs de hauteur égale : carte Google Maps embarquée et
+   informations pratiques. Les règles ci-dessous, hors `@layer` comme celles
+   des autres modules, ne peignent que ce que les utilitaires Tailwind ne
+   peuvent pas exprimer : le fond de section (couleur unie, D7), la géométrie
+   de la carte (iframe en `inset: 0`), les filtres CSS et le voile.
+
+   Le **cadre** des deux conteneurs réutilise les variables du module contact
+   (`--contact-frame-*`, D6) : mêmes replis, même arrondi, un seul réglage de
+   module. Les valeurs de repli comptent — un contenu écrit à la main qui ne
+   poserait pas les variables doit rester lisible, et `0px` est une valeur
+   légitime (« sans cadre ») qui doit l'emporter sur le repli.
+   ========================================================================== */
+
+.contact-map {
+  background-color: var(--contact-map-bg, var(--bg-color));
+  color: var(--contact-map-text, var(--text-color));
+}
+
+/* Variante « contraste » : le fond est l'encre du thème et le texte le fond de
+   page. Le jeton global `--text-muted` resterait sombre sur sombre : on le
+   réexprime **localement** à partir du texte inversé, sans toucher au jeton du
+   site — même mécanique que la couleur de glyphe du module contact. */
+.contact-map--bg-contrast {
+  --text-muted: color-mix(in srgb, var(--contact-map-text) 62%, transparent);
+}
+
+.contact-map__grid {
+  display: grid;
+  gap: 2.5rem;
+}
+
+/* Deux colonnes de force égale à partir de `lg` : les deux cadres s'étirent à
+   la même hauteur (`align-items: stretch`), la carte remplit alors le sien.
+   En dessous, l'ordre du DOM fait foi — c'est lui qui décide quelle colonne
+   passe en premier sur téléphone. */
+@media (min-width: 1024px) {
+  .contact-map__grid {
+    grid-template-columns: 1fr 1fr;
+    align-items: stretch;
+  }
+}
+
+.contact-map__frame {
+  border: var(--contact-frame-border-width, 1px) solid
+    var(--contact-frame-color, var(--border-color));
+  border-radius: var(--contact-frame-radius, 2px);
+  padding: 1.25rem;
+}
+
+@media (min-width: 640px) {
+  .contact-map__frame {
+    padding: 2rem;
+  }
+}
+
+/* La carte est une colonne flex : le cadre peut s'étirer à la hauteur du bloc
+   d'informations sans que l'iframe ait une hauteur fixe. */
+.contact-map__frame--map {
+  display: flex;
+  flex-direction: column;
+}
+
+.contact-map__map {
+  position: relative;
+  flex: 1;
+  min-height: 20rem;
+  overflow: hidden;
+  /* `inherit` : la carte arrondit ses coins comme le cadre, sans second réglage. */
+  border-radius: inherit;
+  background: var(--surface-color);
+}
+
+.contact-map__iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+/* Filtres — `theme-blend` partage le N&B, le fondu au fond venant de l'overlay
+   en `multiply` (voir `.contact-map--blend`). Sans overlay, il reste un N&B. */
+.contact-map__iframe--grayscale,
+.contact-map__iframe--theme-blend {
+  filter: grayscale(100%) contrast(105%);
+}
+
+.contact-map__overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: var(--contact-map-bg, var(--bg-color));
+  opacity: var(--contact-map-overlay, 0);
+}
+
+.contact-map--blend .contact-map__overlay {
+  mix-blend-mode: multiply;
+}
+
+/* Placeholder : aucune adresse résolue. `place-items` centre le texte, et le
+   fond de surface distingue le vide d'une carte qui n'aurait pas chargé. */
+.contact-map__map--empty {
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+.contact-map__info {
+  display: grid;
+  gap: 1.5rem;
+  align-content: start;
+}
+
+.contact-map__address {
+  display: grid;
+  gap: 0.15rem;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+  /* Une adresse de profil saisie sur plusieurs lignes est respectée. */
+  white-space: pre-line;
+}
+
+.contact-map__lines {
+  display: grid;
+  gap: 1.25rem;
+  margin: 0;
+}
+
+.contact-map__lines dt {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.contact-map__lines dd {
+  margin: 0.15rem 0 0;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.contact-map__preline {
+  white-space: pre-line;
+}
+
+/* Bouton sobre : surface nacrée et filet du thème, teinte d'accent au survol.
+   Pas de fond plein — il doit se lire comme une action secondaire, pas comme
+   le CTA principal du site. */
+.contact-map__directions {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 9999px;
+  background-color: var(--surface-color);
+  padding: 0.6rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-color);
+  text-decoration: none;
+  transition:
+    border-color 200ms var(--ease-silk, ease),
+    color 200ms var(--ease-silk, ease);
+}
+
+.contact-map__directions:hover {
+  border-color: var(--accent-color-strong);
+  color: var(--accent-color-strong);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .contact-map__directions {
+    transition: none;
+  }
+}
+
+/* ==========================================================================
    Base layer — typographie, fond, sélection
    ========================================================================== */
 @layer base {

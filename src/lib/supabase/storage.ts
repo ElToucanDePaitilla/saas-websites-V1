@@ -66,6 +66,50 @@ export async function uploadImage(
   return { path: objectPath, publicUrl };
 }
 
+/**
+ * Préfixe Storage des pièces jointes de contact (Étape 14.1).
+ *
+ * Le bucket est **réutilisé** (`portfolio-media`) plutôt que dupliqué : un
+ * bucket séparé imposerait une migration Storage et ses politiques, sans
+ * bénéfice — l'insertion passe par le `service_role`. Les objets ne polluent pas
+ * la médiathèque, qui liste les lignes de la table `media`, pas les objets du
+ * bucket.
+ */
+export const CONTACT_ATTACHMENT_PREFIX = "contact-attachments";
+
+/**
+ * Dépose une **pièce jointe de contact** (préfixe propriétaire dédié).
+ *
+ * L'extension et le type MIME sont fournis par l'appelant, qui les tient du
+ * catalogue fermé (`CONTACT_ATTACHMENT_FORMATS`) : `extensionFromMime` ne
+ * connaît ni `pdf` ni `docx` et renverrait `bin`. Le nom de l'objet est un UUID
+ * **généré**, jamais le nom fourni par le visiteur.
+ *
+ * Retourne le `path` relatif — **jamais** l'URL publique : une URL signée
+ * expire, et c'est le chemin qui est stocké en base.
+ */
+export async function uploadAttachment(
+  client: SupabaseClient,
+  photographerId: string,
+  file: File,
+  extension: string,
+  mimeType: string
+): Promise<{ path: string; publicUrl: string }> {
+  const objectPath = `${CONTACT_ATTACHMENT_PREFIX}/${photographerId}/${crypto.randomUUID()}.${extension}`;
+
+  const { error } = await client.storage
+    .from(MEDIA_BUCKET)
+    .upload(objectPath, file, { contentType: mimeType });
+  if (error) {
+    throw new Error(`Upload de la pièce jointe refusé : ${error.message}`);
+  }
+
+  const publicUrl = client.storage
+    .from(MEDIA_BUCKET)
+    .getPublicUrl(objectPath).data.publicUrl;
+  return { path: objectPath, publicUrl };
+}
+
 /** Supprime un objet du bucket (path complet). */
 export async function deleteImage(
   client: SupabaseClient,

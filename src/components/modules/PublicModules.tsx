@@ -1,6 +1,8 @@
 import { MediaImage } from "@/components/common/MediaImage";
 import { BannerBackground } from "@/components/modules/banner/BannerBackground";
 import { CardsModule } from "@/components/modules/cards/CardsModule";
+import { ContactModule } from "@/components/modules/contact/ContactModule";
+import { ContactMapModule } from "@/components/modules/contact-map/ContactMapModule";
 import { ContentColumnsModule } from "@/components/modules/content/ContentColumnsModule";
 import { GalleryManager } from "@/components/modules/gallery/GalleryManager";
 import { BaseHero } from "@/components/modules/hero/BaseHero";
@@ -205,31 +207,6 @@ export function FaqModule({ module }: { module: PageModule }) {
   );
 }
 
-/** Contact (contenu `contact`). */
-export function ContactModule({ module }: { module: PageModule }) {
-  const content = module.content.type === "contact" ? module.content : null;
-  if (!content) return null;
-
-  return (
-    <section
-      id={module.anchorId}
-      className="mx-auto grid max-w-4xl gap-10 px-4 py-20 sm:px-6 lg:grid-cols-2"
-    >
-      <div>
-        <h2 className="module-h2">
-          {content.heading}
-        </h2>
-        <p className="mt-3 text-[var(--text-muted)]">{content.intro}</p>
-      </div>
-      <ul className="space-y-3 text-sm">
-        {content.email ? <li>Email : {content.email}</li> : null}
-        {content.phone ? <li>Téléphone : {content.phone}</li> : null}
-        {content.address ? <li>Adresse : {content.address}</li> : null}
-      </ul>
-    </section>
-  );
-}
-
 /**
  * Aiguillage du rendu public par type de module.
  *
@@ -243,10 +220,24 @@ export function PageModuleRenderer({
   module,
   exifByUrl,
   titleTag,
+  pageSlug = "",
+  ownerAddress = "",
 }: {
   module: PageModule;
   exifByUrl?: Record<string, unknown>;
   titleTag?: "h1" | "h2";
+  /**
+   * Slug de la page porteuse — transmis **uniquement** au module contact, dont
+   * le formulaire en a besoin pour que le serveur résolve la page publiée et en
+   * déduise le destinataire (14.1 D13). Aucun autre module ne le consomme.
+   */
+  pageSlug?: string;
+  /**
+   * Adresse du profil, transmise **uniquement** au module `contact-map` (14.2
+   * D3). Résolue par le loader serveur et non par le composant : un Server
+   * Component ne doit pas ouvrir une lecture BDD au milieu du rendu.
+   */
+  ownerAddress?: string;
 }) {
   switch (module.content.type) {
     case "hero":
@@ -262,7 +253,11 @@ export function PageModuleRenderer({
     case "faq":
       return <FaqModule module={module} />;
     case "contact":
-      return <ContactModule module={module} />;
+      return <ContactModule module={module} pageSlug={pageSlug} />;
+    case "contact-map":
+      return (
+        <ContactMapModule module={module} ownerAddress={ownerAddress} />
+      );
     case "content":
       return <ContentColumnsModule module={module} />;
     case "cards":
@@ -312,6 +307,8 @@ export function PublicModulesList({
   modules,
   pageTitle,
   exifByUrl,
+  pageSlug = "",
+  ownerAddress = "",
 }: {
   modules: PageModule[];
   /**
@@ -320,6 +317,18 @@ export function PublicModulesList({
    */
   pageTitle: string;
   exifByUrl?: Record<string, unknown>;
+  /**
+   * Slug de la page — descendu jusqu'au formulaire contact (14.1 D13). Absent
+   * sur une page qui n'ouvre pas d'écriture (démonstration), auquel cas aucun
+   * formulaire ne pourra aboutir.
+   */
+  pageSlug?: string;
+  /**
+   * Adresse du profil — descendue jusqu'au module `contact-map` (14.2 D3).
+   * Même tuyau que `pageSlug` : la page la résout une fois, la liste la
+   * transmet, les modules qui l'ignorent ne la lisent pas.
+   */
+  ownerAddress?: string;
 }) {
   // ---- Le titre de niveau 1, décidé UNE fois pour toute la page ------------
   // Règle unique, et la seule du projet : le `h1` va au **premier module**,
@@ -343,6 +352,8 @@ export function PublicModulesList({
       module={module}
       exifByUrl={exifByUrl}
       titleTag={module.id === h1ModuleId ? "h1" : "h2"}
+      pageSlug={pageSlug}
+      ownerAddress={ownerAddress}
     />
   );
 

@@ -8,6 +8,7 @@ import type {
 
 import { ModuleAboutEditor } from "./ModuleAboutEditor";
 import { ModuleCardsEditor } from "./ModuleCardsEditor";
+import { ContactMapEditor } from "./ContactMapEditor";
 import { ModuleContactEditor } from "./ModuleContactEditor";
 import { ModuleCtaBannerEditor } from "./ModuleCtaBannerEditor";
 import { ModuleFaqEditor } from "./ModuleFaqEditor";
@@ -114,6 +115,8 @@ export function ModuleContentEditor({
       return <ModuleFaqEditor content={content} onChangeContent={onChangeContent} />;
     case "contact":
       return <ModuleContactEditor content={content} onChangeContent={onChangeContent} />;
+    case "contact-map":
+      return <ContactMapEditor content={content} onChangeContent={onChangeContent} />;
     case "content":
       return (
         <ModuleContentColumnsEditor

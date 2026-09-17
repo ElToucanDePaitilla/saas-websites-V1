@@ -1,0 +1,1 @@
+ALTER TYPE "public"."module_type" ADD VALUE 'contact-map';

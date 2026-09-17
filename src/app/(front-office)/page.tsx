@@ -76,6 +76,8 @@ export default async function Home() {
         modules={visibleModules}
         pageTitle={page.title}
         exifByUrl={page.exifByUrl}
+        pageSlug={page.slug}
+        ownerAddress={page.ownerAddress}
       />
     </main>
   );

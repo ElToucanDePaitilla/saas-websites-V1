@@ -1,7 +1,10 @@
 "use client";
 
 import * as React from "react";
+import { contactPrefillFromProfile } from "@/lib/contact-prefill";
+import { useOwnerProfile } from "@/lib/owner-profile";
 import {
+  createContactContent,
   createModule,
   demotedHomeSlug,
   reorderModules,
@@ -136,6 +139,11 @@ export function PagesStoreProvider({
    */
   persistenceEnabled?: boolean;
 }) {
+  // Le provider est client : il a le profil sous la main, et c'est donc ici que
+  // se construit l'objet **pur** de préremplissage du module contact (invariant
+  // A1 — `pages.ts` n'importe jamais `owner-profile.ts`).
+  const { profile } = useOwnerProfile();
+
   const [state, setState] = React.useState<StoreState>(() =>
     initialData
       ? { pages: initialData.pages, modulesByPage: initialData.modulesByPage }
@@ -378,7 +386,17 @@ export function PagesStoreProvider({
     ): void => {
       setState((previous) => {
         const current = previous.modulesByPage[pageId] ?? [];
-        const nextModule = createModule(type, current.length + 1, variant);
+        const created = createModule(type, current.length + 1, variant);
+        // Un contact neuf part des coordonnées du profil (nom, adresse, e-mail,
+        // réseaux) au lieu d'exemples génériques ; un profil sans réseaux n'en
+        // reçoit aucun.
+        const nextModule =
+          type === "contact"
+            ? {
+                ...created,
+                content: createContactContent(contactPrefillFromProfile(profile)),
+              }
+            : created;
         return {
           ...previous,
           modulesByPage: {
@@ -506,7 +524,7 @@ export function PagesStoreProvider({
       movePage,
       setHomePage,
     };
-  }, [state, persistenceEnabled]);
+  }, [state, persistenceEnabled, profile]);
 
   return (
     <PagesStoreContext.Provider value={value}>

@@ -67,6 +67,8 @@ export const moduleTypeEnum = pgEnum("module_type", [
   // Étape 13.1 — « Cards » : deuxième famille ajoutée après la création du
   // schéma, même conséquence — migration `ALTER TYPE … ADD VALUE`.
   "cards",
+  // Étape 14.2 — « Contact Map » : troisième `ALTER TYPE … ADD VALUE`.
+  "contact-map",
 ]);
 
 /** Animations d'entrée d'un module (ModuleAnimation). */
@@ -137,6 +139,58 @@ export const pages = pgTable(
     uniqueIndex("pages_home_unique")
       .on(table.photographerId)
       .where(sql`${table.isHome}`),
+  ]
+);
+
+/* --------------------------------------------------------------------------
+   CONTACT_SUBMISSIONS — messages du formulaire de contact (Étape 14.1)
+   --------------------------------------------------------------------------
+   **Premier chemin d'écriture non authentifié** du projet : l'insertion se fait
+   depuis la route `/api/contact` avec la clé `service_role` (le visiteur n'a
+   pas de session). Aucune politique INSERT n'est donc posée — la RLS
+   propriétaire ne couvre que la lecture et la suppression (migration suivante).
+
+   Deux colonnes méritent une note :
+     - `attachment_path` stocke le **chemin relatif** dans le bucket, jamais une
+       URL publique signée (elle expire) ;
+     - `ip_hash` est un hachage **salé** (`CONTACT_IP_SALT`), jamais l'IP en
+       clair, et il porte un index via `contact_submissions_tenant_created_idx`
+       pour la limitation de débit (comptage sur une fenêtre glissante).
+
+   `accepted_cgu` a pour défaut `false` : un consentement n'est jamais présumé.
+   -------------------------------------------------------------------------- */
+
+export const contactSubmissions = pgTable(
+  "contact_submissions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    photographerId: uuid("photographer_id")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "cascade" }),
+    pageId: uuid("page_id").references(() => pages.id, {
+      onDelete: "set null",
+    }),
+    senderName: text("sender_name").notNull(),
+    senderEmail: text("sender_email").notNull(),
+    /** Sujet facultatif — stocké `""` (jamais `null`), décision 14.1 D9. */
+    subject: text("subject").notNull().default(""),
+    message: text("message").notNull(),
+    /** Chemin Storage relatif (`contact-attachments/{photographerId}/…`). */
+    attachmentPath: text("attachment_path"),
+    acceptedCgu: boolean("accepted_cgu").notNull().default(false),
+    /** Lu par un humain plus tard (aucune UI dans ce lot — décision D2). */
+    isRead: boolean("is_read").notNull().default(false),
+    ipHash: text("ip_hash"),
+    userAgent: text("user_agent"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("contact_submissions_tenant_created_idx").on(
+      table.photographerId,
+      table.createdAt
+    ),
   ]
 );
 
@@ -295,5 +349,7 @@ export type ProfileInsert = typeof profiles.$inferInsert;
 export type PageInsert = typeof pages.$inferInsert;
 export type PageModuleInsert = typeof pageModules.$inferInsert;
 export type NavigationEntryInsert = typeof navigationEntries.$inferInsert;
+export type ContactSubmissionInsert = typeof contactSubmissions.$inferInsert;
+export type ContactSubmissionRow = typeof contactSubmissions.$inferSelect;
 export type MediaInsert = typeof media.$inferInsert;
 export type MediaRow = typeof media.$inferSelect;

@@ -3,6 +3,8 @@ import type { Metadata } from "next";
 import { PublicModulesList } from "@/components/modules/PublicModules";
 import {
   createCardsContent,
+  createContactContent,
+  createContactMapContent,
   createCtaBannerContent,
   createGalleryAlbum,
   createGalleryDynamicContent,
@@ -14,6 +16,9 @@ import {
   type CardsLayoutSettings,
   type CardsStyleSettings,
   type CardsVariant,
+  type ContactFrameSettings,
+  type ContactSocialAlignment,
+  type ContactSocialShape,
   type GalleryImage,
   type PageModule,
 } from "@/lib/pages";
@@ -158,6 +163,54 @@ function demoCardsModule(
   return entry;
 }
 
+/**
+ * Un module Contact de démonstration.
+ *
+ * Quatre détails sont **volontaires** :
+ *   - la fabrique complète est conservée : chapeau, coordonnées, formulaire et
+ *     trois réseaux d'exemple — c'est la démonstration du chemin nominal ;
+ *   - `hideContainer2` masque le bloc coordonnées : la preuve visuelle que le
+ *     formulaire occupe alors seul la largeur, centré (`max-w-2xl mx-auto`) ;
+ *   - `shape` et `alignment` diffèrent entre les deux instances pour montrer
+ *     que ces réglages sont bien **de section** (ils changent toute la rangée) ;
+ *   - `frame` diffère aussi : la seconde instance porte un cadre
+ *     `accent-color` / 12 px d'arrondi. Les deux modules partageant la fabrique,
+ *     un cadre distinct **prouve** que le réglage est porté par le module — et
+ *     qu'il s'applique au formulaire même quand C2 est masqué.
+ */
+function demoContactModule(
+  sequence: number,
+  {
+    hideContainer2,
+    shape,
+    alignment,
+    frame,
+  }: {
+    hideContainer2: boolean;
+    shape: ContactSocialShape;
+    alignment: ContactSocialAlignment;
+    frame?: Partial<ContactFrameSettings>;
+  }
+): PageModule {
+  const base = createContactContent();
+  const entry = createModule("contact", sequence);
+  entry.content = {
+    ...base,
+    layout: {
+      ...base.layout,
+      visibility: {
+        ...base.layout.visibility,
+        showContainer2: !hideContainer2,
+      },
+    },
+    style: {
+      social: { ...base.style.social, shape, alignment },
+      frame: { ...base.style.frame, ...frame },
+    },
+  };
+  return entry;
+}
+
 function buildDemoModules(): PageModule[] {
   const hero = createModule("hero", 2);
   hero.content = {
@@ -269,6 +322,51 @@ function buildDemoModules(): PageModule[] {
     ctaHref: "#contact",
   };
 
+  // ---- Contact (Étape 14.1) : deux instances ----
+  // La première est complète (coordonnées + formulaire) et garde le **cadre par
+  // défaut** (1 px, jeton de bordure, 2 px) : c'est le chemin nominal. La seconde
+  // masque son bloc coordonnées pour prouver la mise en page `max-w-2xl mx-auto`,
+  // porte un autre habillage d'icônes et un cadre distinct (accent, 12 px
+  // d'arrondi) : la forme et le cadre sont des réglages **de module**.
+  const contactFull = demoContactModule(11, {
+    hideContainer2: false,
+    shape: "circle",
+    alignment: "left",
+  });
+  const contactNoInfo = demoContactModule(12, {
+    hideContainer2: true,
+    shape: "rounded",
+    // Alignement à gauche pour les deux instances : la barre vit désormais dans
+    // C2, sous des coordonnées alignées à gauche — un centrage y flotterait.
+    alignment: "left",
+    frame: { borderColorToken: "accent-color", borderRadius: 12 },
+  });
+
+  // ---- Contact Map (Étape 14.2) : deux instances permutées ----
+  // La première suit la fabrique (carte à gauche, fond de page, N&B léger) et
+  // tire son adresse du profil de démonstration (`ownerAddress` de la page) :
+  // c'est le chemin nominal de D3. La seconde **permute** les conteneurs
+  // (`mapPosition: "container3"`), force une adresse libre (pour prouver le
+  // repli), masque le parking et cumule fond de surface + fondu au thème +
+  // voile moyen — la preuve visuelle que chaque réglage est porté par le module.
+  const contactMapDefault = createModule("contact-map", 13);
+  const contactMapBase = createContactMapContent();
+  const contactMapPermuted = createModule("contact-map", 14);
+  contactMapPermuted.content = {
+    ...contactMapBase,
+    headerAlignment: "left",
+    mapPosition: "container3",
+    useOwnerAddress: false,
+    customAddress: "12 rue des Lilas, 75011 Paris",
+    showParking: false,
+    style: {
+      ...contactMapBase.style,
+      bgVariant: "surface",
+      mapFilterStyle: "theme-blend",
+      overlayIntensity: "medium",
+    },
+  };
+
   // ---- Cards (Étapes 13.1 → 13.3) : un module par variante ----
   // Seul le bouton est cliquable : la démo le montre avec une bordure de cadre
   // activée et des effets de survol poussés (brillance + saturation), c'est-à-
@@ -331,6 +429,10 @@ function buildDemoModules(): PageModule[] {
     galleryDynamic,
     galleryPortfolio,
     cta,
+    contactFull,
+    contactNoInfo,
+    contactMapDefault,
+    contactMapPermuted,
   ];
 }
 
@@ -351,6 +453,12 @@ export default function DemoPage() {
         modules={modules}
         pageTitle="Démo — Rendu des modules"
         exifByUrl={DEMO_EXIF}
+        // Page de démonstration : aucune écriture n'y est possible (le slug
+        // « demo » ne correspond à aucune page publiée), ce qui est le but.
+        pageSlug="demo"
+        // Adresse du profil simulée : le premier module `contact-map` l'utilise
+        // (`useOwnerAddress: true`), le second l'ignore (adresse libre).
+        ownerAddress="8 avenue de l’Opéra, 75001 Paris"
       />
     </main>
   );

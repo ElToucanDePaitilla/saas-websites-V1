@@ -197,7 +197,10 @@ export type PageModuleType =
   // Étape 13.1 — « Cards ». Nouvelle famille (et non variante d'une famille
   // existante) : elle exige donc d'étendre l'enum Postgres `module_type` et le
   // schéma Zod, en plus de cette union.
-  | "cards";
+  | "cards"
+  // Étape 14.2 — « Contact Map ». Même conséquence qu'en 13.1 : nouvelle
+  // famille, donc enum Postgres, schéma Zod, icône et deux `switch` à étendre.
+  | "contact-map";
 
 /** Animation d'entrée d'un module (spec §7.2-B ; sélecteur en 3.4). */
 export type ModuleAnimation =
@@ -3159,19 +3162,13 @@ export type ModuleContent =
   | ContentColumnsContent
   | CardsContent
   | ({ type: "gallery" } & GalleryContent)
-  | {
+  | ({
       type: "faq";
       heading: string;
       items: FaqItem[];
-    }
-  | {
-      type: "contact";
-      heading: string;
-      intro: string;
-      email: string;
-      phone: string;
-      address: string;
-    };
+    })
+  | ContactContent
+  | ContactMapContent;
 
 /* ==========================================================================
    BANDEAU MESSAGE OU D'APPEL À L'ACTION — « cta-banner » (Étape 11.27)
@@ -4614,6 +4611,1299 @@ export function cardsImageSources(content: CardsContent): ArtSource[] {
   return cards.map((card) => card.media).filter((source) => source.url !== "");
 }
 
+/* ==========================================================================
+   RUBRIQUE « CONTACT » — coordonnées, formulaire, réseaux sociaux (Étape 14.1)
+   --------------------------------------------------------------------------
+   Le module contact historique ne portait que trois champs à plat (titre,
+   introduction, coordonnées) et aucune écriture visiteur. La refonte le
+   structure en **quatre containers** :
+
+     1. le chapeau (titre `h2`, sous-titre, paragraphe) ;
+     2. les coordonnées, masquables ligne par ligne ;
+     3. le formulaire, seul chemin d'écriture **non authentifié** du projet ;
+     4. les réseaux sociaux, liste ordonnée.
+
+   Trois partis pris structurants :
+
+   1. **Aucune donnée sensible ne vient du contenu de module.** Le destinataire
+      du message, le `photographer_id` et la légitimité de la pièce jointe sont
+      résolus côté serveur (XML 14.1 D12/D13) : le JSONB ne décrit que ce que le
+      visiteur voit.
+   2. **La tolérance vit dans `resolveContactContent`**, jamais dans le schéma.
+      Le contenu de module est persisté en `z.unknown()`
+      (`src/lib/schemas/persistence.ts`) : le schéma Zod est un **miroir
+      documentaire**, pas un garde d'enregistrement. Un contenu tronqué ou
+      hérité doit rester lisible — jamais lever.
+   3. **Le résolveur ne ressuscite aucun exemple.** Un champ vidé par
+      l'utilisateur reste vide ; seule la *forme* manquante est complétée
+      (même règle que les Cards, étape 13.3).
+   ========================================================================== */
+
+/** Alignement du chapeau (mêmes deux valeurs que les autres en-têtes). */
+export type ContactAlign = "left" | "center";
+
+/** Alignement horizontal de la rangée de réseaux sociaux. */
+export type ContactSocialAlignment = "left" | "center" | "right";
+
+/**
+ * Habillage d'une icône de réseau.
+ *
+ * C'est un habillage **neutre** : `--surface-color` et filet `--border-color`,
+ * jamais la couleur officielle de la marque. Un fond à la couleur officielle
+ * avec l'icône officielle serait illisible par construction — les deux se
+ * confondraient. La couleur de l'icône est réglée **séparément** par le mode
+ * couleur (cf. `ContactSocialColorMode`).
+ */
+export type ContactSocialShape = "minimal" | "circle" | "square" | "rounded";
+
+/**
+ * Mode couleur des icônes.
+ *   - `theme`    : la couleur d'accent du thème (`currentColor`, déjà alias de
+ *                  `--accent-color`) ;
+ *   - `official` : la couleur officielle de la marque (fournie par la
+ *                  bibliothèque d'icônes) ;
+ *   - `custom`   : une couleur figée choisie par le photographe.
+ */
+export type ContactSocialColorMode = "theme" | "official" | "custom";
+
+/** Réseaux proposés — catalogue **fermé** (une entrée = une icône). */
+export const CONTACT_SOCIAL_NETWORKS = [
+  "instagram",
+  "facebook",
+  "linkedin",
+  "youtube",
+  "tiktok",
+  "x",
+  "pinterest",
+  "vimeo",
+  "behance",
+  "flickr",
+] as const;
+
+/** Réseau social — type dérivé du catalogue ci-dessus. */
+export type ContactSocialNetwork = (typeof CONTACT_SOCIAL_NETWORKS)[number];
+
+/** Garde : réseau du catalogue fermé. */
+export function isContactSocialNetwork(
+  value: unknown
+): value is ContactSocialNetwork {
+  return (
+    typeof value === "string" &&
+    (CONTACT_SOCIAL_NETWORKS as readonly string[]).includes(value)
+  );
+}
+
+/** Ordre d'affichage des réseaux (sélecteur de l'éditeur). */
+export const contactSocialNetworkOrder: ContactSocialNetwork[] = [
+  ...CONTACT_SOCIAL_NETWORKS,
+];
+
+/** Libellés français des réseaux. */
+export const contactSocialNetworkLabels: Record<ContactSocialNetwork, string> = {
+  instagram: "Instagram",
+  facebook: "Facebook",
+  linkedin: "LinkedIn",
+  youtube: "YouTube",
+  tiktok: "TikTok",
+  x: "X (Twitter)",
+  pinterest: "Pinterest",
+  vimeo: "Vimeo",
+  behance: "Behance",
+  flickr: "Flickr",
+};
+
+/** Adresse postale structurée (6 lignes masquables d'un bloc). */
+export interface ContactAddressSettings {
+  proName: string;
+  address1: string;
+  address2: string;
+  postalCode: string;
+  city: string;
+  country: string;
+}
+
+/** Coordonnées du container 2. */
+export interface ContactInfoSettings {
+  name: string;
+  slogan: string;
+  address: ContactAddressSettings;
+  landline: string;
+  mobile: string;
+  email: string;
+  /** Horaires — texte libre multiligne (`white-space: pre-line`). */
+  hours: string;
+  /** Zone d'intervention — texte libre multiligne. */
+  serviceArea: string;
+}
+
+/**
+ * Visibilité du container 2 : un interrupteur **maître** et huit champs.
+ *
+ * Tous affichés par défaut (D14) : la refonte ne doit pas faire disparaître
+ * des coordonnées d'un site existant. Le maître masque le container entier ;
+ * les huit autres ne masquent que leur ligne.
+ */
+export interface ContactVisibilitySettings {
+  showContainer2: boolean;
+  showName: boolean;
+  showSlogan: boolean;
+  showAddressGroup: boolean;
+  showLandline: boolean;
+  showMobile: boolean;
+  showEmail: boolean;
+  showHours: boolean;
+  showServiceArea: boolean;
+}
+
+/**
+ * `false` : la rubrique « Informations pratiques » (horaires, zone
+ * d'intervention) est retirée de l'éditeur **et** du rendu public de ce module,
+ * son code restant en place pour un réemploi prévu dans un autre module.
+ *
+ * Décision D6 de la refonte 14.1.c : le bloc est jugé hors sujet dans le
+ * parcours de contact (il occupait la moitié du bloc C2 sans y répondre), mais
+ * son contenu et sa mécanique de masquage restent utiles. On ne **supprime**
+ * donc rien : on coupe la vue. Rallumer ce seul booléen restitue l'édition et
+ * l'affichage, sans ressusciter une donnée effacée (les champs restent en JSONB).
+ *
+ * Typé `boolean` **explicitement** : sans l'annotation, TS infère le littéral
+ * `false` et toute condition `if (CONTACT_PRACTICAL_INFO_ENABLED)` devient
+ * « toujours fausse » — avertissement lint, et le code conservé paraîtrait mort
+ * alors qu'il est réactivable.
+ */
+export const CONTACT_PRACTICAL_INFO_ENABLED: boolean = false;
+
+/** Réglages du formulaire (container 3). */
+export interface ContactFormSettings {
+  /** Taille maximale d'une pièce jointe, en Mo (borné 1..10, domaine **et** serveur). */
+  maxFileSizeMB: number;
+  /** Extensions acceptées — sous-ensemble du catalogue fermé ci-dessous. */
+  allowedExtensions: string[];
+  /** Case CGU obligatoire (défaut `true`). */
+  requireCGU: boolean;
+  /** Texte du lien CGU. */
+  cguLinkText: string;
+  /** URL du lien CGU — repli `/confidentialite`. */
+  cguLinkUrl: string;
+}
+
+/** Un réseau social affiché (container 4) — liste ordonnée. */
+export interface ContactSocialLink {
+  id: string;
+  network: ContactSocialNetwork;
+  url: string;
+}
+
+/** Apparence de la rangée de réseaux. */
+export interface ContactSocialStyle {
+  colorMode: ContactSocialColorMode;
+  /** Couleur utilisée quand `colorMode === "custom"`. */
+  customColor: string;
+  shape: ContactSocialShape;
+  alignment: ContactSocialAlignment;
+}
+
+/**
+ * Jeton de thème proposé pour le trait des cadres (D2).
+ *
+ * Un **jeton**, jamais une couleur choisie au hexadécimal : le cadre suit alors
+ * le mode clair/sombre du site, comme le reste de la palette. C'est exactement
+ * la contrainte du catalogue de bandeau (`BannerThemeToken`).
+ */
+export type ContactFrameColorToken =
+  | "border-color"
+  | "accent-color"
+  | "accent-color-strong"
+  | "text-color"
+  | "surface-color";
+
+/**
+ * Cadre des conteneurs 2 (coordonnées) et 3 (formulaire) — un **seul** réglage
+ * partagé (D7), pour que les deux blocs « se fassent écho ».
+ *
+ * Le même objet vit dans le JSONB du module (`content.style.frame`) : aucune
+ * migration, aucun réglage global — il n'existe pas de store de design system
+ * dans ce projet (D1). C'est le modèle de `CardsStyleSettings.bodyBorderWidth` /
+ * `bodyRadius`, à ceci près que la couleur est un jeton de thème et non un hex.
+ */
+export interface ContactFrameSettings {
+  /** Épaisseur du trait en px. `0` = **pas de cadre**. Borné 0..8. */
+  borderWidth: number;
+  borderColorToken: ContactFrameColorToken;
+  /** Arrondi des angles en px. Borné 0..24. */
+  borderRadius: number;
+}
+
+/** Mise en page du module. */
+export interface ContactLayoutSettings {
+  /** Alignement du chapeau (C1). */
+  align: ContactAlign;
+  visibility: ContactVisibilitySettings;
+}
+
+/** Apparence du module. */
+export interface ContactStyleSettings {
+  social: ContactSocialStyle;
+  /** Cadre partagé des conteneurs 2 et 3 (D7). */
+  frame: ContactFrameSettings;
+}
+
+/** Contenu du module `contact` — les quatre containers de la refonte 14.1. */
+export interface ContactContent {
+  type: "contact";
+  /** Chapeau (C1) : titre rendu en `<h2>`, jamais un `h1` (invariant de titrage). */
+  heading: string;
+  subtitle: string;
+  intro: string;
+  info: ContactInfoSettings;
+  form: ContactFormSettings;
+  social: ContactSocialLink[];
+  layout: ContactLayoutSettings;
+  style: ContactStyleSettings;
+}
+
+/**
+ * Objet **pur** de préremplissage du module contact (invariant A1).
+ *
+ * Il est construit au point d'appel **client** (l'éditeur, qui a le profil sous
+ * la main) et descendu dans `createContactContent`. `pages.ts` n'importe donc
+ * jamais `owner-profile.ts`, qui est un module `"use client"` — l'importer
+ * depuis du code serveur casserait le build.
+ */
+export interface ContactPrefill {
+  name?: string;
+  slogan?: string;
+  email?: string;
+  serviceArea?: string;
+  address?: Partial<ContactAddressSettings>;
+  socialLinks?: ContactSocialLink[];
+}
+
+/* --------------------------------------------------------------------------
+   FORMATS DE PIÈCE JOINTE — catalogue fermé, signature binaire (D6)
+   --------------------------------------------------------------------------
+   La validation de type ne fait **jamais** confiance à `file.type` (fourni par
+   le navigateur, donc falsifiable). Le serveur relit les premiers octets du
+   fichier et les compare à la signature du format attendu, sur ce catalogue
+   fermé. Le client se contente d'un confort (taille + extension) : il ne
+   protège rien.
+   -------------------------------------------------------------------------- */
+
+/** Un format accepté en pièce jointe. */
+export interface ContactAttachmentFormat {
+  /** Extension sans point, en minuscules (clé du réglage `allowedExtensions`). */
+  extension: string;
+  /** Libellé affiché dans l'éditeur. */
+  label: string;
+  /** Type MIME canonique (jamais lu depuis le navigateur). */
+  mime: string;
+  /** Octets d'en-tête attendus, à l'offset 0. */
+  signature: number[];
+  /** Octets attendus à l'offset 8 — conteneurs RIFF/ZIP (`webp`, `docx`). */
+  signatureAt8?: number[];
+}
+
+/** Catalogue **fermé** des pièces jointes acceptées. */
+export const CONTACT_ATTACHMENT_FORMATS: ContactAttachmentFormat[] = [
+  {
+    extension: "pdf",
+    label: "PDF (.pdf)",
+    mime: "application/pdf",
+    signature: [0x25, 0x50, 0x44, 0x46],
+  },
+  {
+    extension: "png",
+    label: "Image PNG (.png)",
+    mime: "image/png",
+    signature: [0x89, 0x50, 0x4e, 0x47],
+  },
+  {
+    extension: "jpg",
+    label: "Image JPEG (.jpg)",
+    mime: "image/jpeg",
+    signature: [0xff, 0xd8, 0xff],
+  },
+  {
+    extension: "jpeg",
+    label: "Image JPEG (.jpeg)",
+    mime: "image/jpeg",
+    signature: [0xff, 0xd8, 0xff],
+  },
+  {
+    extension: "webp",
+    label: "Image WebP (.webp)",
+    mime: "image/webp",
+    // Conteneur RIFF : « RIFF » à l'offset 0, « WEBP » à l'offset 8.
+    signature: [0x52, 0x49, 0x46, 0x46],
+    signatureAt8: [0x57, 0x45, 0x42, 0x50],
+  },
+  {
+    extension: "docx",
+    label: "Document Word (.docx)",
+    mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    // Tout `.docx` est une archive ZIP (PK\x03\x04).
+    signature: [0x50, 0x4b, 0x03, 0x04],
+  },
+];
+
+/** Extensions par défaut : tout le catalogue. */
+export const contactDefaultExtensions: string[] = CONTACT_ATTACHMENT_FORMATS.map(
+  (format) => format.extension
+);
+
+/** Taille par défaut d'une pièce jointe (Mo). */
+export const CONTACT_DEFAULT_FILE_SIZE_MB = 5;
+
+/** Plafond du réglage — et plafond serveur, identiques par construction. */
+export const CONTACT_MAX_FILE_SIZE_MB = 10;
+
+/** Fenêtre et plafond de la limitation de débit (cf. route `/api/contact`). */
+export const CONTACT_RATE_LIMIT_WINDOW_MINUTES = 10;
+export const CONTACT_RATE_LIMIT_MAX = 5;
+
+/** Garde : extension de pièce jointe du catalogue fermé. */
+export function isContactAttachmentExtension(
+  value: unknown
+): value is string {
+  return (
+    typeof value === "string" &&
+    CONTACT_ATTACHMENT_FORMATS.some((format) => format.extension === value)
+  );
+}
+
+/** Retourne le format du catalogue pour une extension, sinon `null`. */
+export function contactAttachmentFormat(
+  extension: string
+): ContactAttachmentFormat | null {
+  return (
+    CONTACT_ATTACHMENT_FORMATS.find(
+      (format) => format.extension === extension
+    ) ?? null
+  );
+}
+
+/** Extension (minuscule, sans point) d'un nom de fichier — `""` si absente. */
+export function contactFileExtension(fileName: string): string {
+  const lastDot = fileName.lastIndexOf(".");
+  if (lastDot <= 0 || lastDot === fileName.length - 1) {
+    return "";
+  }
+  return fileName.slice(lastDot + 1).toLowerCase();
+}
+
+/**
+ * Vrai si les premiers octets d'un fichier correspondent à la signature du
+ * format attendu. Fonction **pure** : le serveur lui passe le début du fichier.
+ */
+export function matchesContactAttachmentSignature(
+  format: ContactAttachmentFormat,
+  bytes: Uint8Array
+): boolean {
+  if (bytes.length < format.signature.length) {
+    return false;
+  }
+  for (let index = 0; index < format.signature.length; index += 1) {
+    if (bytes[index] !== format.signature[index]) {
+      return false;
+    }
+  }
+  if (format.signatureAt8) {
+    const offset = 8;
+    if (bytes.length < offset + format.signatureAt8.length) {
+      return false;
+    }
+    for (let index = 0; index < format.signatureAt8.length; index += 1) {
+      if (bytes[offset + index] !== format.signatureAt8[index]) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+/** Motif de refus d'une pièce jointe (l'UI en tire un message). */
+export type ContactFileRejection = "size" | "extension" | "signature";
+
+/**
+ * Contrôle **de confort** d'une pièce jointe (taille + extension).
+ *
+ * Partagé client/serveur : le client évite un aller-retour inutile, le serveur
+ * **revalide** et ajoute la signature binaire (`matchesContactAttachmentSignature`),
+ * que le client ne peut pas vérifier de façon fiable.
+ */
+export function contactAttachmentRejection(
+  file: { name: string; size: number },
+  settings: ContactFormSettings
+): ContactFileRejection | null {
+  const maxBytes = settings.maxFileSizeMB * 1024 * 1024;
+  if (file.size <= 0 || file.size > maxBytes) {
+    return "size";
+  }
+  const extension = contactFileExtension(file.name);
+  if (extension === "" || !settings.allowedExtensions.includes(extension)) {
+    return "extension";
+  }
+  return null;
+}
+
+/** Vrai si la pièce jointe passe le contrôle de confort (taille + extension). */
+export function isContactFormFileAllowed(
+  file: { name: string; size: number },
+  settings: ContactFormSettings
+): boolean {
+  return contactAttachmentRejection(file, settings) === null;
+}
+
+/* --------------------------------------------------------------------------
+   ORDRES ET LIBELLÉS
+   -------------------------------------------------------------------------- */
+
+/** Ordre d'affichage des habillages d'icône. */
+export const contactSocialShapeOrder: ContactSocialShape[] = [
+  "minimal",
+  "circle",
+  "square",
+  "rounded",
+];
+
+/** Libellés français des habillages. */
+export const contactSocialShapeLabels: Record<ContactSocialShape, string> = {
+  minimal: "Sans habillage",
+  circle: "Rond",
+  square: "Carré",
+  rounded: "Arrondi",
+};
+
+/** Garde : habillage valide. */
+export function isContactSocialShape(
+  value: unknown
+): value is ContactSocialShape {
+  return (
+    value === "minimal" ||
+    value === "circle" ||
+    value === "square" ||
+    value === "rounded"
+  );
+}
+
+/** Ordre d'affichage des modes couleur. */
+export const contactSocialColorModeOrder: ContactSocialColorMode[] = [
+  "theme",
+  "official",
+  "custom",
+];
+
+/** Libellés français des modes couleur. */
+export const contactSocialColorModeLabels: Record<
+  ContactSocialColorMode,
+  string
+> = {
+  theme: "Couleur du thème",
+  official: "Couleur officielle de la marque",
+  custom: "Couleur personnalisée",
+};
+
+/** Garde : mode couleur valide. */
+export function isContactSocialColorMode(
+  value: unknown
+): value is ContactSocialColorMode {
+  return value === "theme" || value === "official" || value === "custom";
+}
+
+/** Ordre d'affichage des alignements de réseaux. */
+export const contactSocialAlignmentOrder: ContactSocialAlignment[] = [
+  "left",
+  "center",
+  "right",
+];
+
+/** Libellés français des alignements de réseaux. */
+export const contactSocialAlignmentLabels: Record<
+  ContactSocialAlignment,
+  string
+> = {
+  left: "À gauche",
+  center: "Centré",
+  right: "À droite",
+};
+
+/** Ordre d'affichage des alignements de chapeau. */
+export const contactAlignOrder: ContactAlign[] = ["center", "left"];
+
+/** Libellés français des alignements de chapeau. */
+export const contactAlignLabels: Record<ContactAlign, string> = {
+  center: "Centré",
+  left: "Aligné à gauche",
+};
+
+/** Garde : alignement de chapeau valide. */
+export function isContactAlign(value: unknown): value is ContactAlign {
+  return value === "left" || value === "center";
+}
+
+/** Ordre d'affichage des jetons de couleur du cadre (D2). */
+export const contactFrameColorTokenOrder: ContactFrameColorToken[] = [
+  "border-color",
+  "accent-color",
+  "accent-color-strong",
+  "text-color",
+  "surface-color",
+];
+
+/**
+ * Libellés des jetons de couleur du cadre, nommés par la teinte perçue.
+ *
+ * Même parti pris que `bannerThemeTokenLabels` : on décrit ce que le visiteur
+ * verra (« Perle irisée »), pas le nom technique du jeton — le photographe
+ * choisit une couleur, pas une variable CSS.
+ */
+export const contactFrameColorTokenLabels: Record<
+  ContactFrameColorToken,
+  string
+> = {
+  "border-color": "Perle irisée (bordures)",
+  "accent-color": "Rose nacré chaud (accent)",
+  "accent-color-strong": "Bronze doux (survol)",
+  "text-color": "Anthracite (texte)",
+  "surface-color": "Blanc nacré (surface)",
+};
+
+/** Garde : jeton de couleur de cadre valide. */
+export function isContactFrameColorToken(
+  value: unknown
+): value is ContactFrameColorToken {
+  return (
+    value === "border-color" ||
+    value === "accent-color" ||
+    value === "accent-color-strong" ||
+    value === "text-color" ||
+    value === "surface-color"
+  );
+}
+
+/* --------------------------------------------------------------------------
+   DÉFAUTS
+   -------------------------------------------------------------------------- */
+
+/** Coordonnées vides. */
+export const DEFAULT_CONTACT_ADDRESS: ContactAddressSettings = {
+  proName: "",
+  address1: "",
+  address2: "",
+  postalCode: "",
+  city: "",
+  country: "",
+};
+
+/** Les neuf booléens de visibilité, tous à `true` (D14). */
+export const DEFAULT_CONTACT_VISIBILITY: ContactVisibilitySettings = {
+  showContainer2: true,
+  showName: true,
+  showSlogan: true,
+  showAddressGroup: true,
+  showLandline: true,
+  showMobile: true,
+  showEmail: true,
+  showHours: true,
+  showServiceArea: true,
+};
+
+/** Réglages de formulaire par défaut (5 Mo, tout le catalogue, CGU requises). */
+export const DEFAULT_CONTACT_FORM: ContactFormSettings = {
+  maxFileSizeMB: CONTACT_DEFAULT_FILE_SIZE_MB,
+  allowedExtensions: [...contactDefaultExtensions],
+  requireCGU: true,
+  cguLinkText: "Politique de confidentialité",
+  cguLinkUrl: "/confidentialite",
+};
+
+/** Apparence par défaut des réseaux : thème, rond, à gauche. */
+export const DEFAULT_CONTACT_SOCIAL_STYLE: ContactSocialStyle = {
+  colorMode: "theme",
+  customColor: "#1a1a1a",
+  shape: "circle",
+  alignment: "left",
+};
+
+/**
+ * Cadre par défaut (D3) : filet de 1 px, jeton de bordure du thème, 2 px
+ * d'arrondi. Le défaut **pose** un cadre (effet voulu de la refonte) : les pages
+ * déjà publiées en gagnent un après mise à jour, sans aucune perte de donnée.
+ */
+export const DEFAULT_CONTACT_FRAME: ContactFrameSettings = {
+  borderWidth: 1,
+  borderColorToken: "border-color",
+  borderRadius: 2,
+};
+
+/** Mise en page par défaut : chapeau centré, tout visible. */
+export const DEFAULT_CONTACT_LAYOUT: ContactLayoutSettings = {
+  align: "center",
+  visibility: { ...DEFAULT_CONTACT_VISIBILITY },
+};
+
+/* --------------------------------------------------------------------------
+   FABRIQUES ET RÉSOLVEUR
+   -------------------------------------------------------------------------- */
+
+/** Fabrique un réseau social (identifiant stable). */
+export function createContactSocialLink(
+  network: ContactSocialNetwork,
+  url = ""
+): ContactSocialLink {
+  return { id: crypto.randomUUID(), network, url };
+}
+
+/**
+ * Contenu contact par défaut.
+ *
+ * `prefill` (objet pur, invariant A1) remplit les coordonnées issues du profil.
+ * **Trois réseaux d'exemple ne sont posés que si aucun préremplissage de
+ * réseaux n'est fourni** : un profil réel sans réseaux ne doit pas hériter de
+ * faux comptes, alors qu'une démonstration a besoin de montrer le rendu.
+ */
+export function createContactContent(prefill?: ContactPrefill): ContactContent {
+  const address: ContactAddressSettings = {
+    ...DEFAULT_CONTACT_ADDRESS,
+    ...(prefill?.address ?? {}),
+  };
+
+  const info: ContactInfoSettings = prefill
+    ? {
+        name: prefill.name ?? "",
+        slogan: prefill.slogan ?? "",
+        address,
+        landline: "",
+        mobile: "",
+        email: prefill.email ?? "",
+        hours: "",
+        serviceArea: prefill.serviceArea ?? "",
+      }
+    : {
+        name: "Studio Lumière",
+        slogan: "Photographe portrait & mariage",
+        address: {
+          proName: "Studio Lumière",
+          address1: "12 rue des Lilas",
+          address2: "Atelier 3",
+          postalCode: "75011",
+          city: "Paris",
+          country: "France",
+        },
+        landline: "01 23 45 67 89",
+        mobile: "06 12 34 56 78",
+        email: "bonjour@exemple.fr",
+        hours: "Du mardi au samedi\n10 h – 19 h",
+        serviceArea: "Île-de-France",
+      };
+
+  const social: ContactSocialLink[] =
+    prefill?.socialLinks !== undefined
+      ? prefill.socialLinks
+      : [
+          createContactSocialLink(
+            "instagram",
+            "https://www.instagram.com/"
+          ),
+          createContactSocialLink("facebook", "https://www.facebook.com/"),
+          createContactSocialLink("linkedin", "https://www.linkedin.com/"),
+        ];
+
+  return {
+    type: "contact",
+    heading: prefill ? "Contact" : "Contactez-moi",
+    subtitle: "Une question, un projet ?",
+    intro: "Écrivez-moi : je vous réponds sous 24 h.",
+    info,
+    form: { ...DEFAULT_CONTACT_FORM, allowedExtensions: [...contactDefaultExtensions] },
+    social,
+    layout: { ...DEFAULT_CONTACT_LAYOUT, visibility: { ...DEFAULT_CONTACT_VISIBILITY } },
+    style: {
+      social: { ...DEFAULT_CONTACT_SOCIAL_STYLE },
+      frame: { ...DEFAULT_CONTACT_FRAME },
+    },
+  };
+}
+
+/** Lit une adresse stockée (repli champ par champ sur la valeur vide). */
+function resolveContactAddress(raw: unknown): ContactAddressSettings {
+  if (!isRecord(raw)) {
+    return { ...DEFAULT_CONTACT_ADDRESS };
+  }
+  return {
+    proName: readString(raw.proName, ""),
+    address1: readString(raw.address1, ""),
+    address2: readString(raw.address2, ""),
+    postalCode: readString(raw.postalCode, ""),
+    city: readString(raw.city, ""),
+    country: readString(raw.country, ""),
+  };
+}
+
+/** Lit les neuf booléens de visibilité (défaut : `true`). */
+function resolveContactVisibility(raw: unknown): ContactVisibilitySettings {
+  const record = isRecord(raw) ? raw : {};
+  const read = (key: keyof ContactVisibilitySettings): boolean =>
+    typeof record[key] === "boolean"
+      ? (record[key] as boolean)
+      : DEFAULT_CONTACT_VISIBILITY[key];
+  return {
+    showContainer2: read("showContainer2"),
+    showName: read("showName"),
+    showSlogan: read("showSlogan"),
+    showAddressGroup: read("showAddressGroup"),
+    showLandline: read("showLandline"),
+    showMobile: read("showMobile"),
+    showEmail: read("showEmail"),
+    showHours: read("showHours"),
+    showServiceArea: read("showServiceArea"),
+  };
+}
+
+/** Lit les réglages du formulaire (bornage taille, catalogue fermé). */
+function resolveContactForm(raw: unknown): ContactFormSettings {
+  const record = isRecord(raw) ? raw : {};
+  const rawExtensions = isUnknownArray(record.allowedExtensions)
+    ? record.allowedExtensions
+    : contactDefaultExtensions;
+  const allowedExtensions: string[] = [];
+  for (const extension of rawExtensions) {
+    if (
+      isContactAttachmentExtension(extension) &&
+      !allowedExtensions.includes(extension)
+    ) {
+      allowedExtensions.push(extension);
+    }
+  }
+  return {
+    maxFileSizeMB: readBoundedNumber(
+      record.maxFileSizeMB,
+      DEFAULT_CONTACT_FORM.maxFileSizeMB,
+      1,
+      CONTACT_MAX_FILE_SIZE_MB
+    ),
+    // Une liste vidée par l'utilisateur reste vide : on ne ressuscite pas le
+    // catalogue complet, sans quoi décocher tout ressemblerait à un bug.
+    allowedExtensions,
+    requireCGU:
+      typeof record.requireCGU === "boolean"
+        ? record.requireCGU
+        : DEFAULT_CONTACT_FORM.requireCGU,
+    cguLinkText: readString(record.cguLinkText, DEFAULT_CONTACT_FORM.cguLinkText),
+    cguLinkUrl: readString(record.cguLinkUrl, DEFAULT_CONTACT_FORM.cguLinkUrl),
+  };
+}
+
+/**
+ * Lit le cadre des conteneurs 2 et 3.
+ *
+ * Tolérant par construction : un contenu sans `frame` (tout l'existant) reçoit
+ * les défauts, un nombre hors bornes est ramené dans la plage (0..8 / 0..24) et
+ * un jeton inconnu retombe sur `borderColorToken` par défaut. On ne ressuscite
+ * jamais un texte : seule la *forme* est complétée.
+ */
+function resolveContactFrame(raw: unknown): ContactFrameSettings {
+  const record = isRecord(raw) ? raw : {};
+  return {
+    borderWidth: readBoundedNumber(
+      record.borderWidth,
+      DEFAULT_CONTACT_FRAME.borderWidth,
+      0,
+      8
+    ),
+    borderColorToken: isContactFrameColorToken(record.borderColorToken)
+      ? record.borderColorToken
+      : DEFAULT_CONTACT_FRAME.borderColorToken,
+    borderRadius: readBoundedNumber(
+      record.borderRadius,
+      DEFAULT_CONTACT_FRAME.borderRadius,
+      0,
+      24
+    ),
+  };
+}
+
+/** Lit l'apparence des réseaux (mode, couleur, forme, alignement). */
+function resolveContactSocialStyle(raw: unknown): ContactSocialStyle {
+  const record = isRecord(raw) ? raw : {};
+  return {
+    colorMode: isContactSocialColorMode(record.colorMode)
+      ? record.colorMode
+      : DEFAULT_CONTACT_SOCIAL_STYLE.colorMode,
+    customColor: readString(
+      record.customColor,
+      DEFAULT_CONTACT_SOCIAL_STYLE.customColor
+    ),
+    shape: isContactSocialShape(record.shape)
+      ? record.shape
+      : DEFAULT_CONTACT_SOCIAL_STYLE.shape,
+    alignment:
+      record.alignment === "left" ||
+      record.alignment === "center" ||
+      record.alignment === "right"
+        ? record.alignment
+        : DEFAULT_CONTACT_SOCIAL_STYLE.alignment,
+  };
+}
+
+/**
+ * Lit la liste des réseaux : entrées invalides écartées, et — sauf en édition —
+ * entrées sans URL écartées.
+ *
+ * `keepEmpty` existe pour l'**éditeur** : un réseau qu'on vient d'ajouter n'a pas
+ * encore d'adresse. Si le résolveur l'écartait, le contenu commité serait
+ * immédiatement filtré au rendu suivant et le bouton « Ajouter un réseau »
+ * semblerait inerte. Le rendu public, lui, garde le défaut : un lien sans
+ * destination n'a rien à afficher.
+ */
+function resolveContactSocial(
+  raw: unknown,
+  keepEmpty: boolean
+): ContactSocialLink[] {
+  if (!isUnknownArray(raw)) {
+    return [];
+  }
+  const links: ContactSocialLink[] = [];
+  for (const entry of raw) {
+    if (!isRecord(entry) || !isContactSocialNetwork(entry.network)) {
+      continue;
+    }
+    const url = readString(entry.url, "").trim();
+    if (url === "" && !keepEmpty) {
+      continue;
+    }
+    links.push({
+      id: readString(entry.id, crypto.randomUUID()),
+      network: entry.network,
+      url,
+    });
+  }
+  return links;
+}
+
+/**
+ * Options de résolution d'un contenu contact.
+ *
+ * `keepEmptySocialNetworks` est **réservé à l'édition** (cf.
+ * `resolveContactSocial`) : jamais posé par le rendu public, qui doit ignorer un
+ * lien sans adresse.
+ */
+export interface ResolveContactContentOptions {
+  keepEmptySocialNetworks?: boolean;
+}
+
+/**
+ * Résout un contenu contact stocké (JSONB) vers un contenu **complet**.
+ *
+ * Total : `null`, un nombre ou un objet tronqué produisent un contenu lisible.
+ * Aucun texte de démonstration n'est ressuscité (la *forme* est complétée, pas
+ * le *contenu*).
+ *
+ * Rétro-compatibilité avec le module historique
+ * (`{ heading, intro, email, phone, address }`) :
+ *   - `email` → `info.email` ;
+ *   - `phone` → `info.landline` (assumption assumée : le champ historique ne
+ *     distinguait pas fixe et mobile, on le range au fixe) ;
+ *   - `address` (ligne unique) → `info.address.address1`.
+ */
+export function resolveContactContent(
+  raw: unknown,
+  options?: ResolveContactContentOptions
+): ContactContent {
+  if (!isRecord(raw)) {
+    return createContactContent();
+  }
+
+  const infoRaw = isRecord(raw.info) ? raw.info : {};
+  const addressRaw = isRecord(infoRaw.address) ? infoRaw.address : {};
+  const legacyAddress = readString(raw.address, "");
+  const address: ContactAddressSettings = {
+    ...resolveContactAddress(addressRaw),
+  };
+  // Ligne unique historique : elle n'a de sens que si rien de structuré n'est
+  // déjà présent (un contenu moderne ne peut pas avoir les deux).
+  if (address.address1 === "" && legacyAddress !== "") {
+    address.address1 = legacyAddress;
+  }
+
+  const info: ContactInfoSettings = {
+    name: readString(infoRaw.name, ""),
+    slogan: readString(infoRaw.slogan, ""),
+    address,
+    landline: readString(infoRaw.landline, readString(raw.phone, "")),
+    mobile: readString(infoRaw.mobile, ""),
+    email: readString(infoRaw.email, readString(raw.email, "")),
+    hours: readString(infoRaw.hours, ""),
+    serviceArea: readString(infoRaw.serviceArea, ""),
+  };
+
+  const layoutRaw = isRecord(raw.layout) ? raw.layout : {};
+  const styleRaw = isRecord(raw.style) ? raw.style : {};
+
+  return {
+    type: "contact",
+    heading: readString(raw.heading, ""),
+    subtitle: readString(raw.subtitle, ""),
+    intro: readString(raw.intro, ""),
+    info,
+    form: resolveContactForm(raw.form),
+    social: resolveContactSocial(
+      raw.social,
+      options?.keepEmptySocialNetworks === true
+    ),
+    layout: {
+      align: isContactAlign(layoutRaw.align)
+        ? layoutRaw.align
+        : DEFAULT_CONTACT_LAYOUT.align,
+      visibility: resolveContactVisibility(layoutRaw.visibility),
+    },
+    style: {
+      social: resolveContactSocialStyle(styleRaw.social),
+      frame: resolveContactFrame(styleRaw.frame),
+    },
+  };
+}
+
+/* ==========================================================================
+   MODULE « CONTACT MAP » — plan d'accès & informations pratiques (Étape 14.2)
+   --------------------------------------------------------------------------
+   Nouvelle **famille** (D1) : contrairement aux variantes d'une famille
+   existante, elle exige d'étendre l'enum Postgres `module_type` (migration
+   `ALTER TYPE … ADD VALUE`) et le schéma Zod — comme `content` (12.1) et
+   `cards` (13.1) avant elle.
+
+   Le module réunit un chapeau (H2/H3/paragraphe) et **deux conteneurs de hauteur
+   égale** : une carte Google Maps embarquée et des informations pratiques
+   (adresse, parking, horaires, zone, bouton d'itinéraire). Leur ordre est
+   permutable (`mapPosition`) — la disposition est un réglage de module, pas une
+   variante de contenu.
+
+   Décisions structurantes :
+     · D2 — l'adresse est le **seul** contact : pas de téléphone ni d'e-mail,
+       absents du besoin et déjà couverts par le module `contact` ;
+     · D5 — l'iframe Maps est un **embed sans clé** (`output=embed`), aucune
+       variable d'environnement à provisionner ;
+     · D6 — le cadre réutilise `ContactFrameSettings` et le résolveur privé
+       `resolveContactFrame` de 14.1.c : mêmes bornes (0..8 / 0..24), même jeton
+       de thème, un seul réglage partagé par les deux conteneurs.
+
+   Résolution de l'adresse du profil (D3) : elle se fait **au rendu**, jamais à
+   l'édition. Le domaine ignore donc `owner-profile.ts` (module `"use client"`)
+   et se contente de porter `useOwnerAddress` / `customAddress` ; le repli est
+   appliqué par `contactMapAddress` (`src/lib/contact-map.ts`).
+   ========================================================================== */
+
+/** Côté de la grille où la carte est posée — l'ordre des conteneurs est permutable. */
+export type ContactMapPosition = "container2" | "container3";
+
+/** Fond de la carte : plan routier ou vue satellite. */
+export type ContactMapType = "roadmap" | "satellite";
+
+/** Fond de section — couleur unie uniquement (D7), aucun média, aucun survol. */
+export type ContactMapBgVariant = "default" | "surface" | "contrast" | "custom";
+
+/** Filtre CSS appliqué à l'iframe, pour fondre la carte dans la charte. */
+export type ContactMapFilterStyle = "standard" | "grayscale" | "theme-blend";
+
+/** Intensité du voile posé sur la carte (lisibilité du cadre, D7). */
+export type ContactMapOverlayIntensity = "none" | "light" | "medium" | "strong";
+
+/** Ordre d'affichage des positions (sélecteur de l'éditeur). */
+export const contactMapPositionOrder: ContactMapPosition[] = [
+  "container2",
+  "container3",
+];
+
+/** Libellés français des positions. */
+export const contactMapPositionLabels: Record<ContactMapPosition, string> = {
+  container2: "Carte à gauche (conteneur 2)",
+  container3: "Carte à droite (conteneur 3)",
+};
+
+/** Garde : position de carte valide. */
+export function isContactMapPosition(
+  value: unknown
+): value is ContactMapPosition {
+  return value === "container2" || value === "container3";
+}
+
+/** Ordre d'affichage des types de carte. */
+export const contactMapTypeOrder: ContactMapType[] = ["roadmap", "satellite"];
+
+/** Libellés français des types de carte. */
+export const contactMapTypeLabels: Record<ContactMapType, string> = {
+  roadmap: "Plan (routier)",
+  satellite: "Satellite (vue aérienne)",
+};
+
+/** Garde : type de carte valide. */
+export function isContactMapType(value: unknown): value is ContactMapType {
+  return value === "roadmap" || value === "satellite";
+}
+
+/** Ordre d'affichage des fonds de section. */
+export const contactMapBgVariantOrder: ContactMapBgVariant[] = [
+  "default",
+  "surface",
+  "contrast",
+  "custom",
+];
+
+/** Libellés français des fonds de section. */
+export const contactMapBgVariantLabels: Record<ContactMapBgVariant, string> = {
+  default: "Fond de la page",
+  surface: "Surface nacrée",
+  contrast: "Encre du thème (contraste)",
+  custom: "Couleur personnalisée",
+};
+
+/** Garde : fond de section valide. */
+export function isContactMapBgVariant(
+  value: unknown
+): value is ContactMapBgVariant {
+  return (
+    value === "default" ||
+    value === "surface" ||
+    value === "contrast" ||
+    value === "custom"
+  );
+}
+
+/** Ordre d'affichage des filtres de carte. */
+export const contactMapFilterStyleOrder: ContactMapFilterStyle[] = [
+  "standard",
+  "grayscale",
+  "theme-blend",
+];
+
+/** Libellés français des filtres de carte. */
+export const contactMapFilterStyleLabels: Record<ContactMapFilterStyle, string> =
+  {
+    standard: "Couleurs d’origine",
+    grayscale: "Noir et blanc",
+    "theme-blend": "Noir et blanc fondu au fond",
+  };
+
+/** Garde : filtre de carte valide. */
+export function isContactMapFilterStyle(
+  value: unknown
+): value is ContactMapFilterStyle {
+  return (
+    value === "standard" || value === "grayscale" || value === "theme-blend"
+  );
+}
+
+/** Ordre d'affichage des intensités de voile. */
+export const contactMapOverlayIntensityOrder: ContactMapOverlayIntensity[] = [
+  "none",
+  "light",
+  "medium",
+  "strong",
+];
+
+/** Libellés français des intensités de voile. */
+export const contactMapOverlayIntensityLabels: Record<
+  ContactMapOverlayIntensity,
+  string
+> = {
+  none: "Aucun voile",
+  light: "Léger",
+  medium: "Moyen",
+  strong: "Fort",
+};
+
+/** Garde : intensité de voile valide. */
+export function isContactMapOverlayIntensity(
+  value: unknown
+): value is ContactMapOverlayIntensity {
+  return (
+    value === "none" ||
+    value === "light" ||
+    value === "medium" ||
+    value === "strong"
+  );
+}
+
+/** Apparence du module (D6 : un seul cadre partagé par les deux conteneurs). */
+export interface ContactMapStyleSettings {
+  bgVariant: ContactMapBgVariant;
+  /** Utilisée quand `bgVariant === "custom"` (sinon conservée sans effet). */
+  customBgColor: string;
+  /** Cadre partagé carte + informations — réutilise le modèle du module contact. */
+  frame: ContactFrameSettings;
+  mapFilterStyle: ContactMapFilterStyle;
+  overlayIntensity: ContactMapOverlayIntensity;
+}
+
+/** Contenu du module `contact-map` (D8 : h2 titre, h3 sous-titre, `<p>` description). */
+export interface ContactMapContent {
+  type: "contact-map";
+  title: string;
+  subtitle: string;
+  description: string;
+  /** Réutilise `ContactAlign` et ses libellés (14.1.c). */
+  headerAlignment: ContactAlign;
+  /** Carte en conteneur 2 (gauche) ou 3 (droite). */
+  mapPosition: ContactMapPosition;
+  /** Adresse du profil si demandée et renseignée, sinon `customAddress` (D3). */
+  useOwnerAddress: boolean;
+  customAddress: string;
+  /** Niveau de zoom Google Maps — borné 1..20 (domaine ET éditeur). */
+  zoom: number;
+  mapType: ContactMapType;
+  showAddressGroup: boolean;
+  showParking: boolean;
+  parkingText: string;
+  showHoraires: boolean;
+  horairesText: string;
+  showZoneIntervention: boolean;
+  zoneInterventionText: string;
+  showDirectionsButton: boolean;
+  style: ContactMapStyleSettings;
+}
+
+/** Réglages d'apparence par défaut : fond de page, cadre du thème, N&B léger. */
+export const DEFAULT_CONTACT_MAP_STYLE: ContactMapStyleSettings = {
+  bgVariant: "default",
+  customBgColor: "#faf8f8",
+  frame: { ...DEFAULT_CONTACT_FRAME },
+  mapFilterStyle: "grayscale",
+  overlayIntensity: "light",
+};
+
+/**
+ * Forme par défaut **sans texte** (la *forme*, jamais le *contenu*).
+ *
+ * Le résolveur s'appuie sur cet objet pour compléter booléens, nombres et
+ * énumérations : il ne ressuscite aucun texte de démonstration, ce que ferait
+ * `createContactMapContent()`. C'est la distinction posée pour tous les
+ * modules : un JSONB tronqué doit rester lisible sans réinventer un contenu.
+ */
+export const DEFAULT_CONTACT_MAP_CONTENT: ContactMapContent = {
+  type: "contact-map",
+  title: "",
+  subtitle: "",
+  description: "",
+  headerAlignment: "center",
+  mapPosition: "container2",
+  useOwnerAddress: true,
+  customAddress: "",
+  zoom: 15,
+  mapType: "roadmap",
+  showAddressGroup: true,
+  showParking: true,
+  parkingText: "",
+  showHoraires: true,
+  horairesText: "",
+  showZoneIntervention: true,
+  zoneInterventionText: "",
+  showDirectionsButton: true,
+  style: DEFAULT_CONTACT_MAP_STYLE,
+};
+
+/**
+ * Contenu « contact-map » d'exemple (mode démonstration).
+ *
+ * Aucun paramètre de préremplissage : l'adresse du profil est résolue **au
+ * rendu** (D3), la fabrique ignore donc `owner-profile.ts`. `customAddress`
+ * reste renseignée comme **repli** — un profil sans adresse doit tout de même
+ * montrer une carte lisible. Chaque appel retourne une instance neuve (aucune
+ * référence partagée).
+ */
+export function createContactMapContent(): ContactMapContent {
+  return {
+    ...DEFAULT_CONTACT_MAP_CONTENT,
+    title: "Nous trouver",
+    subtitle: "Le studio, le parking et les horaires",
+    description:
+      "Tout ce qu’il faut pour préparer votre visite : l’adresse, où stationner et quand passer.",
+    customAddress: "12 rue des Lilas, 75011 Paris",
+    parkingText:
+      "Parking Indigo Voltaire, à 150 mètres du studio (sortie rue des Lilas).",
+    horairesText: "Du mardi au samedi\n10 h – 19 h",
+    zoneInterventionText: "Île-de-France et régions limitrophes",
+    style: {
+      ...DEFAULT_CONTACT_MAP_STYLE,
+      frame: { ...DEFAULT_CONTACT_FRAME },
+    },
+  };
+}
+
+/**
+ * Résout un contenu `contact-map` stocké (JSONB) vers un contenu **complet**.
+ *
+ * Tolérant par construction : `null`, un objet tronqué ou un JSONB ancien
+ * produisent une forme lisible. Aucun texte de démonstration n'est ressuscité
+ * (la *forme* est complétée, pas le *contenu*) : les champs texte retombent sur
+ * la chaîne vide, jamais sur l'exemple de la fabrique.
+ */
+export function resolveContactMapContent(raw: unknown): ContactMapContent {
+  if (!isRecord(raw)) {
+    return createContactMapContent();
+  }
+  const styleRaw = isRecord(raw.style) ? raw.style : {};
+  const defaults = DEFAULT_CONTACT_MAP_CONTENT;
+
+  return {
+    type: "contact-map",
+    title: readString(raw.title, ""),
+    subtitle: readString(raw.subtitle, ""),
+    description: readString(raw.description, ""),
+    headerAlignment: isContactAlign(raw.headerAlignment)
+      ? raw.headerAlignment
+      : defaults.headerAlignment,
+    mapPosition: isContactMapPosition(raw.mapPosition)
+      ? raw.mapPosition
+      : defaults.mapPosition,
+    useOwnerAddress:
+      typeof raw.useOwnerAddress === "boolean"
+        ? raw.useOwnerAddress
+        : defaults.useOwnerAddress,
+    customAddress: readString(raw.customAddress, ""),
+    zoom: readBoundedNumber(raw.zoom, defaults.zoom, 1, 20),
+    mapType: isContactMapType(raw.mapType) ? raw.mapType : defaults.mapType,
+    showAddressGroup:
+      typeof raw.showAddressGroup === "boolean"
+        ? raw.showAddressGroup
+        : defaults.showAddressGroup,
+    showParking:
+      typeof raw.showParking === "boolean"
+        ? raw.showParking
+        : defaults.showParking,
+    parkingText: readString(raw.parkingText, ""),
+    showHoraires:
+      typeof raw.showHoraires === "boolean"
+        ? raw.showHoraires
+        : defaults.showHoraires,
+    horairesText: readString(raw.horairesText, ""),
+    showZoneIntervention:
+      typeof raw.showZoneIntervention === "boolean"
+        ? raw.showZoneIntervention
+        : defaults.showZoneIntervention,
+    zoneInterventionText: readString(raw.zoneInterventionText, ""),
+    showDirectionsButton:
+      typeof raw.showDirectionsButton === "boolean"
+        ? raw.showDirectionsButton
+        : defaults.showDirectionsButton,
+    style: {
+      bgVariant: isContactMapBgVariant(styleRaw.bgVariant)
+        ? styleRaw.bgVariant
+        : DEFAULT_CONTACT_MAP_STYLE.bgVariant,
+      customBgColor: readColor(
+        styleRaw.customBgColor,
+        DEFAULT_CONTACT_MAP_STYLE.customBgColor
+      ),
+      frame: resolveContactFrame(styleRaw.frame),
+      mapFilterStyle: isContactMapFilterStyle(styleRaw.mapFilterStyle)
+        ? styleRaw.mapFilterStyle
+        : DEFAULT_CONTACT_MAP_STYLE.mapFilterStyle,
+      overlayIntensity: isContactMapOverlayIntensity(styleRaw.overlayIntensity)
+        ? styleRaw.overlayIntensity
+        : DEFAULT_CONTACT_MAP_STYLE.overlayIntensity,
+    },
+  };
+}
+
 /**
  * Module de page — mappe 1:1 vers la future table `page_modules`
  * (la position dans le tableau = ordre vertical = colonne `position` ;
@@ -4807,9 +6097,18 @@ export const moduleCatalog: ModuleCatalogEntry[] = [
   {
     id: "contact",
     type: "contact",
-    label: "Bloc contact",
+    label: "Contact & localisation",
     category: "Contact & cartographie",
-    description: "Coordonnées ou formulaire de contact.",
+    description:
+      "Coordonnées masquables, formulaire de contact sécurisé avec pièce jointe, et réseaux sociaux.",
+  },
+  {
+    id: "contact-map",
+    type: "contact-map",
+    label: "Plan d'accès & informations",
+    category: "Contact & cartographie",
+    description:
+      "Une carte Google Maps encadrée et des informations pratiques (adresse, parking, horaires, zone), permutables et réglables.",
   },
 ];
 
@@ -4923,14 +6222,13 @@ export function createModuleContent(
         ],
       };
     case "contact":
-      return {
-        type: "contact",
-        heading: "Contactez-moi",
-        intro: "Une question, un devis ? Écrivez-moi, je réponds sous 24 h.",
-        email: "bonjour@exemple.fr",
-        phone: "+33 6 00 00 00 00",
-        address: "Paris, France",
-      };
+      // Étape 14.1 — quatre containers ; sans préremplissage (mode démo), la
+      // fabrique pose des coordonnées et trois réseaux d'exemple.
+      return createContactContent();
+    case "contact-map":
+      // Étape 14.2 — aucune variante : la disposition (carte à gauche/droite)
+      // est un réglage de contenu (`mapPosition`), pas une variante de famille.
+      return createContactMapContent();
     case "content":
       return createContentColumnsContent();
   }

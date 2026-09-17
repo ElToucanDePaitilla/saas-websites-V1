@@ -5,6 +5,7 @@ import {
   IdCard,
   LayoutGrid,
   Mail,
+  MapPin,
   Megaphone,
   Sparkles,
   User,
@@ -31,6 +32,7 @@ const moduleIcons: Record<PageModuleType, LucideIcon> = {
   contact: Mail,
   content: Columns3,
   cards: IdCard,
+  "contact-map": MapPin,
 };
 
 export function ModuleIcon({

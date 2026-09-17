@@ -16,6 +16,7 @@ import {
   getHomePage,
   getPagesWithModules,
 } from "@/db/repositories/pages.repository";
+import { getOwnerProfile } from "@/db/repositories/owner-profile.repository";
 import { resolvePublicPhotographerId } from "@/lib/supabase/session";
 import {
   bannerImageSources,
@@ -30,6 +31,8 @@ import {
   heroStaticArtSources,
   heroVideoImageSources,
   resolveCardsContent,
+  resolveContactContent,
+  resolveContactMapContent,
   resolveContentColumnsContent,
   resolveCtaBannerContent,
   resolveGalleryContent,
@@ -55,6 +58,40 @@ export interface PublicPage {
   menuTitle: string;
   modules: PageModule[];
   exifByUrl: Record<string, ResolvedMediaMeta>;
+  /**
+   * Adresse du profil propriétaire, résolue **uniquement** si un module
+   * `contact-map` la demande (D3). Chaîne vide dans tous les autres cas — les
+   * modules consommateurs retombent alors sur leur adresse libre.
+   */
+  ownerAddress: string;
+}
+
+/**
+ * Adresse du profil, lue **conditionnellement** (D3).
+ *
+ * Aucune lecture BDD quand la page n'utilise pas de module `contact-map` : le
+ * rendu d'une page ne doit pas payer une requête dont il n'a pas besoin. Toute
+ * erreur (BDD absente, profil illisible) retombe sur `""` — un profil manquant
+ * ne doit jamais faire échouer le rendu, c'est le repli de `contactMapAddress`
+ * qui prend le relais.
+ */
+async function resolveOwnerAddress(
+  modules: PageModule[],
+  photographerId: string
+): Promise<string> {
+  const needed = modules.some(
+    (module) =>
+      module.content.type === "contact-map" && module.content.useOwnerAddress
+  );
+  if (!needed) {
+    return "";
+  }
+  try {
+    const profile = await getOwnerProfile(photographerId);
+    return profile?.address.trim() ?? "";
+  } catch {
+    return "";
+  }
 }
 
 /**
@@ -171,6 +208,26 @@ export function publicDescription(modules: PageModule[]): string {
     if (content.type === "cta-banner" && content.subheading.trim()) {
       return content.subheading;
     }
+    if (content.type === "contact") {
+      // Une section contact peut être le seul texte de la page : son **chapeau**
+      // (sous-titre, à défaut titre) alimente alors le partage. Jamais les
+      // données du formulaire : elles n'appartiennent pas au contenu éditorial.
+      const contact = resolveContactContent(content);
+      const text = contact.subtitle.trim() || contact.heading.trim();
+      if (text) {
+        return text;
+      }
+    }
+    if (content.type === "contact-map") {
+      // Une section « plan d'accès » peut être le seul texte de la page : son
+      // sous-titre, à défaut son titre, alimente le partage. Jamais les
+      // informations pratiques : ce sont des données d'usage, pas un résumé.
+      const map = resolveContactMapContent(content);
+      const text = map.subtitle.trim() || map.title.trim();
+      if (text) {
+        return text;
+      }
+    }
     if (content.type === "cards") {
       // Une section de cartes peut être le seul texte de la page : son
       // introduction, à défaut son sous-titre, alimente alors le partage.
@@ -239,6 +296,8 @@ function seedPublicPage(slug: string): PublicPage | null {
     menuTitle: seed.menuTitle,
     modules: buildSeedModules(slug),
     exifByUrl: {},
+    // Aucun seed ne contient de module `contact-map` : pas de lecture profil.
+    ownerAddress: "",
   };
 }
 
@@ -274,6 +333,7 @@ export async function getPublicPage(slug: string): Promise<PublicPage | null> {
       menuTitle: target.menuTitle,
       modules,
       exifByUrl,
+      ownerAddress: await resolveOwnerAddress(modules, photographerId),
     };
   } catch {
     // BDD indisponible → repli seed explicite (démo).
@@ -328,6 +388,7 @@ export async function getHomepageState(): Promise<HomepageState> {
         menuTitle: home.menuTitle,
         modules,
         exifByUrl,
+        ownerAddress: await resolveOwnerAddress(modules, photographerId),
       },
     };
   } catch {

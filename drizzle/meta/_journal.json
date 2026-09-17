@@ -57,6 +57,27 @@
       "when": 1789489933949,
       "tag": "0007_slow_sabra",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789595382788,
+      "tag": "0008_gorgeous_rage",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1789595408147,
+      "tag": "0009_contact_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1789681337968,
+      "tag": "0010_simple_chat",
+      "breakpoints": true
     }
   ]
 }

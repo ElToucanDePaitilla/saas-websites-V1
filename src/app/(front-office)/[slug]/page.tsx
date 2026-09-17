@@ -64,6 +64,8 @@ export default async function PublicPage({ params }: PageProps) {
         modules={visibleModules}
         pageTitle={page.title}
         exifByUrl={page.exifByUrl}
+        pageSlug={page.slug}
+        ownerAddress={page.ownerAddress}
       />
     </main>
   );

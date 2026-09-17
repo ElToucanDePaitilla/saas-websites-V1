@@ -38,6 +38,8 @@ const moduleTypeSchema = z.enum([
   "content",
   // Étape 13.1 — « Cards ».
   "cards",
+  // Étape 14.2 — « Contact Map ».
+  "contact-map",
 ]);
 
 /** Animations d'entrée (ModuleAnimation). */
