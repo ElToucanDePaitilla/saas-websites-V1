@@ -5,6 +5,8 @@ import { ContactModule } from "@/components/modules/contact/ContactModule";
 import { ContactMapModule } from "@/components/modules/contact-map/ContactMapModule";
 import { ContentColumnsModule } from "@/components/modules/content/ContentColumnsModule";
 import { GalleryManager } from "@/components/modules/gallery/GalleryManager";
+import { MarqueeModule } from "@/components/modules/marquee/MarqueeModule";
+import { ReviewsModule } from "@/components/modules/reviews/ReviewsModule";
 import { BaseHero } from "@/components/modules/hero/BaseHero";
 import { HeroModule } from "@/components/modules/hero/HeroModule";
 import { bannerEffectiveVariant } from "@/lib/banner-effects";
@@ -258,6 +260,10 @@ export function PageModuleRenderer({
       return (
         <ContactMapModule module={module} ownerAddress={ownerAddress} />
       );
+    case "marquee":
+      return <MarqueeModule module={module} />;
+    case "reviews":
+      return <ReviewsModule module={module} />;
     case "content":
       return <ContentColumnsModule module={module} />;
     case "cards":

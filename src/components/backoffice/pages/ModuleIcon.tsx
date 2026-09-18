@@ -2,11 +2,13 @@ import {
   BadgeDollarSign,
   CircleHelp,
   Columns3,
+  GalleryHorizontal,
   IdCard,
   LayoutGrid,
   Mail,
   MapPin,
   Megaphone,
+  MessageSquareQuote,
   Sparkles,
   User,
   type LucideIcon,
@@ -33,6 +35,8 @@ const moduleIcons: Record<PageModuleType, LucideIcon> = {
   content: Columns3,
   cards: IdCard,
   "contact-map": MapPin,
+  marquee: GalleryHorizontal,
+  reviews: MessageSquareQuote,
 };
 
 export function ModuleIcon({

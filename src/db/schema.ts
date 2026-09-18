@@ -40,6 +40,7 @@ import {
 
 import type { OwnerProfile } from "../lib/owner-profile";
 import type { ModuleContent } from "../lib/pages";
+import type { TopBanner } from "../lib/top-banner";
 import type { VisualIdentity } from "../lib/visual-identity";
 
 /* --------------------------------------------------------------------------
@@ -69,6 +70,10 @@ export const moduleTypeEnum = pgEnum("module_type", [
   "cards",
   // Étape 14.2 — « Contact Map » : troisième `ALTER TYPE … ADD VALUE`.
   "contact-map",
+  // Étape 14.3 — « Bandeau défilant » : quatrième `ALTER TYPE … ADD VALUE`.
+  "marquee",
+  // Étape 14.4 — « Avis clients » : cinquième `ALTER TYPE … ADD VALUE`.
+  "reviews",
 ]);
 
 /** Animations d'entrée d'un module (ModuleAnimation). */
@@ -333,6 +338,29 @@ export const siteVisualIdentity = pgTable("site_visual_identity", {
     .$type<VisualIdentity>()
     .notNull()
     .default(sql`'{}'::jsonb`),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
+/* --------------------------------------------------------------------------
+   SITE_TOP_BANNER — mini-bandeau Alerte / Promo (réglage global)
+   --------------------------------------------------------------------------
+   1 ligne par photographe (photographer_id = PK/FK → profiles.id). Hauteur,
+   gaps, couleurs, typographie, mode défilant/statique et lien stockés en `data`
+   JSONB typé `TopBanner` (validé par `TopBannerSchema`). RLS owner-only : le
+   bandeau public est alimenté côté serveur (rôle service) via l'hydratation SSR,
+   comme l'identité visuelle — aucune lecture `anon`.
+   -------------------------------------------------------------------------- */
+
+export const siteTopBanner = pgTable("site_top_banner", {
+  photographerId: uuid("photographer_id")
+    .primaryKey()
+    .references(() => profiles.id, { onDelete: "cascade" }),
+  data: jsonb("data").$type<TopBanner>().notNull().default(sql`'{}'::jsonb`),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),

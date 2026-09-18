@@ -2,9 +2,11 @@ import type { ReactNode } from "react";
 
 import { NavigationStoreProvider } from "@/components/backoffice/navigation/NavigationStoreProvider";
 import { OwnerProfileProvider } from "@/components/backoffice/profile/OwnerProfileProvider";
+import { TopBannerProvider } from "@/components/backoffice/top-banner/TopBannerProvider";
 import { VisualIdentityProvider } from "@/components/backoffice/visual-identity/VisualIdentityProvider";
 import Footer from "@/components/layout/Footer";
 import Header from "@/components/layout/Header";
+import { TopBannerChrome } from "@/components/layout/TopBannerChrome";
 import { loadInitialData } from "@/db/load-initial-data";
 import { resolvePublicPhotographerId } from "@/lib/supabase/session";
 
@@ -34,6 +36,12 @@ import { resolvePublicPhotographerId } from "@/lib/supabase/session";
  *
  * Le Provider n'ajoute aucun nœud DOM (contexte React seul) : le Header / main /
  * Footer restent enfants directs du `<body>` en `flex flex-col`.
+ *
+ * Réglage global « Mini-bandeau Alerte / Promo » : `TopBannerChrome` enveloppe
+ * Header + `main` d'un wrapper en `display: contents` — il transmet la variable
+ * `--top-banner-offset` sans insérer de nœud de mise en page (un `<div>` réel
+ * capterait le `flex-1` de `main` et décollerait le Footer). Le Footer reste
+ * donc hors du wrapper, enfant direct du `<body>`.
  *
  * Références : plans/ROADMAP-5.2-ssr-db-hydration.md §2.B —
  *              plans/ROADMAP-4.5-front-navigation.md §4 —
@@ -86,8 +94,25 @@ export default async function FrontOfficeLayout({
           initialData={initial.navigation}
           persistenceEnabled={initial.dbAvailable}
         >
-          <Header />
-          <main className="flex-1 pt-20">{children}</main>
+          <TopBannerProvider
+            initialTopBanner={initial.topBanner}
+            persistenceEnabled={initial.dbAvailable}
+          >
+            <TopBannerChrome
+              photographerId={photographerId}
+              initialTopBanner={initial.topBanner}
+            >
+              <Header />
+              <main
+                className="flex-1"
+                style={{
+                  paddingTop: "calc(5rem + var(--top-banner-offset, 0px))",
+                }}
+              >
+                {children}
+              </main>
+            </TopBannerChrome>
+          </TopBannerProvider>
           <Footer />
         </NavigationStoreProvider>
       </VisualIdentityProvider>

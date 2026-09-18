@@ -40,6 +40,10 @@ const moduleTypeSchema = z.enum([
   "cards",
   // Étape 14.2 — « Contact Map ».
   "contact-map",
+  // Étape 14.3 — « Bandeau défilant ».
+  "marquee",
+  // Étape 14.4 — « Avis clients ».
+  "reviews",
 ]);
 
 /** Animations d'entrée (ModuleAnimation). */
@@ -632,6 +636,71 @@ export const VisualIdentitySchema = z.object({
     })
     .default({ url: "", altText: "" }),
 });
+
+/* --------------------------------------------------------------------------
+   MINI-BANDEAU ALERTE / PROMO — réglage global (site_top_banner)
+   --------------------------------------------------------------------------
+   Le bandeau n'appartient à aucune page : il est stocké par photographe, comme
+   l'identité visuelle. Le schéma est le miroir de `TopBanner`
+   (`src/lib/top-banner.ts`) et valide `PUT /api/top-banner`. Les bornes y sont
+   doublées : la route refuse une valeur hors plage, même si le résolveur
+   tolérant la ramènerait ensuite.
+   -------------------------------------------------------------------------- */
+
+const topBannerColorSchema = z.object({
+  source: z.enum(["theme", "custom"]).default("theme"),
+  token: z
+    .enum([
+      "accent-color",
+      "accent-color-strong",
+      "surface-color",
+      "surface-color-soft",
+      "bg-color",
+      "text-color",
+      "border-color",
+    ])
+    .default("bg-color"),
+  value: z.string().default("#FFFFFF"),
+});
+
+const topBannerGapSchema = z.object({
+  enabled: z.boolean().default(false),
+  value: z.number().int().min(0).max(15).default(0),
+});
+
+/** Configuration complète du mini-bandeau global. */
+export const TopBannerSchema = z.object({
+  enabled: z.boolean().default(false),
+  text: z.string().default(""),
+  height: z.number().int().min(15).max(50).default(32),
+  gapTop: topBannerGapSchema.default({ enabled: false, value: 0 }),
+  gapBottom: topBannerGapSchema.default({ enabled: false, value: 0 }),
+  gapColor: topBannerColorSchema.default({
+    source: "theme",
+    token: "bg-color",
+    value: "#FFFFFF",
+  }),
+  background: topBannerColorSchema.default({
+    source: "theme",
+    token: "text-color",
+    value: "#1E293B",
+  }),
+  textColor: topBannerColorSchema.default({
+    source: "theme",
+    token: "bg-color",
+    value: "#FFFFFF",
+  }),
+  fontSize: z.number().int().min(11).max(16).default(12),
+  fontWeight: z.enum(["400", "500", "600", "700"]).default("500"),
+  letterSpacing: z.enum(["tight", "normal", "wide", "wider"]).default("normal"),
+  textMode: z.enum(["marquee", "static"]).default("marquee"),
+  durationSeconds: z.number().int().min(20).max(60).default(24),
+  linkEnabled: z.boolean().default(false),
+  linkHref: z.string().default(""),
+});
+
+/** Valeur (TypeScript) du corps `PUT /api/top-banner`. */
+export type TopBannerPayload = z.infer<typeof TopBannerSchema>;
 
 /** Protocole de changement de mot de passe sécurisé. */
 export const ProfileSecuritySchema = z

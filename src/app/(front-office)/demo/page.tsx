@@ -11,7 +11,9 @@ import {
   createGalleryPortfolioContent,
   createGalleryStaticContent,
   createHeroStaticContent,
+  createMarqueeContent,
   createModule,
+  createReviewsContent,
   type CardsColumns,
   type CardsLayoutSettings,
   type CardsStyleSettings,
@@ -367,6 +369,92 @@ function buildDemoModules(): PageModule[] {
     },
   };
 
+  // ---- Bandeau défilant (Étape 14.3) : deux instances ----
+  // La première suit la fabrique (portrait 2:3, ombre normale) et pointe vers
+  // une ancre interne : c'est le chemin nominal du lien (D7) et la preuve que
+  // le ruban capte le clic sans imbriquer d'élément interactif. La pause au
+  // survol y est posée **explicitement** : le défaut du domaine est passé à
+  // `false`, la démo doit continuer de montrer l'état « pause active ».
+  // La seconde change tous les réglages visibles à la fois — format **paysage**
+  // 16:9, vignettes plus hautes que la bande (rognage symétrique), écart
+  // resserré, cycle court, pause désactivée, ombre retirée et fond de surface :
+  // chaque réglage est bien **porté par le module**.
+  const marqueeBase = createMarqueeContent();
+  const marqueeDefault = createModule("marquee", 15);
+  marqueeDefault.content = {
+    ...marqueeBase,
+    images: makeDemoImages("demo-marquee-a", 6),
+    linkEnabled: true,
+    linkHref: "#galerie",
+    pauseOnHover: true,
+  };
+
+  const marqueeCompact = createModule("marquee", 16);
+  marqueeCompact.content = {
+    ...marqueeBase,
+    images: makeDemoImages("demo-marquee-b", 4),
+    ratio: "16:9",
+    tileHeight: 200,
+    gap: 8,
+    durationSeconds: 18,
+    pauseOnHover: false,
+    style: {
+      ...marqueeBase.style,
+      shadowEnabled: false,
+      background: { source: "theme", token: "surface-color", value: "#faf8f8" },
+    },
+  };
+
+  // ---- Avis clients (Étape 14.4) : une instance ----
+  // Trois avis aux notes **distinctes** — dont 3.5, qui éprouve l'étoile à
+  // moitié remplie — et un avis **non vérifié** : la pastille doit disparaître
+  // sur cette carte seulement. `pauseOnHover` et la vitesse restent ceux de la
+  // fabrique, pour montrer le chemin nominal.
+  const reviewsBase = createReviewsContent();
+  const reviews = createModule("reviews", 17);
+  reviews.content = {
+    ...reviewsBase,
+    heading: "Ils me font confiance",
+    provider: "google",
+    overallScore: 4.5,
+    totalReviewsText: "Basé sur 3 avis",
+    autoplaySpeedMs: 5000,
+    pauseOnHover: true,
+    reviews: [
+      {
+        id: crypto.randomUUID(),
+        author: "Camille D.",
+        initial: "",
+        timeAgo: "il y a 2 semaines",
+        rating: 5,
+        comment:
+          "Un regard juste et beaucoup de bienveillance : les photos nous ressemblent, sans jamais paraître posées.",
+        isVerified: true,
+      },
+      {
+        id: crypto.randomUUID(),
+        author: "Léa & Marc",
+        initial: "L",
+        timeAgo: "il y a 1 mois",
+        rating: 4,
+        comment:
+          "Reportage de mariage impeccable, des préparatifs à la soirée. Nous avons adoré la discrétion du photographe.",
+        isVerified: true,
+      },
+      {
+        id: crypto.randomUUID(),
+        author: "Sofia R.",
+        initial: "",
+        timeAgo: "il y a 3 mois",
+        rating: 3.5,
+        comment:
+          "De belles images et un rendu soigné ; le délai de livraison a toutefois été un peu plus long que prévu.",
+        // Non vérifié : c'est la carte qui prouve la condition d'affichage.
+        isVerified: false,
+      },
+    ],
+  };
+
   // ---- Cards (Étapes 13.1 → 13.3) : un module par variante ----
   // Seul le bouton est cliquable : la démo le montre avec une bordure de cadre
   // activée et des effets de survol poussés (brillance + saturation), c'est-à-
@@ -433,6 +521,9 @@ function buildDemoModules(): PageModule[] {
     contactNoInfo,
     contactMapDefault,
     contactMapPermuted,
+    marqueeDefault,
+    marqueeCompact,
+    reviews,
   ];
 }
 

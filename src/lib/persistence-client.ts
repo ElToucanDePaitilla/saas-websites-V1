@@ -18,6 +18,7 @@ import type { SitePage } from "./pages";
 import type { NavPresetId, SiteNavigation } from "./navigation";
 import type { PageMetadataDraft } from "./pages";
 import type { OwnerProfile } from "./owner-profile";
+import type { TopBanner } from "./top-banner";
 import type { VisualIdentity } from "./visual-identity";
 
 /** Corps JSON typé des modules (content ouvert à la frontière API). */
@@ -154,4 +155,9 @@ export async function persistVisualIdentity(
   visualIdentity: VisualIdentity
 ): Promise<void> {
   await send(jsonRequest("/api/visual-identity", "PUT", visualIdentity));
+}
+
+/** Upsert du mini-bandeau global (réglage au-dessus du Header). */
+export async function persistTopBanner(topBanner: TopBanner): Promise<void> {
+  await send(jsonRequest("/api/top-banner", "PUT", topBanner));
 }

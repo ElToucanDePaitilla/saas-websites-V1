@@ -200,7 +200,15 @@ export type PageModuleType =
   | "cards"
   // Étape 14.2 — « Contact Map ». Même conséquence qu'en 13.1 : nouvelle
   // famille, donc enum Postgres, schéma Zod, icône et deux `switch` à étendre.
-  | "contact-map";
+  | "contact-map"
+  // Étape 14.3 — « Bandeau défilant ». Même conséquence qu'en 13.1/14.2 :
+  // nouvelle famille, jamais une variante de galerie (une galerie s'explore,
+  // un bandeau se traverse — ni lightbox, ni légendes, ni survol).
+  | "marquee"
+  // Étape 14.4 — « Avis clients ». Cinquième `ALTER TYPE … ADD VALUE` : une
+  // section de réassurance n'est ni une FAQ ni des cartes — elle porte un
+  // carrousel, une note de synthèse et un logo de fournisseur d'avis.
+  | "reviews";
 
 /** Animation d'entrée d'un module (spec §7.2-B ; sélecteur en 3.4). */
 export type ModuleAnimation =
@@ -3168,7 +3176,9 @@ export type ModuleContent =
       items: FaqItem[];
     })
   | ContactContent
-  | ContactMapContent;
+  | ContactMapContent
+  | MarqueeContent
+  | ReviewsContent;
 
 /* ==========================================================================
    BANDEAU MESSAGE OU D'APPEL À L'ACTION — « cta-banner » (Étape 11.27)
@@ -5904,6 +5914,435 @@ export function resolveContactMapContent(raw: unknown): ContactMapContent {
   };
 }
 
+/* ==========================================================================
+   MODULE « BANDEAU DÉFILANT » — marquee / carrousel infini (Étape 14.3)
+   --------------------------------------------------------------------------
+   Un ruban de photos qui défile en boucle continue. Nouvelle **famille**, et
+   non variante de la galerie : une galerie s'explore (sélection, diaporama,
+   légendes, survol), un bandeau se regarde passer. Le module ne porte donc
+   aucun texte, aucune lightbox et aucun état local.
+
+   L'animation est **CSS pur** (D2). Le projet n'avait aucun `@keyframes` et
+   `framer-motion` n'est pas installé : introduire une dépendance pour un seul
+   défilement linéaire aurait été disproportionné, et le CSS sait déjà le
+   mettre en pause (`animation-play-state`), y compris via `prefers-reduced-motion`.
+   ========================================================================== */
+
+/**
+ * Format des vignettes — paysage, portrait et vertical.
+ *
+ * Les trois formats portrait existent en miroir paysage : un ruban peut aussi
+ * bien défiler en vignettes verticales (portraits, stories) qu'horizontales
+ * (paysages, détails larges). Aucun carré : il ne rentrerait dans aucune des
+ * deux intentions et aurait dénaturé la lecture du ruban.
+ */
+export type MarqueeRatio =
+  | "16:9"
+  | "3:2"
+  | "4:3"
+  | "2:3"
+  | "3:4"
+  | "9:16";
+
+/** Ordre d'affichage des formats (paysage d'abord, puis portrait/vertical). */
+export const marqueeRatioOrder: MarqueeRatio[] = [
+  "16:9",
+  "3:2",
+  "4:3",
+  "2:3",
+  "3:4",
+  "9:16",
+];
+
+/** Libellés français des formats de vignette. */
+export const marqueeRatioLabels: Record<MarqueeRatio, string> = {
+  "16:9": "Paysage 16:9",
+  "3:2": "Paysage 3:2",
+  "4:3": "Paysage 4:3",
+  "2:3": "Portrait 2:3",
+  "3:4": "Portrait 3:4",
+  "9:16": "Vertical 9:16 (story)",
+};
+
+/** Garde : format de vignette valide. */
+export function isMarqueeRatio(value: unknown): value is MarqueeRatio {
+  return (
+    value === "16:9" ||
+    value === "3:2" ||
+    value === "4:3" ||
+    value === "2:3" ||
+    value === "3:4" ||
+    value === "9:16"
+  );
+}
+
+/**
+ * "9:16" → "9 / 16" (valeur CSS `aspect-ratio`).
+ *
+ * Le ratio n'est pas stocké sous forme de couple : c'est une énumération
+ * fermée, et la conversion vit ici pour que le CSS et le `sizes` du rendu
+ * partagent exactement la même source (aucun « : » à reparser ailleurs).
+ */
+export function marqueeAspectRatio(ratio: MarqueeRatio): string {
+  return ratio.replace(":", " / ");
+}
+
+/** Apparence du ruban (fond de section + ombre des vignettes). */
+export interface MarqueeStyleSettings {
+  /** Réutilise le fond couleur du bandeau (jeton de thème ou pipette). */
+  background: BannerColorSettings;
+  shadowEnabled: boolean;
+  /** Réutilise l'échelle d'ombre de la galerie — pas de curseurs dédiés (D6). */
+  shadow: GalleryShadowLevel;
+}
+
+/** Contenu du module `marquee` (D8 : aucune donnée texte propre). */
+export interface MarqueeContent {
+  type: "marquee";
+  /** Hauteur de la bande, en px — borné 100..500 (défaut 150). */
+  height: number;
+  /** Hauteur unifiée des vignettes, en px — borné 80..450 (défaut 120). */
+  tileHeight: number;
+  ratio: MarqueeRatio;
+  /** Écart horizontal entre vignettes, en px — borné 0..32 (défaut 20). */
+  gap: number;
+  /** Durée d'un cycle complet, en secondes — borné 10..120 (défaut 40). */
+  durationSeconds: number;
+  pauseOnHover: boolean;
+  images: GalleryImage[];
+  linkEnabled: boolean;
+  linkHref: string;
+  /** Libellé d'accessibilité du lien (aria-label), facultatif. */
+  linkLabel: string;
+  style: MarqueeStyleSettings;
+}
+
+/** Réglages d'apparence par défaut : fond du thème, ombre normale active. */
+export const DEFAULT_MARQUEE_STYLE: MarqueeStyleSettings = {
+  background: { source: "theme", token: "bg-color", value: "#faf8f8" },
+  shadowEnabled: true,
+  shadow: "normal",
+};
+
+/**
+ * Forme par défaut **sans photo ni texte**. Le résolveur s'appuie sur cet objet
+ * pour compléter booléens, nombres et énumérations ; il ne ressuscite jamais
+ * une image ou une destination — un JSONB tronqué doit rester vide, jamais
+ * réinventer une démonstration. Partir d'une liste vide est la même décision
+ * que la galerie : c'est au photographe d'importer ses visuels.
+ */
+export const DEFAULT_MARQUEE_CONTENT: MarqueeContent = {
+  type: "marquee",
+  height: 150,
+  tileHeight: 120,
+  ratio: "2:3",
+  gap: 20,
+  durationSeconds: 40,
+  // Défilement continu par défaut : un bandeau qui s'arrête au survol surprend
+  // plus qu'il n'aide. L'interrupteur reste disponible dans l'éditeur.
+  pauseOnHover: false,
+  images: [],
+  linkEnabled: false,
+  linkHref: "",
+  linkLabel: "",
+  style: DEFAULT_MARQUEE_STYLE,
+};
+
+/**
+ * Contenu « marquee » par défaut (mode démonstration). Chaque appel retourne une
+ * instance neuve, y compris pour le fond imbriqué : l'éditeur mute par copie,
+ * une référence partagée entre deux modules ferait basculer l'un en changeant
+ * l'autre.
+ */
+export function createMarqueeContent(): MarqueeContent {
+  return {
+    ...DEFAULT_MARQUEE_CONTENT,
+    images: [],
+    style: {
+      ...DEFAULT_MARQUEE_STYLE,
+      background: { ...DEFAULT_MARQUEE_STYLE.background },
+    },
+  };
+}
+
+/**
+ * Lit le fond de section stocké (JSONB).
+ *
+ * Copie de la convention du bandeau (`cta-banner`) : `source` est réduite aux
+ * deux valeurs connues, le jeton est validé contre la liste du thème, et la
+ * valeur libre n'est retenue que si elle est renseignée. Un fond `custom` sans
+ * valeur retombe donc sur le défaut, jamais sur une chaîne vide qui peindrait
+ * un fond transparent par accident.
+ */
+function resolveMarqueeBackground(raw: unknown): BannerColorSettings {
+  const record = isRecord(raw) ? raw : {};
+  return {
+    source: record.source === "custom" ? "custom" : "theme",
+    token: isBannerThemeToken(record.token)
+      ? record.token
+      : DEFAULT_MARQUEE_STYLE.background.token,
+    value: readColor(
+      record.value,
+      DEFAULT_MARQUEE_STYLE.background.value
+    ),
+  };
+}
+
+/**
+ * Résout un contenu `marquee` stocké (JSONB) vers un contenu **complet**.
+ *
+ * Tolérant par construction : `null`, un objet tronqué ou un JSONB ancien
+ * produisent une forme lisible. Aucune photo, aucun lien et aucun texte ne sont
+ * ressuscités — la *forme* est complétée, pas le *contenu*. Les nombres sont
+ * bornés **ici** (et non seulement dans l'éditeur) : une donnée héritée ne peut
+ * pas produire une bande de 10 000 px ni une animation instantanée.
+ */
+export function resolveMarqueeContent(raw: unknown): MarqueeContent {
+  if (!isRecord(raw)) {
+    return createMarqueeContent();
+  }
+  const styleRaw = isRecord(raw.style) ? raw.style : {};
+  const defaults = DEFAULT_MARQUEE_CONTENT;
+
+  return {
+    type: "marquee",
+    height: readBoundedNumber(raw.height, defaults.height, 100, 500),
+    tileHeight: readBoundedNumber(raw.tileHeight, defaults.tileHeight, 80, 450),
+    ratio: isMarqueeRatio(raw.ratio) ? raw.ratio : defaults.ratio,
+    gap: readBoundedNumber(raw.gap, defaults.gap, 0, 32),
+    durationSeconds: readBoundedNumber(
+      raw.durationSeconds,
+      defaults.durationSeconds,
+      10,
+      120
+    ),
+    pauseOnHover:
+      typeof raw.pauseOnHover === "boolean"
+        ? raw.pauseOnHover
+        : defaults.pauseOnHover,
+    images: readGalleryImages(raw.images),
+    linkEnabled:
+      typeof raw.linkEnabled === "boolean"
+        ? raw.linkEnabled
+        : defaults.linkEnabled,
+    linkHref: readString(raw.linkHref, ""),
+    linkLabel: readString(raw.linkLabel, ""),
+    style: {
+      background: resolveMarqueeBackground(styleRaw.background),
+      shadowEnabled:
+        typeof styleRaw.shadowEnabled === "boolean"
+          ? styleRaw.shadowEnabled
+          : defaults.style.shadowEnabled,
+      shadow: isGalleryShadowLevel(styleRaw.shadow)
+        ? styleRaw.shadow
+        : defaults.style.shadow,
+    },
+  };
+}
+
+/* ==========================================================================
+   AVIS CLIENTS — famille « reviews » (Étape 14.4)
+   --------------------------------------------------------------------------
+   Section de réassurance **saisie manuellement** : aucun appel API (Google,
+   Trustpilot…), aucune clé, aucun cache. Le champ `provider` ne choisit que le
+   logo affiché — le contenu des avis vit dans le JSONB du module, comme les
+   autres familles (D2 du plan).
+
+   Le composant public est **props-only** : ce résolveur est le seul garde-fou
+   entre un JSONB ancien ou tronqué et le rendu.
+   ========================================================================== */
+
+/** Fournisseur d'avis — ne détermine que le logo affiché. */
+export type ReviewProvider =
+  | "google"
+  | "trustpilot"
+  | "trusted_shops"
+  | "avis_verifies"
+  | "tripadvisor"
+  | "facebook";
+
+/** Un avis client tel que saisi dans l'éditeur. */
+export interface ReviewItem {
+  /** Identifiant stable (crypto.randomUUID() côté éditeur). */
+  id: string;
+  author: string;
+  /** Initiale affichée ; vide → repli sur la 1re lettre de `author`. */
+  initial: string;
+  /** Ancienneté relative, ex. « il y a 2 semaines ». */
+  timeAgo: string;
+  /** Note bornée 0..5 (une décimale autorisée). */
+  rating: number;
+  comment: string;
+  /** Défaut `true` : un avis enregistré avant ce champ reste vérifié. */
+  isVerified: boolean;
+}
+
+/** Contenu du module `reviews`. */
+export interface ReviewsContent {
+  type: "reviews";
+  /** Titre de section optionnel (`module-h2`) — vide : non rendu. */
+  heading: string;
+  provider: ReviewProvider;
+  /** Mot d'accroche global, ex. « EXCELLENT ». */
+  summaryWord: string;
+  /** Note moyenne 0..5 (une décimale autorisée). */
+  overallScore: number;
+  /** Légende du nombre d'avis, ex. « Basé sur 10 avis ». */
+  totalReviewsText: string;
+  reviews: ReviewItem[];
+  /** Vitesse d'autoplay — mêmes valeurs que le Héro (3/5/7/10 s). */
+  autoplaySpeedMs: HeroAutoplaySpeed;
+  pauseOnHover: boolean;
+}
+
+/** Ordre des fournisseurs dans le sélecteur de l'éditeur. */
+export const reviewProviderOrder: ReviewProvider[] = [
+  "google",
+  "trustpilot",
+  "trusted_shops",
+  "avis_verifies",
+  "tripadvisor",
+  "facebook",
+];
+
+/** Libellés français des fournisseurs. */
+export const reviewProviderLabels: Record<ReviewProvider, string> = {
+  google: "Google",
+  trustpilot: "Trustpilot",
+  trusted_shops: "Trusted Shops",
+  avis_verifies: "Avis Vérifiés",
+  tripadvisor: "Tripadvisor",
+  facebook: "Facebook",
+};
+
+/** Garde : fournisseur connu (pour le résolveur JSONB). */
+export function isReviewProvider(value: unknown): value is ReviewProvider {
+  return (
+    typeof value === "string" &&
+    (reviewProviderOrder as string[]).includes(value)
+  );
+}
+
+/** Contenu « reviews » par défaut : la section est vide, jamais inventée. */
+export const DEFAULT_REVIEWS_CONTENT: ReviewsContent = {
+  type: "reviews",
+  heading: "Avis clients",
+  provider: "google",
+  summaryWord: "EXCELLENT",
+  overallScore: 4.5,
+  totalReviewsText: "Basé sur 10 avis",
+  reviews: [],
+  autoplaySpeedMs: 5000,
+  pauseOnHover: true,
+};
+
+/**
+ * Contenu « reviews » par défaut (mode démonstration). Chaque appel retourne une
+ * instance neuve — l'éditeur mute par copie, un tableau partagé entre deux
+ * modules ferait basculer l'un en changeant l'autre.
+ */
+export function createReviewsContent(): ReviewsContent {
+  return {
+    ...DEFAULT_REVIEWS_CONTENT,
+    reviews: [],
+  };
+}
+
+/**
+ * Lit une note bornée 0..5, arrondie à **une décimale**.
+ *
+ * `readBoundedNumber` conviendrait au bornage, mais pas à la précision : un
+ * JSONB peut contenir `4.5238716…`, et une note affichée à la décimale près ne
+ * doit pas dépendre d'un `toFixed` de rendu. Le bornage précède l'arrondi.
+ */
+function readBoundedScore(
+  value: unknown,
+  fallback: number,
+  min: number,
+  max: number
+): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return fallback;
+  }
+  const clamped = Math.min(Math.max(value, min), max);
+  return Math.round(clamped * 10) / 10;
+}
+
+/**
+ * Lit la liste d'avis stockée (JSONB).
+ *
+ * Les entrées non-objet sont ignorées, et un avis **sans auteur ni commentaire**
+ * l'est aussi : sa carte serait vide sur le site. Jamais de contenu ressuscité —
+ * l'`id` manquant reçoit un repli **déterministe** (`review-1`, `review-2`…), car
+ * un identifiant aléatoire côté serveur produirait un mismatch d'hydratation.
+ */
+function readReviewItems(value: unknown): ReviewItem[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const items: ReviewItem[] = [];
+  value.forEach((raw, index) => {
+    if (!isRecord(raw)) {
+      return;
+    }
+    const author = readString(raw.author, "");
+    const comment = readString(raw.comment, "");
+    if (author.trim() === "" && comment.trim() === "") {
+      return;
+    }
+    items.push({
+      id: readString(raw.id, `review-${index + 1}`),
+      author,
+      initial: readString(raw.initial, ""),
+      timeAgo: readString(raw.timeAgo, ""),
+      rating: readBoundedScore(raw.rating, 0, 0, 5),
+      comment,
+      isVerified: typeof raw.isVerified === "boolean" ? raw.isVerified : true,
+    });
+  });
+  return items;
+}
+
+/**
+ * Résout un contenu `reviews` stocké (JSONB) vers un contenu **complet**.
+ *
+ * Tolérant par construction : `null`, un objet tronqué ou un JSONB ancien
+ * produisent une forme lisible. Aucun texte n'est ressuscité (une chaîne vidée
+ * reste vide, seule une clé absente retombe sur le défaut) ; notes et vitesses
+ * sont bornées **ici**, et pas seulement dans l'éditeur — une donnée héritée ne
+ * peut pas produire une note de 12/5 ni un carrousel qui change toutes les 10 ms.
+ */
+export function resolveReviewsContent(raw: unknown): ReviewsContent {
+  if (!isRecord(raw)) {
+    return createReviewsContent();
+  }
+  const defaults = DEFAULT_REVIEWS_CONTENT;
+  return {
+    type: "reviews",
+    heading: readString(raw.heading, defaults.heading),
+    provider: isReviewProvider(raw.provider) ? raw.provider : defaults.provider,
+    summaryWord: readString(raw.summaryWord, defaults.summaryWord),
+    overallScore: readBoundedScore(
+      raw.overallScore,
+      defaults.overallScore,
+      0,
+      5
+    ),
+    totalReviewsText: readString(
+      raw.totalReviewsText,
+      defaults.totalReviewsText
+    ),
+    reviews: readReviewItems(raw.reviews),
+    autoplaySpeedMs: isBannerAutoplaySpeed(raw.autoplaySpeedMs)
+      ? raw.autoplaySpeedMs
+      : defaults.autoplaySpeedMs,
+    pauseOnHover:
+      typeof raw.pauseOnHover === "boolean"
+        ? raw.pauseOnHover
+        : defaults.pauseOnHover,
+  };
+}
+
 /**
  * Module de page — mappe 1:1 vers la future table `page_modules`
  * (la position dans le tableau = ordre vertical = colonne `position` ;
@@ -6110,6 +6549,22 @@ export const moduleCatalog: ModuleCatalogEntry[] = [
     description:
       "Une carte Google Maps encadrée et des informations pratiques (adresse, parking, horaires, zone), permutables et réglables.",
   },
+  {
+    id: "marquee",
+    type: "marquee",
+    label: "Bandeau défilant",
+    category: "Galeries & Portfolio",
+    description:
+      "Un ruban de photos qui défile en boucle, hauteur, format, ombre et vitesse réglables ; cliquable vers une destination unique.",
+  },
+  {
+    id: "reviews",
+    type: "reviews",
+    label: "Avis clients",
+    category: "Bannières & réassurance",
+    description:
+      "Un logo de fournisseur d’avis, un carrousel d’avis clients et une note globale — pour rassurer avant le premier contact.",
+  },
 ];
 
 /**
@@ -6229,6 +6684,15 @@ export function createModuleContent(
       // Étape 14.2 — aucune variante : la disposition (carte à gauche/droite)
       // est un réglage de contenu (`mapPosition`), pas une variante de famille.
       return createContactMapContent();
+    case "marquee":
+      // Étape 14.3 — aucune variante non plus : format, hauteur et vitesse sont
+      // des réglages de contenu ; un ruban horizontal ou vertical n'a pas à
+      // doubler la famille.
+      return createMarqueeContent();
+    case "reviews":
+      // Étape 14.4 — aucune variante : fournisseur, note et avis sont des
+      // réglages de contenu, pas des dispositions concurrentes.
+      return createReviewsContent();
     case "content":
       return createContentColumnsContent();
   }

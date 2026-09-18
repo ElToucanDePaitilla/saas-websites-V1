@@ -30,6 +30,13 @@
   --border-color: #eae5e5;         /* Perle irisée — découpe chirurgicale 1px */
   --text-muted: rgba(26, 26, 26, 0.6); /* Gris perle foncé (sous-titres, dates) */
 
+  /* Étoiles d'avis (module « Avis clients », étape 14.4) : deux jetons dédiés
+     car il n'existe ni `--star-gold` ni équivalent dans la palette. Le doré
+     chaud s'accorde à la nacre ; l'étoile vide reste assez claire pour lire la
+     note comme « 3.5 sur 5 » sans jamais disparaître. */
+  --star-color: #e0a82e;
+  --star-color-empty: #d9d3d0;
+
   /* Hauteur du Header fixe (barre `h-16`) — nommée ici pour que les sections
      qui se mesurent « sous la barre » (Héro, bandeau message/CTA, ancres)
      partagent la même source au lieu de répéter `4rem`. */
@@ -142,6 +149,11 @@
   --accent-color-strong: #c7aead;
   --border-color: rgba(244, 240, 239, 0.12);
   --text-muted: rgba(244, 240, 239, 0.62);
+
+  /* Étoiles d'avis : doré éclairci et « vide » translucide clair — un vide
+     opaque gris foncé se confondrait avec la surface sombre. */
+  --star-color: #e6b84d;
+  --star-color-empty: rgba(244, 240, 239, 0.22);
 
   --background: var(--bg-color);
   --foreground: var(--text-color);
@@ -1648,6 +1660,250 @@
 @media (prefers-reduced-motion: reduce) {
   .contact-map__directions {
     transition: none;
+  }
+}
+
+/* ==========================================================================
+   MODULE « BANDEAU DÉFILANT » — ruban de photos en boucle (Étape 14.3)
+   --------------------------------------------------------------------------
+   Premier `@keyframes` du projet : le défilement est une **translation CSS**
+   pure, sans dépendance ni mesure JavaScript. Deux groupes identiques sont
+   animés de `-100%` ; comme chacun fait au moins la largeur de la bande, aucune
+   zone vide ne peut apparaître au raccord, même avec deux photos. Une piste
+   unique animée de `-50%` aurait exigé que le contenu dépasse toujours la bande
+   — ce qui n'est pas garanti avec peu de visuels.
+
+   Le composant répète la séquence dans chaque groupe jusqu'à couvrir une
+   largeur de référence : un groupe plus large que la bande n'a plus d'espace
+   libre, donc `space-around` n'absorbe plus l'écart réglé (le `gap` est exact).
+   `space-around` et `min-width: 100%` ne restent que comme filet : sur un
+   viewport plus large que la référence, ils étirent sans jamais laisser de trou.
+
+   Règles hors `@layer`, comme celles des autres modules : le fond de bande et
+   la géométrie priment sur les utilitaires Tailwind.
+   ========================================================================== */
+
+.marquee {
+  display: flex;
+  align-items: center; /* centrage vertical : le rognage est symétrique */
+  height: var(--marquee-height, 150px);
+  overflow: hidden;
+  background-color: var(--marquee-bg, var(--bg-color));
+}
+
+/* Le conteneur d'animation (`RevealHero`) est le seul enfant : en tant
+   qu'élément flex, il se réduirait à la largeur de son contenu, et les groupes
+   perdraient leur référence de largeur (le `min-width: 100%` se résout contre
+   lui). */
+.marquee > div {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.marquee__viewport {
+  display: flex;
+  overflow: hidden;
+  cursor: default;
+}
+
+.marquee__group {
+  display: flex;
+  flex: 0 0 auto;
+  min-width: 100%;
+  justify-content: space-around;
+  gap: var(--marquee-gap, 20px);
+  padding-right: var(--marquee-gap, 20px); /* conserve l'écart au raccord */
+  will-change: transform;
+  animation: marquee-scroll var(--marquee-duration, 40s) linear infinite;
+}
+
+.marquee__tile {
+  position: relative;
+  flex: 0 0 auto;
+  height: var(--marquee-tile-height, 120px);
+  aspect-ratio: var(--marquee-aspect, 2 / 3);
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--surface-color);
+}
+
+/* La photo remplit son cadre par construction — y compris le repli `<img>`
+   natif des URL non optimisables, où aucune classe utilitaire n'est appliquée. */
+.marquee__tile :where(img) {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+@keyframes marquee-scroll {
+  to {
+    transform: translate3d(-100%, 0, 0);
+  }
+}
+
+.marquee--pause:hover .marquee__group,
+.marquee--pause:focus-within .marquee__group {
+  animation-play-state: paused;
+}
+
+/* Mouvement réduit : l'animation est supprimée, les copies de boucle et le
+   second groupe masqués — un seul jeu reste lisible, et le ruban redevient
+   défilable à la main. */
+@media (prefers-reduced-motion: reduce) {
+  .marquee__group {
+    animation: none;
+  }
+
+  .marquee__group[aria-hidden="true"],
+  .marquee__tile--repeat {
+    display: none;
+  }
+
+  .marquee__viewport {
+    overflow-x: auto;
+  }
+}
+
+/* ==========================================================================
+   MODULE « MINI-BANDEAU ALERTE / PROMO » — réglage global (au-dessus du Header)
+   --------------------------------------------------------------------------
+   Barre fixe pleine largeur, au-dessus du Header public. Son emprise totale
+   vaut `gap haut + hauteur + gap bas` ; c'est cette valeur que le wrapper du
+   layout expose en `--top-banner-offset` pour décaler Header et `<main>`.
+
+   Le défilement reprend le motif éprouvé du module « Bandeau défilant » : deux
+   groupes identiques animés de `-100%`, chacun assez large (`min-width: 100%`)
+   et répétant le message jusqu'à couvrir une largeur de référence. Un seul
+   groupe animé de `-50%` laisserait un trou lorsque le message est court.
+
+   Règles hors `@layer`, comme les autres blocs de modules : la géométrie et les
+   couleurs du bandeau priment sur les utilitaires Tailwind.
+   ========================================================================== */
+
+.top-banner {
+  position: fixed;
+  inset-inline: 0;
+  top: 0;
+  z-index: 60; /* au-dessus du Header public (z-50) */
+  padding-top: var(--top-banner-gap-top, 0px);
+  padding-bottom: var(--top-banner-gap-bottom, 0px);
+  background-color: var(--top-banner-gap-color, transparent);
+}
+
+/* Aperçu éditeur : seule la position est neutralisée — couleurs, typographie,
+   gaps et défilement restent ceux du public (aucune seconde implémentation).
+   `min-width: 0` est indispensable : sans lui, le `min-width: 100%` des groupes
+   du défilant impose sa largeur de contenu à la grille de l'éditeur, qui
+   déborde alors de l'écran (toggles et boutons de repli partent à droite). */
+.top-banner--preview {
+  position: static;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.top-banner__bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: var(--top-banner-height, 32px);
+  /* La zone de texte réserve la place du bouton « X », qui vit dans cette
+     réserve en position absolue. */
+  padding-right: 40px;
+  overflow: hidden;
+  background-color: var(--top-banner-bg, var(--text-color));
+  color: var(--top-banner-text, var(--bg-color));
+  font-family: var(--font-body);
+  font-size: var(--top-banner-font-size, 12px);
+  font-weight: var(--top-banner-font-weight, 500);
+  letter-spacing: var(--top-banner-letter-spacing, 0.02em);
+  line-height: 1.1;
+}
+
+.top-banner__viewport {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  cursor: default;
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Le curseur ne devient une main que si le bandeau est réellement cliquable. */
+.top-banner__link--clickable {
+  cursor: pointer;
+}
+
+.top-banner__group {
+  display: flex;
+  flex: 0 0 auto;
+  min-width: 100%;
+  align-items: center;
+  justify-content: space-around;
+  gap: 48px;
+  padding-right: 48px; /* conserve l'écart au raccord de boucle */
+  will-change: transform;
+  animation: top-banner-scroll var(--top-banner-duration, 24s) linear infinite;
+}
+
+.top-banner__copy {
+  white-space: nowrap;
+}
+
+/* Texte statique : une seule ligne, centrée, tronquée (barre bornée 15–50 px). */
+.top-banner__static {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.top-banner__close {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.85;
+}
+
+.top-banner__close:hover,
+.top-banner__close:focus-visible {
+  opacity: 1;
+  background-color: color-mix(in srgb, currentColor 15%, transparent);
+}
+
+@keyframes top-banner-scroll {
+  to {
+    transform: translate3d(-100%, 0, 0);
+  }
+}
+
+/* Mouvement réduit : animation supprimée, copies de boucle et second groupe
+   masqués — un seul message reste lisible, et le bandeau redevient défilable
+   à la main si le texte déborde. */
+@media (prefers-reduced-motion: reduce) {
+  .top-banner__group {
+    animation: none;
+  }
+
+  .top-banner__group--repeat,
+  .top-banner__copy--repeat {
+    display: none;
+  }
+
+  .top-banner__viewport {
+    overflow-x: auto;
   }
 }
 

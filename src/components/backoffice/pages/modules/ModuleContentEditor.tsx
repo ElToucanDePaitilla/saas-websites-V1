@@ -18,6 +18,8 @@ import { ModuleHeroSliderEditor } from "./ModuleHeroSliderEditor";
 import { ModuleHeroParallaxEditor } from "./ModuleHeroParallaxEditor";
 import { ModuleHeroCurtainEditor } from "./ModuleHeroCurtainEditor";
 import { ModuleHeroVideoEditor } from "./ModuleHeroVideoEditor";
+import { ModuleMarqueeEditor } from "./ModuleMarqueeEditor";
+import { ModuleReviewsEditor } from "./ModuleReviewsEditor";
 import { ModuleContentColumnsEditor } from "./ModuleContentColumnsEditor";
 import { ModuleServicesEditor } from "./ModuleServicesEditor";
 
@@ -117,6 +119,15 @@ export function ModuleContentEditor({
       return <ModuleContactEditor content={content} onChangeContent={onChangeContent} />;
     case "contact-map":
       return <ContactMapEditor content={content} onChangeContent={onChangeContent} />;
+    case "marquee":
+      return (
+        <ModuleMarqueeEditor content={content} onChangeContent={onChangeContent} />
+      );
+    case "reviews":
+      // Étape 14.4 — famille sans variante : un seul écran d'édition.
+      return (
+        <ModuleReviewsEditor content={content} onChangeContent={onChangeContent} />
+      );
     case "content":
       return (
         <ModuleContentColumnsEditor

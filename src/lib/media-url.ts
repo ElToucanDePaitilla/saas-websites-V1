@@ -42,6 +42,15 @@ export function isSupabaseStorageUrl(src: string): boolean {
 
 /**
  * URL servie par le CDN Supabase : largeur demandée, format WebP, qualité.
+ *
+ * `resize=contain` est **obligatoire** : sans lui, Supabase applique son mode
+ * par défaut (`cover`) et, comme on ne fournit pas de hauteur, il conserve la
+ * hauteur d'origine — une photo 1920×1280 demandée en `width=640` revenait en
+ * **640×1280**, écrasée horizontalement. Affichée dans un cadre paysage, elle
+ * ne laissait voir qu'un bandeau vertical. `contain` redimensionne la largeur
+ * en préservant le ratio (640×427) ; c'est le navigateur qui recadre ensuite,
+ * via `object-fit`.
+ *
  * Une URL qui n'est pas une image Supabase est renvoyée **telle quelle** — les
  * visuels de démonstration (picsum) continuent donc de fonctionner à l'identique.
  * La largeur est plafonnée à `MAX_TRANSFORM_WIDTH` (voir plus haut).
@@ -56,7 +65,7 @@ export function supabaseImageUrl(
   const base = src.replace(SUPABASE_PUBLIC_MARKER, SUPABASE_RENDER_MARKER);
   const separator = base.includes("?") ? "&" : "?";
   const targetWidth = Math.min(width, MAX_TRANSFORM_WIDTH);
-  const params = [`width=${targetWidth}`, "format=webp"];
+  const params = [`width=${targetWidth}`, "resize=contain", "format=webp"];
   if (quality !== undefined) {
     params.push(`quality=${quality}`);
   }

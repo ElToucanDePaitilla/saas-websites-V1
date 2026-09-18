@@ -41,6 +41,8 @@ import {
   resolveHeroParallaxContent,
   resolveHeroSliderContent,
   resolveHeroVideoContent,
+  resolveMarqueeContent,
+  resolveReviewsContent,
   richTextDocToPlainText,
   seedPages,
   type ArtSource,
@@ -165,6 +167,16 @@ function collectImageUrls(modules: PageModule[]): string[] {
         urls.push(source.url);
       }
     }
+    if (mod.content.type === "marquee") {
+      // Bandeau défilant (14.3) : seules les photos **rendues** comptent (une
+      // photo masquée ou sans URL n'apparaît pas sur la page, elle n'a donc rien
+      // à faire dans les métadonnées résolues).
+      for (const image of resolveMarqueeContent(mod.content).images) {
+        if (image.url !== "" && image.hidden !== true) {
+          urls.push(image.url);
+        }
+      }
+    }
   }
   return urls;
 }
@@ -228,6 +240,16 @@ export function publicDescription(modules: PageModule[]): string {
         return text;
       }
     }
+    if (content.type === "reviews") {
+      // Une section d'avis peut être le seul texte de la page : son titre, à
+      // défaut le mot d'accroche (« EXCELLENT »), alimente alors le partage.
+      // Jamais les commentaires d'avis : ils appartiennent à leurs auteurs.
+      const reviews = resolveReviewsContent(content);
+      const text = reviews.heading.trim() || reviews.summaryWord.trim();
+      if (text) {
+        return text;
+      }
+    }
     if (content.type === "cards") {
       // Une section de cartes peut être le seul texte de la page : son
       // introduction, à défaut son sous-titre, alimente alors le partage.
@@ -278,6 +300,14 @@ export function publicOgImage(modules: PageModule[]): string | null {
     }
     if (content.type === "cards") {
       const first = cardsImageSources(resolveCardsContent(content))[0];
+      if (first) return first.url;
+    }
+    if (content.type === "marquee") {
+      // Le ruban peut être le seul visuel de la page : sa première photo rendue
+      // devient alors l'image de partage, mêmes règles d'exclusion qu'au rendu.
+      const first = resolveMarqueeContent(content).images.find(
+        (image) => image.url !== "" && image.hidden !== true
+      );
       if (first) return first.url;
     }
   }

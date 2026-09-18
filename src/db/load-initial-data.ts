@@ -31,6 +31,7 @@ import {
   type SitePage,
 } from "../lib/pages";
 import type { VisualIdentity } from "../lib/visual-identity";
+import type { TopBanner } from "../lib/top-banner";
 import { DEMO_PROFILE_ID } from "./constants";
 import {
   getNavigation,
@@ -38,6 +39,7 @@ import {
 } from "./repositories/navigation.repository";
 import { getOwnerProfile } from "./repositories/owner-profile.repository";
 import { getHomePage, getPagesWithModules } from "./repositories/pages.repository";
+import { getTopBanner } from "./repositories/top-banner.repository";
 import { getVisualIdentity } from "./repositories/visual-identity.repository";
 
 /** Données initiales attendues par `PagesStoreProvider` (prop `initialData`). */
@@ -62,6 +64,8 @@ export interface SiteInitialData {
   profile?: OwnerProfile;
   /** Espace marque Header (Étape 9.1) — absent si aucune ligne en BDD. */
   visualIdentity?: VisualIdentity;
+  /** Mini-bandeau global (réglage au-dessus du Header) — absent sans ligne. */
+  topBanner?: TopBanner;
   /** true si une page d'accueil (`is_home`) existe — pilote l'onboarding. */
   hasHomepage?: boolean;
   /** true si la BDD est joignable (persistance CRUD activée — Étape 5.3). */
@@ -105,6 +109,7 @@ export async function loadInitialData(
     const home = await getHomePage(photographerId);
     const profile = await getOwnerProfile(photographerId);
     const visualIdentity = await getVisualIdentity(photographerId);
+    const topBanner = await getTopBanner(photographerId);
 
     const initial: Omit<SiteInitialData, "dbAvailable"> = {
       // Étape 10.1 : toujours fournis (même vides) → plus de seed implicite.
@@ -117,6 +122,9 @@ export async function loadInitialData(
     }
     if (visualIdentity) {
       initial.visualIdentity = visualIdentity;
+    }
+    if (topBanner) {
+      initial.topBanner = topBanner;
     }
     return { ...initial, dbAvailable: true };
   } catch {

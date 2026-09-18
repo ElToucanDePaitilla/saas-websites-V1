@@ -11,6 +11,254 @@ NOTICE D'UTILISATION DU FICHIER CHANGELOG.MD
 
 ---
 
+## 2026-09-18 – 18:20 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Correctif réel de l'affichage des photos — le loader Supabase écrasait les images (l'entrée de 18:05 ci-dessous est supersédée : `object-fit` n'était pas la cause).**
+- **Cause racine (régression d'environ 8 jours, à l'introduction du loader personnalisé)** : `supabaseImageUrl` demandait `width=…` **sans** `resize`. Supabase applique alors son mode par défaut (`cover`) et, sans hauteur fournie, **conserve la hauteur d'origine** : une photo 1920×1280 demandée en `width=640` revenait en **640×1280**, écrasée horizontalement. Affichée dans un cadre paysage, cette image au ratio 0,5 ne laissait voir qu'un **bandeau vertical** — ce que le réglage `object-fit` ne pouvait pas corriger.
+- **Preuve mesurée** (même URL Supabase, largeur 640) :
+  - `?width=640` → **640×1280** (écrasée) — réglage d'origine ;
+  - `?width=640&resize=cover` → 640×1280 ;
+  - `?width=640&resize=contain` → **640×427** ✓ (ratio préservé) ;
+  - `?width=640&height=427` → 640×427 (exige la hauteur, non connue du loader).
+- **Correctif minimal** : `resize=contain` ajouté aux paramètres de `supabaseImageUrl` (`src/lib/media-url.ts`) — le loader ne connaît que la largeur, `contain` lui fait préserver le ratio, le navigateur recadrant ensuite via `object-fit`. Aucune autre modification du montage (loader, `next.config`, `MediaImage`).
+- **Retour en arrière assumé** : les passages en `object-contain` d'À propos, Galerie, Cards (entrée de 18:05) sont **annulés** (`object-cover` rétabli, règle `.cards-card__frame :where(img)` comprise). L'objectif de l'utilisateur — « remplir le cadre sans déformer, comme avant » — est satisfait par `cover` **une fois l'image source correcte** ; `contain` n'était qu'un pansement sur un symptôme.
+
+### Mesures et vérifications
+- `npx tsc --noEmit` → **0** ; `npm run lint` → **0 erreur, 0 avertissement**.
+- **Loader vérifié** (exécution directe) : `supabaseImageUrl(url, { width: 640, quality: 80 })` → `…?width=640&resize=contain&format=webp&quality=80` ; une URL non Supabase (picsum) reste inchangée.
+- **Réponse Supabase contrôlée** : `width=640&resize=contain` → **640×427** pour une source 1920×1280 (au lieu de 640×1280).
+- Les URL d'images changent (nouveau paramètre) : aucun cache d'image périmé à craindre. Un **redémarrage de `next dev`** est conseillé si le loader n'est pas rechargé à chaud.
+- Recette visuelle restante (non mesurable ici) : sur le site réel authentifié (photos Supabase), À propos / Galeries / Cards doivent retrouver l'affichage d'avant la régression.
+
+### Fichiers modifiés
+- `src/lib/media-url.ts` (correctif), `src/components/modules/PublicModules.tsx`, `src/components/modules/gallery/GalleryItem.tsx`, `src/components/modules/cards/CardItem.tsx`, `src/components/modules/cards/EditorialCardItem.tsx`, `src/app/globals.css` (retour à `cover`), `CHANGELOG.md`.
+
+### Prochaine étape prévue
+Recette visuelle navigateur sur le site réel (photos portrait et paysage), puis validation du chargement WebP et de sa qualité.
+
+---
+
+## 2026-09-18 – 18:05 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Correctif de recette — les photos importées n'apparaissent plus recadrées (À propos, Galeries static/dynamic, Cards).**
+*(Diagnostic incomplet : la cause réelle — le loader Supabase qui écrasait les images — est corrigée dans l'entrée du 18:20 ; les `object-contain` posés ici ont été annulés.)*
+- **Cause racine** : les photos étaient rendues en `object-cover` dans des cadres à **ratio fixe** (À propos `aspect-[4/3]` ; galerie « uniforme » `4 / 3` forcé dans `GalleryGrid.tsx:102` ; Cards au ratio du format — portrait 4:5, carré 1:1, paysage 3:2). Une photo importée d'un autre format était agrandie jusqu'à couvrir le cadre **puis coupée** : seule une bande centrale restait visible (le « fragment / zoom excessif »). Ce n'était pas une régression ni un problème de chargement : la lightbox, elle, utilise déjà `object-contain` (d'où son rendu correct).
+- **Correctif** : passage à `object-contain` sur les images concernées — `AboutModule` (`PublicModules.tsx`), `GalleryItem` (partagé par static / dynamic / portfolio), `CardItem` et `EditorialCardItem`. Le fond de surface des cadres (`--surface-color`) comble les côtés quand le format diffère. La règle CSS unlayered `.cards-card__frame :where(img)` (qui primait sur l'utilitaire Tailwind) est passée à `object-fit: contain` — sans cela, le repli `<img>` natif des URL non optimisables serait resté en `cover`.
+- **Volontairement inchangés** : les fonds de Héro (static/slider/vidéo/parallaxe) et les vignettes du bandeau défilant restent en `cover` — ce sont des visuels pleine surface / décoratifs, où le recadrage est attendu.
+
+### Mesures et vérifications
+- `npx tsc --noEmit` → **0** ; `npm run lint` → **0 erreur, 0 avertissement**.
+- **`/demo` → 200** : `22` images portent la classe `object-contain` (À propos + galeries + cards) ; les `object-cover` restants sont les fonds de Héro, le bandeau défilant et le contenu en colonnes (image à ratio intrinsèque, non recadrée).
+- **CSS compilé contrôlé** : `.cards-card__frame :where(img) { object-fit: contain; }` ; `.marquee__tile :where(img)` reste `cover`.
+- Recette navigateur restante (non mesurable ici) : sur le site réel, une photo portrait dans À propos et des formats variés dans une galerie uniforme doivent s'afficher en entier, centrées, sans bande sombre disgracieuse (le fond suit le thème).
+
+### Fichiers modifiés
+- `src/components/modules/PublicModules.tsx`, `src/components/modules/gallery/GalleryItem.tsx`, `src/components/modules/cards/CardItem.tsx`, `src/components/modules/cards/EditorialCardItem.tsx`, `src/app/globals.css`, `CHANGELOG.md`.
+
+### Prochaine étape prévue
+Recette visuelle navigateur sur le site réel (photos portrait/paysage confondues), puis décision sur les vignettes du bandeau défilant si un rendu « en entier » y est aussi souhaité.
+
+---
+
+## 2026-09-18 – 17:40 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Recette du module « Avis clients » : deux fournisseurs supplémentaires (Tripadvisor, Facebook) et section en bande pleine largeur.**
+- **Fournisseurs** : `ReviewProvider` += `"tripadvisor"` et `"facebook"` ; `reviewProviderOrder` et `reviewProviderLabels` (« Tripadvisor », « Facebook ») complétés. Le sélecteur de l’éditeur et la garde `isReviewProvider` du résolveur suivent automatiquement (aucun autre point à modifier, le contenu vivant en JSONB).
+- **Logos** : deux SVG inline `currentColor` ajoutés à `PROVIDER_LOGOS` — Tripadvisor (les deux « jumelles » cerclées avec pupille + nom) et Facebook (carré arrondi avec son « f » + nom). Marques approximatives, sans média ni fetch (D9).
+- **Bande pleine largeur** : la `<section>` porte désormais `w-full border-y border-[var(--border-color)] bg-[var(--surface-color-soft)]` ; le fond et les filets haut/bas couvrent tout l’écran, tandis que le titre et la grille restent recentrés dans un conteneur interne `mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8` (lisibilité sur grand écran). Le carrousel ne porte plus le fond, la bordure et l’arrondi (transférés à la section).
+
+### Écarts assumés (et pourquoi)
+- **Contenu recentré sous une bande pleine largeur** (plutôt qu’une grille étirée bord à bord) : un logo à l’extrême gauche et la note à l’extrême droite d’un écran 1920 px rendraient la section illisible ; le bandeau, lui, occupe bien toute la largeur demandée.
+- **Libellé « Facebook »** pour la valeur `facebook` : c’est la source d’avis la plus explicite ; « MetaReviews » n’est pas une marque distincte du groupe.
+
+### Mesures et vérifications
+- `npx tsc --noEmit` → **0** ; `npm run lint` → **0 erreur, 0 avertissement**.
+- **Logos vérifiés par rastérisation `sharp`** (SVG → trame ASCII) : « jumelles » Tripadvisor et carré « f » Facebook lisibles, à côté de leur nom.
+- **`/demo` → 200** ; balise de section rendue : `<section id="reviews-17" class="w-full border-y border-[var(--border-color)] bg-[var(--surface-color-soft)]">` ; conteneur interne `mx-auto max-w-7xl px-4 py-20 …` présent ; racine du carrousel `grid gap-8 md:grid-cols-[1fr_1.5fr_1fr] md:items-center md:gap-10` (plus de fond ni de bordure) ; page `<h1` = **1**.
+- `npm run build` **non lancé** : serveur de développement présent sur le port 3000 (`.next` partagé).
+
+### Fichiers modifiés
+- `src/lib/pages.ts`, `src/components/modules/reviews/ReviewsCarousel.tsx`, `src/components/modules/reviews/ReviewsModule.tsx`, `CHANGELOG.md`.
+
+### Prochaine étape prévue
+Recette visuelle navigateur : bande effectivement bord à bord, logos Tripadvisor / Facebook dans le sélecteur, thème sombre et mobile.
+
+---
+
+## 2026-09-18 – 17:10 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Module « Avis clients » — nouvelle famille Page Builder `reviews` (Étape 14.4).**
+Section de réassurance insérable : logo du fournisseur d’avis, carrousel d’avis clients (navigation + autoplay) et synthèse de note globale. Contenu **saisi manuellement**, stocké dans le JSONB `page_modules.content`, rendu avec les jetons du thème, **sans appel API** (D1/D2).
+- **Domaine** (`src/lib/pages.ts`) : `PageModuleType` += `"reviews"` ; `ReviewProvider`, `ReviewItem`, `ReviewsContent` ; catalogues `reviewProviderOrder`/`reviewProviderLabels`/`isReviewProvider` ; `DEFAULT_REVIEWS_CONTENT` + `createReviewsContent()` (instance neuve) ; résolveur tolérant `resolveReviewsContent` (notes bornées 0..5 **arrondies à une décimale** via un lecteur dédié, vitesses validées par la garde Héro existante, avis filtrés aux objets, `id` de repli **déterministe** `review-N`, aucun texte ressuscité) ; `ModuleContent` += `ReviewsContent` ; entrée catalogue ; `case "reviews"` de `createModuleContent`.
+- **Composants publics** (`src/components/modules/reviews/`) : `ReviewsCarousel.tsx` (Client, **props-only**, aucun import Back-Office) puis `ReviewsModule.tsx` (Server : normalise, `return null` si aucun avis, `h2` optionnel, jamais de `h1`). Étoiles à remplissage partiel par dégradé SVG **id via `useId()`** (les `:` sont retirés, un `Math.random()` aurait provoqué un mismatch d’hydratation). Autoplay `window.setInterval` + `setState` **fonctionnel**, deps honnêtes `[autoplaySpeedMs, count, paused, reducedMotion]`, coupé sous `prefers-reduced-motion` (hook interne, `matchMedia`, SSR-safe) et à la pause ; pause au survol **et** au focus clavier, gouvernée par `pauseOnHover`. Piste `translateX(-index * 100%)` avec cartes `w-full shrink-0` (plus de `320px` codé en dur), `motion-reduce:transition-none`, cartes hors index `aria-hidden`, `aria-roledescription="carousel"`, boutons « Avis précédent » / « Avis suivant », `line-clamp-4`, badge vérifié sur les seuls avis vérifiés.
+- **CSS** (`src/app/globals.css`) : `--star-color` / `--star-color-empty` dans `:root` (doré chaud + vide perle) et dans le bloc `.dark` (doré éclairci + vide translucide). Aucun `@keyframes`.
+- **Éditeur** (`ModuleReviewsEditor.tsx`) : trois `EditorZone` (En-tête et fournisseur ; Avis ; Défilement), normalisation `useMemo(resolveReviewsContent)`, `patch(next)` au `??`, liste ajout/suppression calquée sur la FAQ, `SwitchField` « Avis vérifié », sélecteur de vitesse du Héro. `case "reviews"` ajouté au routeur `ModuleContentEditor`.
+- **Intégration de famille** : `moduleTypeEnum` (`schema.ts`), `moduleTypeSchema` (`persistence.ts`, ⚠ non signalé à la compilation), `reviews: MessageSquareQuote` (`ModuleIcon.tsx`), `publicDescription` (branche `reviews` → `heading || summaryWord` ; `collectImageUrls`/`publicOgImage` **inchangés**, aucune image).
+- **Migration** : `drizzle/0013_cultured_eddie_brock.sql` (`ALTER TYPE "public"."module_type" ADD VALUE 'reviews';`) + snapshot/journal, appliquée avant tout enregistrement (sinon HTTP 400).
+- **`/demo`** : instance `reviews-17` — 3 avis aux notes 5 / 4 / **3.5** (étoile partielle) dont un **non vérifié**, `overallScore: 4.5`, `provider: "google"`, `heading: "Ils me font confiance"`, `autoplaySpeedMs: 5000`, `pauseOnHover: true`.
+
+### Écarts assumés (et pourquoi)
+- **Filtre des avis vides dans le résolveur** (en plus du filtre « objets » du plan) : un avis sans auteur ni commentaire produirait une carte vide ; il est écarté, comme une photo sans URL l’est au rendu du ruban. Cela n’invente aucun contenu.
+- **Arrondi de la note dans le résolveur, pas dans l’éditeur** : le résolveur borne **puis** arrondit à une décimale (une note héritée ne peut pas s’afficher à 7 décimales) ; l’éditeur ne fait que **borner** la saisie, pour ne pas réécrire un « 4,5 » en cours de frappe.
+- **Parser décimal local** `parseScore` (et non `parseBounded`) : `parseBounded` est un **entier borné**, inadapté à `overallScore`/`rating`.
+- **`SelectField` de vitesse sans paramètre générique** : `HeroAutoplaySpeed` est une union **numérique**, or `SelectField<T extends string>` n’accepte que des chaînes. On suit l’idiome déjà en place dans `ModuleHeroSliderEditor` (`String(value)` + `Number(speed) as HeroAutoplaySpeed`).
+- **Logo fournisseur porté par le SVG lui-même** (`role="img"` + `aria-label`) plutôt qu’un texte `sr-only` redondant.
+
+### Mesures et vérifications
+- `npx tsc --noEmit` → **0** ; `npm run lint` → **0 erreur, 0 avertissement**.
+- **Enum Postgres** : `select enum_range(null::module_type)` → contient bien `…,"marquee","reviews"` (migration `0013` appliquée).
+- **`/demo` → 200** (HTML fourni par `next dev`, balises `<script>` retirées) ; tranche `id="reviews-17"` : `module-h2` = **1**, `<h1>` = **0** dans la tranche (page = **1**) ; `aria-roledescription="slide"` = **3** ; logo Google = **1** ; **20** dégradés d’étoiles **tous uniques** (20 étoiles : 5 synthèse + 3 × 5 cartes) ; `var(--star-color)` = **40** arrêts ; boutons « Avis précédent » / « Avis suivant » = **1/1** ; `EXCELLENT`, `4.5`, « Basé sur 3 avis » = **1 chacun** ; badges « Avis vérifié » = **2** (l’avis non vérifié n’en a pas).
+- **CSS compilé contrôlé** (chunk de `/demo` téléchargé) : `--star-color: #e0a82e` / `--star-color-empty: #d9d3d0` en clair, `--star-color: #e6b84d` / `--star-color-empty: #f4f0ef38` en sombre.
+- **Correctif de recette — logo Google** : le premier tracé (cercle en pointillés + rectangle) formait un « G » cassé. Remplacé par un anneau ouvert en haut à droite (arc `M40 24A16 16 0 1 1 35.314 12.686`) et une barre horizontale qui s’y raccorde (`M24 24h16`), tracés en `currentColor` ; contrôle par rastérisation `sharp` du SVG (`G` + « Google » lisibles), `npx tsc --noEmit` → **0**, `npm run lint` → **0 erreur, 0 avertissement**.
+- `npm run build` **non lancé** (serveur de développement sur le port 3000, `.next` partagé).
+- Recette navigateur restante (non mesurable ici) : autoplay/pause au survol-focus, `prefers-reduced-motion`, troncature `line-clamp-4`, responsive une colonne, contraste du doré en thème sombre.
+
+### Fichiers modifiés
+- `src/lib/pages.ts`, `src/lib/public-page.ts`, `src/lib/schemas/persistence.ts`, `src/db/schema.ts`, `src/components/modules/PublicModules.tsx`, `src/components/modules/reviews/ReviewsModule.tsx`, `src/components/modules/reviews/ReviewsCarousel.tsx`, `src/components/backoffice/pages/ModuleIcon.tsx`, `src/components/backoffice/pages/modules/ModuleContentEditor.tsx`, `src/components/backoffice/pages/modules/ModuleReviewsEditor.tsx`, `src/app/globals.css`, `src/app/(front-office)/demo/page.tsx`, `drizzle/0013_cultured_eddie_brock.sql`, `drizzle/meta/_journal.json`, `drizzle/meta/0013_snapshot.json`, `CHANGELOG.md`.
+
+### Prochaine étape prévue
+Recette visuelle navigateur (étoiles partielles, autoplay/pause, thème sombre, une colonne mobile), puis enregistrement réel d’un module `reviews` depuis le Back-Office.
+
+---
+
+## 2026-09-18 – 15:45 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Bandeau d’alerte — correctifs de recette : durée de cycle 20–60 s et fin du débordement horizontal de l’écran d’édition.**
+- **Durée d’un cycle (défilement)** : bornes passées de `18..30` à **`20..60` secondes** dans le domaine (`TOP_BANNER_LIMITS`, commentaire de `TopBanner.durationSeconds`), dans `TopBannerSchema` (`.min(20).max(60)`) et dans l’aide de l’éditeur (« 20 à 60 s »). Le défaut (`24 s`) et `parseBounded` (qui lit déjà `TOP_BANNER_LIMITS`) sont inchangés ; aucune migration nécessaire (la valeur vit dans le JSONB `data`).
+- **Débordement horizontal de `/admin/bandeau-alerte` (cause racine)** : l’aperçu rendait `.top-banner` en `position: static` **sans borner son `min-width`**. Les groupes du défilant portent `min-width: 100%` et répètent le message : leur largeur de contenu imposait le `min-content` de la piste de grille de l’éditeur, élargissant toute la colonne au-delà de l’écran (les lignes `justify-between` des toggles et les en-têtes de zones partaient alors très loin à droite, d’où le scroll horizontal). `.top-banner--preview` reçoit `min-width: 0; max-width: 100%; overflow: hidden;` — la barre se cale sur la largeur de l’éditeur, le défilant est rogné comme sur le site public. `TopBannerScreen` reçoit `min-w-0` à la racine et sur la zone « Aperçu » comme garde-fous de grille.
+
+### Mesures et vérifications
+- `npx tsc --noEmit` → **0** ; `npm run lint` → **0 erreur, 0 avertissement**.
+- **CSS compilé contrôlé** (chunk extrait de `/demo` puis téléchargé) : `.top-banner--preview { min-width: 0; max-width: 100%; position: static; overflow: hidden; }`.
+- Aucun changement de schéma : `durationSeconds` reste stocké en JSONB, sans migration (`0012` déjà appliquée).
+- Recette visuelle navigateur (non mesurable ici) : l’écran d’édition ne doit plus produire de barre de défilement horizontale, même avec un message long en mode défilant ; la durée se règle de 20 à 60 s.
+
+### Fichiers modifiés
+- `src/lib/top-banner.ts`, `src/lib/schemas/persistence.ts`, `src/components/backoffice/top-banner/TopBannerScreen.tsx`, `src/app/globals.css`, `CHANGELOG.md`.
+
+### Prochaine étape prévue
+Recette visuelle navigateur de l’écran d’édition (largeur, aperçu, durée 60 s), puis validation de l’enregistrement réel.
+
+---
+
+## 2026-09-18 – 14:20 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Mini-bandeau « Alerte / Promotion » — réglage global au-dessus du Header public (décision A).**
+- **Domaine pur** `src/lib/top-banner.ts` : `TopBanner` (activation, message, hauteur 15–50, gaps haut/bas optionnels 0–15 avec valeur conservée, gaps/fond/texte en `BannerColorSettings`, taille 11–16, graisse, interlettrage, mode défilant/statique, durée 18–30 s, lien), catalogues + libellés, `DEFAULT_TOP_BANNER`, `createDefaultTopBanner()` (clone profond), `topBannerTotalHeight`, `topBannerVisible` (`enabled && text.trim() !== ""`) et `normalizeTopBanner` tolérant (bornes, énumérations validées, aucun texte ressuscité). **Ce n'est pas une famille de module Page Builder** : aucun `PageModuleType`/`moduleCatalog`/`moduleTypeEnum`/`renderer` n'est touché.
+- **Store** `src/lib/top-banner-store.ts` (`useSyncExternalStore`, `hydrate…`, `subscribe…`, `useTopBanner`) + hook `useTopBannerWithFallback` (voir écarts).
+- **Persistance** : table `site_top_banner` (`schema.ts`), `TopBannerSchema`/`TopBannerPayload` (`persistence.ts`), `top-banner.repository.ts` (décodage + upsert `onConflictDoUpdate`), lecture dans le `try` de `load-initial-data.ts` (donc `undefined` en repli hors-BDD), `persistTopBanner` (`persistence-client.ts`), route `GET`/`PUT /api/top-banner` (`resolvePhotographerId`).
+- **Migration** `drizzle/0012_quiet_peter_parker.sql` générée puis **RLS owner-only écrite à la main** (4 politiques `auth.uid()`, aucune lecture `anon`), copiée de `0004` ; `npm run db:migrate` appliquée.
+- **Chrome public** : `TopBannerChrome` (store, fermeture session par photographe, offset, wrapper `display: contents`, report de `--top-banner-offset` sur `document.documentElement`) + `TopBannerBar` (rendu partagé public/aperçu : 2 groupes identiques `aria-hidden`, copies de boucle, lien `NavLink`/`<a>` portant **uniquement** la zone de texte, bouton « X »). `Header` lit `top: var(--top-banner-offset, 0px)` ; `main` passe de `pt-20` à `padding-top: calc(5rem + var(--top-banner-offset, 0px))` ; `NavLink.scrollToHashId` ajoute l'offset du bandeau lu sur `documentElement`.
+- **Back-office** : `TopBannerProvider`, `TopBannerScreen` (7 zones : activation, message/affichage, typographie, couleurs ×3, dimensions/gaps, lien, aperçu en direct via `TopBannerBar`), page `/admin/bandeau-alerte`, entrée `Megaphone` « Bandeau d’alerte » dans `SidebarNav`, provider ajouté au layout `/admin`.
+- **CSS** : section `MINI-BANDEAU ALERTE / PROMO` hors `@layer` (`.top-banner`, `__bar`, `__viewport`, `__group`, `__copy`, `__static`, `__close`, variante `--preview`), second `@keyframes` du projet (`top-banner-scroll`), `prefers-reduced-motion`.
+
+### Écarts assumés (et pourquoi)
+- **Rendu SSR du bandeau via `useTopBannerWithFallback` + drapeau `hydrated` du store** (au lieu d'une lecture directe du store comme les autres providers) : sans cela, le chrome aurait rendu les défauts au premier rendu et le bandeau n'aurait **pas été présent dans le HTML SSR** — le contenu aurait sauté de sa hauteur à l'hydratation. `getServerSnapshot` renvoie la valeur initiale du serveur, donc HTML et hydratation concordent ; le store prend le relais une fois hydraté. Alternative rejetée : hydrater le singleton côté serveur (fuite entre requêtes/tenants).
+- **Wrapper en `display: contents`** (piège du handover) : le `<body>` est `flex flex-col` et `main` porte `flex-1` pour ancrer le Footer ; un `<div>` réel aurait capté ce `flex-1`. `display: contents` transmet les variables CSS sans nœud de mise en page.
+- **`TopBannerBar` extrait** de `TopBannerChrome` : l'écran d'édition réutilise exactement le même balisage/variables (aucune seconde implémentation de l'aperçu). La classe `.top-banner--preview { position: static }` est le **seul** écart de rendu (neutraliser le `fixed`).
+- **Fermeture par `sessionStorage` exposée comme source externe** (`useSyncExternalStore` + `createDismissedStore`) plutôt que `useState` + `setState` dans un effet : la règle `react-hooks/set-state-in-effect` l'interdit, et un état initial lu pendant le rendu casserait l'hydratation.
+- **Provider : `hydrateTopBanner(default)` quand la BDD est disponible mais qu'aucune ligne n'existe** : l'absence est une information (un bandeau supprimé ne doit pas rester affiché sur les navigations suivantes). Hors BDD, la valeur en mémoire est préservée (partage avec le Back-Office).
+- **Message = une seule chaîne**, police du corps (`--font-body`), fond couleur uniquement, bouton « X » toujours présent : décisions laissées en recette par le plan.
+
+### Mesures et vérifications
+- `npx tsc --noEmit` → **0** ; `npm run lint` → **0 erreur, 0 avertissement**.
+- `npm run db:generate` → `drizzle/0012_quiet_peter_parker.sql` (table + FK + RLS owner-only éditées) ; `npm run db:migrate` → **appliquée** (table `site_top_banner` et politiques créées).
+- **Bandeau activé en BDD** pour le photographe démo (script `tsx` temporaire, supprimé) : message, hauteur 40, gaps 5/5, mode défilant, lien externe `https://example.com`. `/demo` → **200** :
+  - `.top-banner` = **1**, `.top-banner__bar` = **1**, région `aria-label="Bandeau d’information"` = **1**, bouton `aria-label="Masquer le bandeau"` = **1** ;
+  - `.top-banner__group` = **2** (dont **1** `--repeat` `aria-hidden`), **12** copies de boucle `--repeat`, `--top-banner-offset:50px` sur le wrapper (40 + 5 + 5), `display:contents`, `top:var(--top-banner-offset, 0px)` sur le Header, `padding-top:calc(5rem + var(--top-banner-offset, 0px))` sur `main`, page `<h1` = **1** ;
+  - lien : `<a href="https://example.com" target="_blank" rel="noopener noreferrer" class="top-banner__viewport top-banner__link--clickable">`.
+- **Rendus complémentaires** (script `tsx` temporaire, supprimé) : mode **statique** sans lien → `.top-banner__static` = 1, `.top-banner__group` = 0, aucun `<a>`, `.top-banner__link--clickable` absent ; lien `mailto:` → `<a class="top-banner__viewport">` avec `href="mailto:…"` et **sans** `target="_blank"`.
+- **Ligne de test supprimée** puis `/demo` re-fetché : `.top-banner` = **0**, `--top-banner-offset:0px`, `main` et `<h1` inchangés.
+- **CSS compilé contrôlé** (chunk extrait du HTML puis téléchargé, 146 984 caractères) : `.top-banner` porte `position: fixed` et `z-index: 60` ; `@keyframes top-banner-scroll { to { transform: translate3d(-100%, 0, 0); } }` ; `.top-banner__group` porte `min-width: 100%` et `animation: top-banner-scroll var(--top-banner-duration, 24s) linear infinite` ; `@media (prefers-reduced-motion: reduce)` masque `.top-banner__group--repeat` et `.top-banner__copy--repeat` et remet `.top-banner__viewport { overflow-x: auto; }` ; `.top-banner--preview { position: static; }`.
+- **`npm run build` non lancé** : serveur de développement sur le port 3000 (`.next` partagé).
+- **Recette navigateur** (non mesurable ici) : fermeture → Header remonte et reste fermé dans l’onglet (session) ; gaps colorés, graisse/interlettrage, statique vs défilant, ancres `#id` compensées sous le bandeau ; écran `/admin/bandeau-alerte` (protégé par `src/proxy.ts`, non atteignable sans session).
+
+### Fichiers modifiés
+- `src/lib/top-banner.ts` (créé), `src/lib/top-banner-store.ts` (créé), `src/db/schema.ts`, `src/lib/schemas/persistence.ts`, `src/db/repositories/top-banner.repository.ts` (créé), `src/db/load-initial-data.ts`, `src/lib/persistence-client.ts`, `src/app/api/top-banner/route.ts` (créé), `drizzle/0012_quiet_peter_parker.sql` + `drizzle/meta/_journal.json` + snapshot (générés), `src/components/layout/TopBannerChrome.tsx` (créé), `src/components/layout/TopBannerBar.tsx` (créé), `src/app/(front-office)/layout.tsx`, `src/components/layout/Header.tsx`, `src/components/common/NavLink.tsx`, `src/app/globals.css`, `src/components/backoffice/top-banner/TopBannerProvider.tsx` (créé), `src/components/backoffice/top-banner/TopBannerScreen.tsx` (créé), `src/app/(back-office)/admin/bandeau-alerte/page.tsx` (créé), `src/components/backoffice/SidebarNav.tsx`, `src/app/(back-office)/admin/layout.tsx`, `CHANGELOG.md`.
+
+### Prochaine étape prévue
+Recette visuelle navigateur (recouvrement Header/bandeau, fermeture mémorisée, mouvement réduit, ancres), puis validation de l’enregistrement réel depuis `/admin/bandeau-alerte` (RLS owner-only) et du rendu statique long tronqué.
+
+---
+
+## 2026-09-18 – 12:05 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Étape 14.3.b — Bandeau défilant, ajustements : formats paysage, nouveaux défauts de hauteur, correctif du gap, pause au survol désactivée par défaut.**
+- **Formats (D1)** : `MarqueeRatio` gagne les trois miroirs paysage `16:9`, `3:2`, `4:3` à côté de `2:3`, `3:4`, `9:16` ; `marqueeRatioOrder` les liste paysage d'abord, `marqueeRatioLabels` les nomme, `isMarqueeRatio` accepte les six. Défaut inchangé (`2:3`), `marqueeAspectRatio` déjà générique.
+- **Hauteurs (D2/D3)** : hauteur de bande **150 px par défaut, bornée 100–500** ; hauteur de vignette **120 px par défaut, bornée 80–450** — domaine (`DEFAULT_MARQUEE_CONTENT`, `resolveMarqueeContent`), éditeur (`parseBounded` + aides) et replis CSS (`var(--marquee-height, 150px)`, `var(--marquee-tile-height, 120px)`) alignés.
+- **Correctif du gap (D4, cause racine)** : `min-width: 100%` + `justify-content: space-around` rendait le `gap` algébriquement neutre (l'espace libre réparti absorbait exactement l'écart ajouté), d'où un réglage sans effet visible. Chaque groupe **répète désormais la séquence** jusqu'à couvrir une largeur de référence (`MARQUEE_REFERENCE_WIDTH = 2560`, plafond `MARQUEE_MAX_COPIES = 6`) : un groupe plus large que la bande n'a plus d'espace libre, le `gap` est donc **exact**, et la boucle reste **sans trou**. `space-around`/`min-width` ne subsistent que comme filet pour les viewports plus larges que la référence (gap minimum, jamais de trou).
+- **Pause au survol (D5)** : `pauseOnHover` passe à **`false`** par défaut ; le toggle est décoché à l'ajout. `marquee-15` de `/demo` le pose explicitement à `true` pour continuer de démontrer la pause, `marquee-16` le laisse à `false`.
+- **Accessibilité et mouvement réduit** : les copies de boucle au-delà de la première, comme le second groupe, sont `aria-hidden` ; elles portent `.marquee__tile--repeat`, masquée sous `prefers-reduced-motion` (sinon les copies s'afficheraient côte à côte).
+- **`/demo`** : `marquee-16` passe en **paysage 16:9** (vignette 200 px > bande 150 px, donc rognage symétrique) ; `marquee-15` conserve ses défauts (Portrait 2:3, 150/120) et la pause explicite.
+
+### Écarts assumés (et pourquoi)
+- **Répétition plutôt qu'un layout plus léger** : c'est le seul moyen, sans JavaScript ni mesure, d'avoir un `gap` exact **et** une boucle sans trou. Alternative rejetée : `flex-start` sans répétition (trou visible avec peu de photos) ; `space-around` seul (gap neutralisé). Le DOM reste borné (≈ `2 × 2560 / (largeur_vignette + gap)` vignettes, indépendamment du nombre de photos) et plafonné à 6 copies.
+- **Largeur de référence 2560 px** : constante assumée ; au-delà, le gap redevient un minimum (dégradation sans trou, pas un bug). Elle borne le coût DOM pour les vignettes très petites.
+- **Copies `aria-hidden` et `.marquee__tile--repeat`** : ajouts non prévus par le plan initial, nécessaires pour ne pas dégrader l'accessibilité (alt répétés) ni l'affichage en mouvement réduit.
+- **`marquee-15` force `pauseOnHover: true`** dans la démo : sans cela, la démonstration de la pause aurait disparu avec le nouveau défaut, alors qu'elle reste un comportement utile à montrer.
+
+### Mesures et vérifications
+- `npx tsc --noEmit` → **0** ; `npm run lint` → **0 erreur, 0 avertissement**.
+- **Valeurs du domaine** (script `tsx` temporaire, supprimé) : `height === 150`, `tileHeight === 120`, `pauseOnHover === false`, `ratio === "2:3"` ; `marqueeRatioOrder.length === 6` ; `isMarqueeRatio("16:9") === true` et `isMarqueeRatio("1:1") === false` ; bornes contrôlées (`height 5000 → 500`, `tileHeight 1 → 80`).
+- `/demo` → **200**. Tranche `marquee-15` (6 photos, 5 copies par groupe) : `.marquee__group` = **2**, **60** vignettes au total (6 × 5 × 2), **48** `.marquee__tile--repeat`, **55** `aria-hidden` (24 copies du groupe 1 + 30 du groupe 2 + 1 groupe), `marquee--pause` présent, ombre présente, `<a class="marquee__viewport"` avec `href="#galerie"` sans `target="_blank"`, variables `--marquee-height: 150px`, `--marquee-tile-height: 120px`, `--marquee-gap: 20px`, `--marquee-aspect: 2 / 3`, `--marquee-duration: 40s`.
+- Tranche `marquee-16` (4 photos, 2 copies par groupe) : `.marquee__group` = **2**, **16** vignettes (4 × 2 × 2), **8** `.marquee__tile--repeat`, `marquee--pause` **absent**, `box-shadow: none` présent, aucun `<a class="marquee__viewport"`, variables `--marquee-aspect: 16 / 9`, `--marquee-tile-height: 200px`, `--marquee-gap: 8px`, `--marquee-duration: 18s`, `--marquee-bg: var(--surface-color)`. Page `<h1` = **1** ; aucun `<h1>`/`<h2>` dans les tranches.
+- **CSS compilé contrôlé** (chunk extrait du HTML puis téléchargé, 144 612 caractères) : `@keyframes marquee-scroll` présent ; `.marquee` porte `height: var(--marquee-height, 150px)` ; `.marquee__tile` porte `height: var(--marquee-tile-height, 120px)` ; `.marquee__group` conserve `gap: var(--marquee-gap, 20px)`, `justify-content: space-around` et `min-width: 100%` ; `.marquee__tile--repeat` masquée sous `prefers-reduced-motion` ; `animation-play-state: paused` présent.
+- **`npm run build` non lancé** : le serveur de développement occupe le port 3000 et `.next` est partagé.
+- **Recette visuelle navigateur** (non mesurable ici) : modifier l'écart de 0 à 32 change réellement l'espacement, boucle sans trou même avec deux photos, formats paysage dans le bon sens, rognage symétrique de la vignette 200 px dans la bande de 150 px, toggle pause décoché à l'ajout.
+
+### Fichiers modifiés
+- `src/lib/pages.ts` (`MarqueeRatio` + catalogue + garde, bornes/défauts de `MarqueeContent` et `DEFAULT_MARQUEE_CONTENT`, `resolveMarqueeContent`), `src/components/modules/marquee/MarqueeModule.tsx` (répétition des séquences, `aria-hidden`, `.marquee__tile--repeat`), `src/app/globals.css` (replis 150/120, masquage des copies sous mouvement réduit, commentaires), `src/components/backoffice/pages/modules/ModuleMarqueeEditor.tsx` (bornes 100–500 / 80–450 et aides), `src/app/(front-office)/demo/page.tsx` (`pauseOnHover` explicite sur 15, format paysage sur 16), `CHANGELOG.md`.
+
+### Prochaine étape prévue
+Recette visuelle navigateur du gap exact et des formats paysage, contrôle du rendu en mouvement réduit (un seul jeu de photos), puis validation de l'enregistrement réel d'un module `marquee` depuis le Dashboard.
+
+---
+
+## 2026-09-18 – 11:15 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Étape 14.3 — nouveau module « Bandeau défilant » : ruban de photos en boucle continue, hauteur, format, ombre, fond et vitesse réglables, destination unique.**
+- **Nouvelle famille `marquee` (D1)** : `PageModuleType`, `moduleTypeEnum` (Postgres), `moduleTypeSchema` (Zod), `moduleCatalog` (catégorie « Galeries & Portfolio », label « Bandeau défilant »), `ModuleIcon` (`GalleryHorizontal`) et les deux `switch` sans `default` (`ModuleContentEditor`, `PageModuleRenderer`) sont étendus. Migration `drizzle/0011_plain_tomas.sql` : `ALTER TYPE "public"."module_type" ADD VALUE 'marquee';`.
+- **Domaine** : `MarqueeContent` (interface portant son `type`, idiome `ContactContent`), `MarqueeStyleSettings`, `MarqueeRatio` à catalogue (`marqueeRatioOrder` / `marqueeRatioLabels` / `isMarqueeRatio`) + `marqueeAspectRatio` (« 9:16 » → « 9 / 16 »). `DEFAULT_MARQUEE_STYLE` (fond `bg-color`, ombre `normal` active), `DEFAULT_MARQUEE_CONTENT` (forme sans photo ni texte) et `createMarqueeContent()` (instance neuve, fond imbriqué cloné). Résolveur tolérant `resolveMarqueeContent` : `readBoundedNumber` (height 150..500, tileHeight 120..400, gap 0..32, durationSeconds 10..120), `readGalleryImages` réutilisé, `isGalleryShadowLevel`, `resolveMarqueeBackground` (calqué sur la couleur du bandeau). **Aucune photo ni destination ressuscitée.**
+- **Animation CSS pure (D2/D3)** : premier `@keyframes` du projet (`marquee-scroll`, `translate3d(-100%,0,0)`), **aucune dépendance ajoutée** (`framer-motion` n'est pas installé). Deux groupes **strictement identiques** dans un viewport `overflow: hidden`, chacun `min-width: 100%` + `justify-content: space-around` : la boucle est sans raccord **sans mesure JavaScript**, même avec deux photos. Le second groupe est toujours `aria-hidden`. Pause au survol / focus par `animation-play-state` (D2).
+- **Rendu public** `src/components/modules/marquee/MarqueeModule.tsx` (Server Component) : photos à URL non vide et non `hidden` uniquement (liste vide → `return null`), `MediaImage fill` + `sizes` calculé depuis `tileHeight × ratio`, ombre posée par `galleryShadowStyle` (D6) ou `box-shadow: none` explicite, fond par `bannerColorCssValue` (D5). Lien unique (D7) : le **viewport** devient `NavLink` (externe → nouvel onglet, page/ancre → défilement compensé) ou `<a>` simple pour `mailto:`/`tel:` ; fond de section inerte, aucun descendant interactif. `RevealHero` pour l'animation d'entrée (`module.animation`, D9). Aucun `h1`/`h2`.
+- **Éditeur** `ModuleMarqueeEditor.tsx` (5 `EditorZone` : photos, défilement, dimensions, apparence, lien), helper `patch` en `??`, champs numériques `TextField type="number"` + `parseBounded` (D10), `GalleryImagesPanel` et `LinkTargetSelect` réutilisés, `ColorField` seulement en fond `custom`.
+- **SEO/OG** : `collectImageUrls` et `publicOgImage` lisent les images **rendues** du ruban ; `publicDescription` **inchangé** (le module ne porte aucun texte).
+- **`/demo`** : `marquee-15` (6 photos, 2:3, ombre normale, pause, lien interne `#galerie`) et `marquee-16` (4 photos, 3:4, `tileHeight: 200`, `gap: 8`, cycle 18 s, pause désactivée, ombre retirée, fond `surface-color`).
+- **CSS** : nouvelle section `MODULE « BANDEAU DÉFILANT »` hors `@layer`, avant `Base layer` (fond, viewport, groupes, vignettes, keyframe, pause, `prefers-reduced-motion`).
+
+### Écarts assumés (et pourquoi)
+- **`.marquee > div` porte `flex: 1 1 auto; min-width: 0`.** `RevealHero` s'intercale entre la section et le viewport ; en tant qu'élément flex, il se serait réduit à la largeur de son contenu et les groupes auraient perdu leur référence de largeur (`min-width: 100%`). Le plan ne montrait pas cet intermédiaire ; sans cette règle, le ruban ne remplissait pas la bande.
+- **Le repli `<img>` natif est couvert par `.marquee__tile :where(img)`** (`width`/`height`/`object-fit: cover`) : sans cela, une URL non optimisable (hors Supabase/picsum) n'aurait pas rempli sa vignette, comme le prévoit pourtant la convention des autres modules (`Cards`).
+- **`box-shadow: none` est posé explicitement quand l'ombre est désactivée**, et non rien : la valeur neutralise toute ombre héritée et rend l'assertion de démo vérifiable.
+- **`aria-hidden` sur le second groupe suffit** : les textes alternatifs n'ont pas été vidés, le groupe étant hors de l'arbre d'accessibilité. Le second groupe reste **strictement identique** au premier (aucun `priority`, aucun index préfixé).
+- **Comptages HTML par tranche** : la charge RSC de `next dev` duplique les classes en fin de document ; les assertions ont porté sur `marquee-15` / `marquee-16` et sur des sélecteurs complets.
+- **CSS non minifié en développement** : le keyframe est servi sous sa forme normalisée (`100%` → `to`), valeur équivalente.
+
+### Mesures et vérifications
+- `npx tsc --noEmit` → **0** ; `npm run lint` → **0 erreur, 0 avertissement**.
+- `npm run db:generate` → `drizzle/0011_plain_tomas.sql` (`ALTER TYPE "public"."module_type" ADD VALUE 'marquee';`) ; `npm run db:migrate` → **appliquée**. Enum contrôlé **en base** (`enum_range(NULL::module_type)` contient `marquee`, script `tsx` temporaire supprimé après usage).
+- `/demo` → **200**. Tranche `marquee-15` : `.marquee__group` = **2** (dont **1** `aria-hidden="true"`), `.marquee__tile` = **12** (6 × 2), `marquee--pause` présent, ombre présente, `<a class="marquee__viewport"` avec `href="#galerie"` et `target="_blank"` **absent**, variables `--marquee-bg: var(--bg-color)`, `--marquee-height: 350px`, `--marquee-tile-height: 250px`, `--marquee-aspect: 2 / 3`, `--marquee-gap: 20px`, `--marquee-duration: 40s`.
+- Tranche `marquee-16` : `.marquee__group` = **2** (dont **1** `aria-hidden`), `.marquee__tile` = **8** (4 × 2), `marquee--pause` **absent**, `box-shadow: none` **présent**, aucun `<a class="marquee__viewport"`, variables `--marquee-bg: var(--surface-color)`, `--marquee-tile-height: 200px`, `--marquee-aspect: 3 / 4`, `--marquee-gap: 8px`, `--marquee-duration: 18s`. Page `<h1` = **1** ; aucun `<h1>`/`<h2>` dans l'une ou l'autre tranche.
+- **CSS compilé contrôlé** (chunk extrait du HTML puis téléchargé, 144 588 caractères) : `@keyframes marquee-scroll` présent (forme `to`), `.marquee__group` porte `animation: marquee-scroll var(--marquee-duration, 40s) linear infinite` et `min-width: 100%`, `.marquee--pause:hover .marquee__group, .marquee--pause:focus-within .marquee__group { animation-play-state: paused; }`, `@media (prefers-reduced-motion: reduce)` porte `.marquee__group { animation: none; }`, `.marquee__group[aria-hidden="true"] { display: none; }` et `.marquee__viewport { overflow-x: auto; }`, `.marquee__tile :where(img)` présent.
+- **`npm run build` non lancé** : le serveur de développement occupe le port 3000 et `.next` est partagé.
+- **Recette visuelle navigateur** (non mesurable ici) : boucle sans à-coup, pause/reprise au survol, curseur standard, rognage symétrique à vignette plus haute que la bande, mode sombre.
+
+### Fichiers modifiés
+- `src/lib/pages.ts`, `src/db/schema.ts`, `drizzle/0011_plain_tomas.sql` + `drizzle/meta/_journal.json` + snapshot (générés), `src/lib/schemas/persistence.ts`, `src/components/backoffice/pages/ModuleIcon.tsx`, `src/components/modules/marquee/MarqueeModule.tsx` (créé), `src/components/modules/PublicModules.tsx`, `src/lib/public-page.ts`, `src/components/backoffice/pages/modules/ModuleMarqueeEditor.tsx` (créé), `src/components/backoffice/pages/modules/ModuleContentEditor.tsx`, `src/app/(front-office)/demo/page.tsx`, `src/app/globals.css`, `CHANGELOG.md`.
+
+### Prochaine étape prévue
+Recette visuelle navigateur (boucle et raccord, pause, rognage, `prefers-reduced-motion`, mode sombre), puis contrôle de l'enregistrement réel d'un module `marquee` depuis le Dashboard (couverture Zod + enum) et du défilement horizontal en mode « mouvement réduit ».
+
+---
+
 ## 2026-09-17 – 16:35 (heure locale America/Bogota)
 
 ### Tâche exécutée

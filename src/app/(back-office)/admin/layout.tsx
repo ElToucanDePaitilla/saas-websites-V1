@@ -7,6 +7,7 @@ import { SidebarNav } from "@/components/backoffice/SidebarNav";
 import { PagesNavigationSync } from "@/components/backoffice/navigation/PagesNavigationSync";
 import { NavigationStoreProvider } from "@/components/backoffice/navigation/NavigationStoreProvider";
 import { OwnerProfileProvider } from "@/components/backoffice/profile/OwnerProfileProvider";
+import { TopBannerProvider } from "@/components/backoffice/top-banner/TopBannerProvider";
 import { VisualIdentityProvider } from "@/components/backoffice/visual-identity/VisualIdentityProvider";
 import { Button } from "@/components/ui/button";
 import { loadInitialData } from "@/db/load-initial-data";
@@ -137,18 +138,23 @@ export default async function AdminLayout({
               initialVisualIdentity={initial.visualIdentity}
               persistenceEnabled={initial.dbAvailable}
             >
-              <PagesStoreProvider
-                initialData={initial.pages}
+              <TopBannerProvider
+                initialTopBanner={initial.topBanner}
                 persistenceEnabled={initial.dbAvailable}
               >
-                <NavigationStoreProvider
-                  initialData={initial.navigation}
+                <PagesStoreProvider
+                  initialData={initial.pages}
                   persistenceEnabled={initial.dbAvailable}
                 >
-                  <PagesNavigationSync />
-                  {children}
-                </NavigationStoreProvider>
-              </PagesStoreProvider>
+                  <NavigationStoreProvider
+                    initialData={initial.navigation}
+                    persistenceEnabled={initial.dbAvailable}
+                  >
+                    <PagesNavigationSync />
+                    {children}
+                  </NavigationStoreProvider>
+                </PagesStoreProvider>
+              </TopBannerProvider>
             </VisualIdentityProvider>
           </OwnerProfileProvider>
         </main>

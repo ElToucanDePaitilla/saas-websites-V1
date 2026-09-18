@@ -71,6 +71,23 @@ function prefersReducedMotion(): boolean {
 }
 
 /**
+ * Hauteur du bandeau global (mini-bandeau Alerte / Promo) lue sur
+ * `document.documentElement` — un `<a>` ne voit pas la variable posée par le
+ * wrapper du layout. `0` quand le bandeau est masqué ou absent.
+ */
+function topBannerOffset(): number {
+  if (typeof document === "undefined") {
+    return 0;
+  }
+  const raw = window
+    .getComputedStyle(document.documentElement)
+    .getPropertyValue("--top-banner-offset")
+    .trim();
+  const parsed = Number.parseFloat(raw);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+/**
  * Défile en douceur vers l'élément `#id`, en compensant la hauteur du Header
  * fixe. Retourne `false` si aucun élément ne porte cet id (rien à faire).
  */
@@ -83,7 +100,10 @@ function scrollToHashId(id: string): boolean {
     return false;
   }
   const top =
-    element.getBoundingClientRect().top + window.scrollY - HEADER_OFFSET;
+    element.getBoundingClientRect().top +
+    window.scrollY -
+    HEADER_OFFSET -
+    topBannerOffset();
   window.scrollTo({
     top: Math.max(top, 0),
     behavior: prefersReducedMotion() ? "auto" : "smooth",

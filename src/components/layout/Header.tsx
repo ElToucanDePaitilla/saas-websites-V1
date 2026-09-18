@@ -277,6 +277,9 @@ export default function Header() {
     <header
       role="banner"
       className="glass fixed inset-x-0 top-0 z-50 border-b border-[var(--border-color)]/60"
+      // Le bandeau global peut occuper le haut de l'écran : le Header se décale
+      // de sa hauteur totale (variable posée par `TopBannerChrome`, 0 sinon).
+      style={{ top: "var(--top-banner-offset, 0px)" }}
     >
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-6 px-4 sm:px-6 lg:px-8">
         {/* ---- Marque (gauche) : « Identité visuelle / Logo » (Étape 9.1).
