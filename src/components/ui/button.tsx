@@ -4,6 +4,14 @@ import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "@/lib/utils";
 
+/**
+ * Couleurs des variantes : elles viennent **exclusivement** des jetons de
+ * `src/app/globals.css` (voir la « Convention des jetons de thème »).
+ * Variante par défaut : `bg-primary text-primary-foreground`. Variante
+ * `outline` : `border-border`. Variante `destructive` : le texte devrait
+ * consommer `--destructive-foreground`, jamais un blanc codé en dur — un hex
+ * posé ici échapperait à la palette et à la garde `npm run check:contrast`.
+ */
 const buttonVariants = cva(
   "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
   {

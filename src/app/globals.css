@@ -19,6 +19,48 @@
       easing « soie » et garde-fous d'accessibilité / reduced-motion.
    ========================================================================== */
 
+/* ==========================================================================
+   CONVENTION DES JETONS DE THÈME — à lire avant toute retouche de couleur
+   --------------------------------------------------------------------------
+   Quatre rôles « produit » portent la charte ; tous les autres jetons en
+   dérivent, dans les trois portées (voir plus bas) :
+     · --bg-color       — le fond de page ;
+     · --text-color     — le texte principal, posé sur --bg-color ou
+                          --surface-color, jamais sur --accent-color ;
+     · --accent-color   — l'accent « CTA » (fond de bouton, soulignement) ;
+     · --surface-color  — les cartes, modales et bandeaux.
+   Dérivés : --accent-color-strong (survol, anneau de focus `--ring`),
+   --border-color (découpe 1px), --text-muted (sous-titres, dates).
+
+   Règle du texte de CTA : --primary-foreground et --accent-foreground doivent
+   tenir ≥ 4,5:1 sur leur fond respectif. Un accent clair (--accent-color) prend
+   donc un texte sombre ; un accent foncé (primaire du back-office) prend un
+   texte blanc. On ne pose jamais --text-color sur --accent-color.
+
+   Seuils : texte ≥ 4,5:1 (WCAG 2.1 AA, 1.4.3) ; éléments non textuels et
+   anneau de focus ≥ 3:1 (1.4.11). Le script `npm run check:contrast` vérifie
+   ces paires et sort en code 1 si une paire obligatoire passe sous son seuil.
+
+   Frontière : les valeurs hex/rgba vivent UNIQUEMENT dans les jetons de ce
+   fichier (:root, .dark, .admin et le mapping shadcn). Un composant ou un
+   bouton ne code jamais une couleur en dur — il consomme un utilitaire
+   (bg-primary, text-primary-foreground, border-border…) ou var(--…). Seule
+   exception : le texte posé sur une photo (Héro, bandeaux), qui doit rester
+   lisible quelle que soit l'image et n'a donc pas de fond de jeton stable.
+
+   Trois portées, une seule source :
+     · :root  — site public, thème clair ;
+     · .dark  — variante sombre, mêmes rôles, valeurs inversées ;
+     · .admin — back-office, palette zinc. `--primary` y vaut VOLONTAIREMENT un
+       anthracite (#18181b) distinct de --accent-color : c'est un primaire de
+       productivité, pas le rose nacré du site. Ne pas « corriger » cet écart,
+       et ne pas unifier --primary-foreground sur --accent-foreground : ils
+       diffèrent exprès (#ffffff contre #18181b).
+
+   Presets opt-in `.theme-<id>` : voir la section dédiée ; appliqués à `<html>`
+   uniquement, sinon les alias shadcn résolus dans `:root` resteraient par défaut.
+   ========================================================================== */
+
 :root {
   /* ---- 1. Palette produit « Éclat Minéral & Nacre » ---- */
   --bg-color: #ffffff;             /* Blanc pur — clarté & respiration */
@@ -219,6 +261,156 @@
   --border: var(--border-color);
   --input: var(--border-color);
   --ring: #a1a1aa;
+}
+
+/* ==========================================================================
+   PRESETS DE THÈME (opt-in) — `.theme-<id>`
+   --------------------------------------------------------------------------
+   Six palettes alternatives, **dormantes** : aucune ne s'applique tant qu'un
+   futur lot de sélection n'ajoute pas la classe correspondante. Le thème par
+   défaut (« Nacre & Éditorial ») reste `:root` ; ces blocs ne le modifient pas.
+
+   Pourquoi aucun alias shadcn (`--background`, `--foreground`, `--primary`,
+   `--accent`, `--ring`, `--border`, `--input`, `--muted-foreground`) ici : leur
+   `var()` est résolu **là où il est déclaré**, c'est-à-dire dans `:root`. Un
+   preset ne peut donc pas se contenter de surcharger les jetons produit sous
+   peine de voir `--primary`, `--ring` ou `--background` rester nacrés. Le
+   contrat est d'appliquer `.theme-<id>` sur **le même élément que `:root`**
+   (`<html>`, cf. src/app/layout.tsx). L'alternative — re-déclarer les alias
+   dans chaque preset pour autoriser un simple wrapper — a été écartée pour
+   l'instant : elle dupliquerait le mapping shadcn six fois, donc six endroits
+   à maintenir à chaque évolution du mapping.
+
+   `--ring` (dérive de `--accent-color-strong`) et `--muted-foreground` (dérive
+   de `--text-muted`) sont volontairement absents : les déclarer romprait cette
+   dérivation unique. `--primary` et `--accent` restent branchés sur
+   `--accent-color` par `:root`.
+
+   `galerie-luxe` est le seul preset **sombre** : ses jetons encodent déjà le
+   sombre, mais il doit être couplé à `.dark` pour que les variantes `dark:`
+   des composants se déclenchent (`@custom-variant dark`, l.4). Son bloc est
+   placé après `.dark` et `.admin` pour gagner à spécificité égale.
+
+   Les paires de ces jetons sont mesurées par `npm run check:contrast`
+   (scripts/check-contrast.ts) : toute retouche de couleur ici doit être
+   répercutée dans la table `THEMES` du script, sinon la garde mesure une
+   valeur qui n'existe plus.
+   ========================================================================== */
+
+.theme-corporate {
+  --bg-color: #ffffff;
+  --text-color: #1e293b;
+  --surface-color: #f8fafc;
+  --surface-color-soft: #f1f5f9;
+  --accent-color: #1d4ed8;
+  --accent-color-strong: #1e40af;
+  --border-color: #e2e8f0;
+  --text-muted: #64748b;
+  --primary-foreground: #ffffff;
+  --accent-foreground: #ffffff;
+  --secondary: #f1f5f9;
+  --secondary-foreground: #0f172a;
+  --muted: #f1f5f9;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+}
+
+.theme-tech-minimaliste {
+  --bg-color: #fafafa;
+  --text-color: #18181b;
+  --surface-color: #ffffff;
+  --surface-color-soft: #f4f4f5;
+  --accent-color: #047857;
+  --accent-color-strong: #065f46;
+  --border-color: #e4e4e7;
+  --text-muted: #71717a;
+  --primary-foreground: #ffffff;
+  --accent-foreground: #ffffff;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #18181b;
+  --muted: #f4f4f5;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+}
+
+.theme-terre-atelier {
+  --bg-color: #fdfbf7;
+  --text-color: #2d241e;
+  --surface-color: #f4efea;
+  --surface-color-soft: #ebe3db;
+  --accent-color: #b04d32;
+  --accent-color-strong: #8f3c24;
+  --border-color: #e2d7cd;
+  --text-muted: #78685e;
+  --primary-foreground: #ffffff;
+  --accent-foreground: #ffffff;
+  --secondary: #ebe3db;
+  --secondary-foreground: #2d241e;
+  --muted: #ebe3db;
+  --destructive: #b91c1c;
+  --destructive-foreground: #ffffff;
+}
+
+.theme-sauge-cabinet {
+  --bg-color: #f4f6f4;
+  --text-color: #1c2826;
+  --surface-color: #ffffff;
+  --surface-color-soft: #e8ebe8;
+  --accent-color: #8c6311;
+  --accent-color-strong: #6e4d0c;
+  --border-color: #d5dbd5;
+  --text-muted: #5c6b68;
+  --primary-foreground: #ffffff;
+  --accent-foreground: #ffffff;
+  --secondary: #e8ebe8;
+  --secondary-foreground: #1c2826;
+  --muted: #e8ebe8;
+  --destructive: #b91c1c;
+  --destructive-foreground: #ffffff;
+}
+
+.theme-galerie-luxe {
+  --bg-color: #121212;
+  --text-color: #f5f5f5;
+  --surface-color: #1e1e1e;
+  --surface-color-soft: #2a2a2a;
+  --accent-color: #d4af37;
+  --accent-color-strong: #f3c846;
+  --border-color: #333333;
+  --text-muted: #a3a3a3;
+  --primary-foreground: #121212;
+  --accent-foreground: #121212;
+  --secondary: #2a2a2a;
+  --secondary-foreground: #f5f5f5;
+  --muted: #2a2a2a;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+
+  /* Étoiles et verre : seuls jetons propres à la galerie sombre, le doré
+     remplaçant l'or chaud nacré et le verre s'assombrissant pour rester
+     lisible sur `--bg-color`. Les presets clairs héritent des valeurs Nacre. */
+  --star-color: #d4af37;
+  --star-color-empty: #333333;
+  --glass-bg: rgba(30, 30, 30, 0.75);
+  --glass-border: rgba(212, 175, 55, 0.2);
+}
+
+.theme-girly-baby {
+  --bg-color: #fff9fb;
+  --text-color: #2d1f25;
+  --surface-color: #ffffff;
+  --surface-color-soft: #fdebf2;
+  --accent-color: #9e3b68;
+  --accent-color-strong: #7d2b50;
+  --border-color: #f3d2e1;
+  --text-muted: #7d626e;
+  --primary-foreground: #ffffff;
+  --accent-foreground: #ffffff;
+  --secondary: #fdebf2;
+  --secondary-foreground: #2d1f25;
+  --muted: #fdebf2;
+  --destructive: #be123c;
+  --destructive-foreground: #ffffff;
 }
 
 /* ==========================================================================
