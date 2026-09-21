@@ -57,8 +57,9 @@
        et ne pas unifier --primary-foreground sur --accent-foreground : ils
        diffèrent exprès (#ffffff contre #18181b).
 
-   Presets opt-in `.theme-<id>` : voir la section dédiée ; appliqués à `<html>`
-   uniquement, sinon les alias shadcn résolus dans `:root` resteraient par défaut.
+   Presets opt-in `.theme-<id>` : voir la section dédiée ; **auto-suffisants**
+   (ils re-déclarent les alias shadcn via une règle partagée), donc applicables
+   à un simple wrapper — `display: contents` — et pas seulement à `<html>`.
    ========================================================================== */
 
 :root {
@@ -264,27 +265,63 @@
 }
 
 /* ==========================================================================
+   APERÇU D'UN COMPOSANT PUBLIC DANS LE BACK-OFFICE — `.site-preview`
+   --------------------------------------------------------------------------
+   Un aperçu (pop-up, bandeau…) rendu SOUS `.admin` hérite de la palette zinc de
+   l'administration : `.admin` surcharge littéralement `--background`, `--card`,
+   `--primary`…, si bien qu'un composant public utilisant `bg-card`/`bg-primary`
+   montrerait la mauvaise palette.
+
+   Cette portée re-déclare la correspondance des rôles produit exactement comme
+   `:root` (Nacre), pour que l'aperçu affiche la palette du site public. Placée
+   **avant** les blocs `.theme-<id>` : un preset choisi la surcharge (même
+   spécificité, plus bas dans la feuille), et seul Nacre — qui n'a pas de bloc
+   dédié — a besoin d'elle. `--surface-color` et `--border-color` restent ceux
+   de `.admin` (écart imperceptible, même limite que l'aperçu d'Apparence).
+   -------------------------------------------------------------------------- */
+.site-preview {
+  --background: var(--bg-color);
+  --foreground: var(--text-color);
+  --card: var(--surface-color);
+  --card-foreground: var(--text-color);
+  --popover: var(--surface-color);
+  --popover-foreground: var(--text-color);
+  --primary: var(--accent-color);
+  --primary-foreground: #1a1a1a;
+  --secondary: #f0ebe9;
+  --secondary-foreground: var(--text-color);
+  --muted: #f5f2f1;
+  --muted-foreground: var(--text-muted);
+  --accent: var(--accent-color);
+  --accent-foreground: #1a1a1a;
+  --destructive: #b4534a;
+  --destructive-foreground: #faf8f8;
+  --border: var(--border-color);
+  --input: var(--border-color);
+  --ring: var(--accent-color-strong);
+}
+
+/* ==========================================================================
    PRESETS DE THÈME (opt-in) — `.theme-<id>`
    --------------------------------------------------------------------------
-   Six palettes alternatives, **dormantes** : aucune ne s'applique tant qu'un
-   futur lot de sélection n'ajoute pas la classe correspondante. Le thème par
-   défaut (« Nacre & Éditorial ») reste `:root` ; ces blocs ne le modifient pas.
+   Six palettes alternatives, choisies depuis « Paramètres › Apparence »
+   (`/admin/apparence`). Le thème par défaut (« Nacre & Éditorial ») reste
+   `:root` : l'id `nacre` ne pose aucune classe, ces blocs ne le modifient pas.
 
-   Pourquoi aucun alias shadcn (`--background`, `--foreground`, `--primary`,
-   `--accent`, `--ring`, `--border`, `--input`, `--muted-foreground`) ici : leur
+   Pourquoi les alias shadcn sont re-déclarés (règle partagée ci-dessous) : leur
    `var()` est résolu **là où il est déclaré**, c'est-à-dire dans `:root`. Un
-   preset ne peut donc pas se contenter de surcharger les jetons produit sous
-   peine de voir `--primary`, `--ring` ou `--background` rester nacrés. Le
-   contrat est d'appliquer `.theme-<id>` sur **le même élément que `:root`**
-   (`<html>`, cf. src/app/layout.tsx). L'alternative — re-déclarer les alias
-   dans chaque preset pour autoriser un simple wrapper — a été écartée pour
-   l'instant : elle dupliquerait le mapping shadcn six fois, donc six endroits
-   à maintenir à chaque évolution du mapping.
+   preset qui ne surchargerait que les jetons produit laisserait `--primary`,
+   `--ring` ou `--background` nacrés. Les presets sont donc **auto-suffisants**,
+   comme `.admin`, et s'appliquent à un **wrapper** (`(front-office)/layout.tsx`,
+   en `display: contents`) plutôt qu'à `<html>`. L'application sur `<html>` a
+   été écartée : le layout racine `src/app/layout.tsx` rend `<html>` mais n'est
+   **pas async** et ignore le photographe, il faudrait un layout racine async ou
+   un script client (FOUC + désaccord d'hydratation). Réviser ce choix implique
+   de déplacer le wrapper, pas de retirer la règle partagée.
 
    `--ring` (dérive de `--accent-color-strong`) et `--muted-foreground` (dérive
-   de `--text-muted`) sont volontairement absents : les déclarer romprait cette
-   dérivation unique. `--primary` et `--accent` restent branchés sur
-   `--accent-color` par `:root`.
+   de `--text-muted`) sont fournis par la règle partagée : les presets ne les
+   déclarent jamais eux-mêmes, la dérivation reste unique.
 
    `galerie-luxe` est le seul preset **sombre** : ses jetons encodent déjà le
    sombre, mais il doit être couplé à `.dark` pour que les variantes `dark:`
@@ -411,6 +448,33 @@
   --muted: #fdebf2;
   --destructive: #be123c;
   --destructive-foreground: #ffffff;
+}
+
+/* Alias shadcn partagés par les six presets — les rendent **auto-suffisants**
+   sur un wrapper. Une seule règle pour les six (plutôt qu'un mapping recopié
+   dans chaque bloc) : toute évolution du mapping shadcn n'a qu'un endroit à
+   toucher. Les jetons **littéraux** qui ne dérivent pas des rôles produit
+   (`--primary-foreground`, `--accent-foreground`, `--secondary`,
+   `--secondary-foreground`, `--muted`, `--destructive`,
+   `--destructive-foreground`) restent, eux, déclarés dans chaque preset. */
+.theme-corporate,
+.theme-tech-minimaliste,
+.theme-terre-atelier,
+.theme-sauge-cabinet,
+.theme-galerie-luxe,
+.theme-girly-baby {
+  --background: var(--bg-color);
+  --foreground: var(--text-color);
+  --card: var(--surface-color);
+  --card-foreground: var(--text-color);
+  --popover: var(--surface-color);
+  --popover-foreground: var(--text-color);
+  --primary: var(--accent-color);
+  --accent: var(--accent-color);
+  --ring: var(--accent-color-strong);
+  --border: var(--border-color);
+  --input: var(--border-color);
+  --muted-foreground: var(--text-muted);
 }
 
 /* ==========================================================================

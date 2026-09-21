@@ -12,6 +12,12 @@
  * ============================================================================
  */
 
+import {
+  DEFAULT_SITE_THEME,
+  readSiteTheme,
+  type SiteThemeId,
+} from "./site-theme";
+
 export type VisualIdentityMode = "text" | "logo";
 export type VisualIdentityTextSize =
   | "small"
@@ -43,6 +49,8 @@ export interface VisualIdentityLogoConfig {
 
 /** Configuration complète de l'espace marque. */
 export interface VisualIdentity {
+  /** Palette du site public choisi dans « Paramètres › Apparence ». */
+  theme: SiteThemeId;
   mode: VisualIdentityMode;
   text: VisualIdentityTextConfig;
   logo: VisualIdentityLogoConfig;
@@ -50,6 +58,7 @@ export interface VisualIdentity {
 
 /** Défauts : champs **vierges** (aucun pré-remplissage depuis le Profil). */
 export const DEFAULT_VISUAL_IDENTITY: VisualIdentity = {
+  theme: DEFAULT_SITE_THEME,
   mode: "text",
   text: {
     line1: { value: "", color: "#1E293B", size: "medium", weight: "600" },
@@ -240,6 +249,7 @@ export function normalizeVisualIdentity(raw: unknown): VisualIdentity {
 
   const logoRaw = isRecord(raw.logo) ? raw.logo : {};
   return {
+    theme: readSiteTheme(raw.theme),
     mode,
     text: { line1, line2 },
     logo: {

@@ -13,6 +13,8 @@
 
 import { z } from "zod";
 
+import { DEFAULT_SITE_THEME, SITE_THEME_IDS } from "../site-theme";
+
 /** Statut de publication d'une page. */
 const pageStatusSchema = z.enum(["draft", "published"]);
 
@@ -499,6 +501,12 @@ export const pageMetadataSchema = z.object({
   slug: z.string(),
   status: pageStatusSchema,
   inMenu: z.boolean(),
+  /**
+   * Pop-up rattachée à cette page (Lot A). Optionnel avec défaut `null` : les
+   * charges utiles antérieures (et les pages seed) restent valides, et une
+   * pop-up supprimée détache la page via `ON DELETE SET NULL`.
+   */
+  popupId: z.string().min(1).nullable().default(null),
 });
 
 /** Module de page (liste complète des modules d'une page). */
@@ -609,6 +617,7 @@ const visualIdentityLine2Schema = visualIdentityTextLineSchema.extend({
 
 /** Configuration manuelle de l'espace marque du Header (texte ou logo). */
 export const VisualIdentitySchema = z.object({
+  theme: z.enum(SITE_THEME_IDS).default(DEFAULT_SITE_THEME),
   mode: visualIdentityModeSchema.default("text"),
   text: z
     .object({
@@ -701,6 +710,96 @@ export const TopBannerSchema = z.object({
 
 /** Valeur (TypeScript) du corps `PUT /api/top-banner`. */
 export type TopBannerPayload = z.infer<typeof TopBannerSchema>;
+
+/* --------------------------------------------------------------------------
+   POP-UP — entité dédiée (site_popups)
+   --------------------------------------------------------------------------
+   Miroir de `PopUp` (`src/lib/popup.ts`). Ce n'est **pas** une famille de
+   `moduleTypeSchema` : une pop-up n'appartient pas au flux vertical d'une page
+   et une pop-up globale ne peut pas vivre dans `pages` (voir `popup.ts`).
+   Tous les champs ont un défaut : un JSONB enregistré avant l'ajout d'un
+   réglage reste lisible sans migration.
+   -------------------------------------------------------------------------- */
+
+const popUpCtaSchema = z.object({
+  show: z.boolean().default(false),
+  label: z.string().default(""),
+  href: z.string().default(""),
+  style: z.enum(["primary", "secondary", "outline"]).default("primary"),
+});
+
+const popUpTargetingSchema = z.object({
+  mode: z.enum(["all", "home", "pages"]).default("all"),
+  pageIds: z.array(z.string()).default([]),
+});
+
+const popUpTriggersSchema = z.object({
+  timer: z
+    .object({
+      enabled: z.boolean().default(false),
+      delaySeconds: z.number().int().min(0).max(120).default(5),
+    })
+    .default({ enabled: false, delaySeconds: 5 }),
+  exitIntent: z
+    .object({ enabled: z.boolean().default(false) })
+    .default({ enabled: false }),
+  scrollDepth: z
+    .object({
+      enabled: z.boolean().default(false),
+      percent: z.number().int().min(10).max(100).default(50),
+    })
+    .default({ enabled: false, percent: 50 }),
+  click: z
+    .object({ enabled: z.boolean().default(false) })
+    .default({ enabled: false }),
+});
+
+const popUpFrequencySchema = z.object({
+  mode: z.enum(["every", "session", "days", "once"]).default("session"),
+  days: z.number().int().min(1).max(365).default(7),
+  suppressAfterSubmit: z.boolean().default(true),
+});
+
+/** Configuration complète d'une pop-up. */
+export const PopUpSchema = z.object({
+  id: z.string().min(1),
+  enabled: z.boolean().default(false),
+  name: z.string().default(""),
+  scope: z.enum(["global", "page"]).default("global"),
+  targeting: popUpTargetingSchema.default({ mode: "all", pageIds: [] }),
+  contentKind: z.enum(["message", "promo", "lead"]).default("message"),
+  heading: z.string().default(""),
+  body: z.string().default(""),
+  media: artSourceSchema.nullable().default(null),
+  cta: popUpCtaSchema.default({
+    show: false,
+    label: "",
+    href: "",
+    style: "primary",
+  }),
+  promoCode: z.string().default(""),
+  leadCollectName: z.boolean().default(false),
+  triggers: popUpTriggersSchema.default({
+    timer: { enabled: false, delaySeconds: 5 },
+    exitIntent: { enabled: false },
+    scrollDepth: { enabled: false, percent: 50 },
+    click: { enabled: false },
+  }),
+  frequency: popUpFrequencySchema.default({
+    mode: "session",
+    days: 7,
+    suppressAfterSubmit: true,
+  }),
+  mobileAutoOpen: z.boolean().default(false),
+  layout: z.enum(["modal", "slide-in", "fullscreen"]).default("modal"),
+  slidePosition: z.enum(["bottom-right", "bottom-left"]).default("bottom-right"),
+  overlay: z.boolean().default(true),
+  dismissOnOverlay: z.boolean().default(true),
+  animation: moduleAnimationSchema.default("fade-in"),
+});
+
+/** Valeur (TypeScript) du corps `PUT /api/popups`. */
+export type PopUpPayload = z.infer<typeof PopUpSchema>;
 
 /** Protocole de changement de mot de passe sécurisé. */
 export const ProfileSecuritySchema = z

@@ -40,6 +40,7 @@ import {
 
 import type { OwnerProfile } from "../lib/owner-profile";
 import type { ModuleContent } from "../lib/pages";
+import type { PopUp } from "../lib/popup";
 import type { TopBanner } from "../lib/top-banner";
 import type { VisualIdentity } from "../lib/visual-identity";
 
@@ -108,6 +109,39 @@ export const profiles = pgTable("profiles", {
 });
 
 /* --------------------------------------------------------------------------
+   SITE_POPUPS — pop-ups paramétrables (entité dédiée, lot Pop-up)
+   --------------------------------------------------------------------------
+   Une pop-up n'est **pas** une famille `PageModuleType` : elle n'appartient pas
+   au flux vertical d'une page, et une pop-up **globale** ne peut pas vivre dans
+   `pages` (FK `page_id`) sans duplication. La table est donc déclarée **avant**
+   `pages` : c'est elle que référence `pages.popup_id`, et l'ordre de création
+   conditionne la migration (la table doit exister avant la FK).
+
+   Le contenu est stocké en `data` JSONB typé `PopUp` (validé `PopUpSchema`).
+   RLS owner-only (ajoutée à la main en migration, comme 0012) : le rendu public
+   est alimenté côté serveur (rôle service) via `loadInitialData` ; aucune
+   lecture `anon`.
+   -------------------------------------------------------------------------- */
+
+export const sitePopups = pgTable(
+  "site_popups",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    photographerId: uuid("photographer_id")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "cascade" }),
+    data: jsonb("data").$type<PopUp>().notNull().default(sql`'{}'::jsonb`),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [index("site_popups_photographer_idx").on(table.photographerId)]
+);
+
+/* --------------------------------------------------------------------------
    PAGES — métadonnées de page (mapping SitePage)
    -------------------------------------------------------------------------- */
 
@@ -128,6 +162,13 @@ export const pages = pgTable(
      * `/` (au lieu du slug vide). Un seul accueil par photographe (index partiel).
      */
     isHome: boolean("is_home").notNull().default(false),
+    /**
+     * Pop-up rattachée à cette page (lot Pop-up). `SET NULL` : supprimer une
+     * pop-up **détache** la page sans la casser — la page survit sans pop-up.
+     */
+    popupId: uuid("popup_id").references(() => sitePopups.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -381,3 +422,5 @@ export type ContactSubmissionInsert = typeof contactSubmissions.$inferInsert;
 export type ContactSubmissionRow = typeof contactSubmissions.$inferSelect;
 export type MediaInsert = typeof media.$inferInsert;
 export type MediaRow = typeof media.$inferSelect;
+export type PopUpInsert = typeof sitePopups.$inferInsert;
+export type PopUpRow = typeof sitePopups.$inferSelect;

@@ -18,6 +18,7 @@ import type { SitePage } from "./pages";
 import type { NavPresetId, SiteNavigation } from "./navigation";
 import type { PageMetadataDraft } from "./pages";
 import type { OwnerProfile } from "./owner-profile";
+import type { PopUp } from "./popup";
 import type { TopBanner } from "./top-banner";
 import type { VisualIdentity } from "./visual-identity";
 
@@ -86,7 +87,7 @@ export async function persistUpdatePage(
   pageId: string,
   draft: PageMetadataDraft
 ): Promise<void> {
-  const { title, menuTitle, slug, status, inMenu } = draft;
+  const { title, menuTitle, slug, status, inMenu, popupId } = draft;
   await send(
     jsonRequest(`/api/pages/${encodeURIComponent(pageId)}`, "PATCH", {
       id: pageId,
@@ -95,6 +96,7 @@ export async function persistUpdatePage(
       slug,
       status,
       inMenu,
+      popupId,
     })
   );
 }
@@ -160,4 +162,14 @@ export async function persistVisualIdentity(
 /** Upsert du mini-bandeau global (réglage au-dessus du Header). */
 export async function persistTopBanner(topBanner: TopBanner): Promise<void> {
   await send(jsonRequest("/api/top-banner", "PUT", topBanner));
+}
+
+/** Upsert d'une pop-up (id fourni par le client). */
+export async function persistPopUp(popup: PopUp): Promise<void> {
+  await send(jsonRequest("/api/popups", "PUT", popup));
+}
+
+/** Suppression d'une pop-up (les pages rattachées sont détachées). */
+export async function persistDeletePopUp(id: string): Promise<void> {
+  await send(jsonRequest(`/api/popups/${encodeURIComponent(id)}`, "DELETE"));
 }

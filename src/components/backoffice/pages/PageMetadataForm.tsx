@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { usePopUps } from "@/components/backoffice/popups/PopUpProvider";
 import {
   slugFromTitle,
   type PageMetadataDraft,
@@ -53,6 +54,12 @@ type FormErrors = Partial<Record<"title" | "menuTitle" | "slug", string>>;
 
 const MAX_MENU_TITLE_LENGTH = 28;
 
+/**
+ * Sentinel du sélecteur de pop-up : Radix `Select` refuse `value=""`, et
+ * `popupId` vaut `null` par défaut. La sentinelle n'est jamais persistée.
+ */
+const NO_POPUP_VALUE = "__none__";
+
 export function PageMetadataForm({
   initial,
   existingSlugs,
@@ -69,7 +76,18 @@ export function PageMetadataForm({
   // Rattachement automatique au menu par défaut (désactivable) : une nouvelle
   // page apparaît dans le Header sauf si le photographe décoche l'option.
   const [inMenu, setInMenu] = React.useState(initial?.inMenu ?? true);
+  // Pop-up de la page (lot Pop-up) : seules les pop-ups de portée « page » sont
+  // proposées — une pop-up globale a son propre ciblage, la rattacher ici la
+  // ferait apparaître deux fois.
+  const { popups } = usePopUps();
+  const [popupId, setPopupId] = React.useState<string | null>(
+    initial?.popupId ?? null
+  );
   const [errors, setErrors] = React.useState<FormErrors>({});
+
+  const pageScopedPopUps = popups.filter((popup) => popup.scope === "page");
+  const hasOrphanPopUp =
+    popupId !== null && !pageScopedPopUps.some((popup) => popup.id === popupId);
 
   /** Le slug suit automatiquement le titre tant qu'il n'a pas été saisi à la main. */
   const [slugFollowsTitle, setSlugFollowsTitle] = React.useState(
@@ -127,6 +145,7 @@ export function PageMetadataForm({
       slug: cleanSlug,
       status,
       inMenu,
+      popupId,
     });
   }
 
@@ -276,6 +295,39 @@ export function PageMetadataForm({
             aria-label="Ajouter automatiquement cette page au menu principal"
           />
         </div>
+      </div>
+
+      {/* ---- Pop-up de cette page (lot Pop-up) ---- */}
+      <div className="grid gap-2">
+        <Label htmlFor="page-popup">Pop-up de cette page</Label>
+        <Select
+          value={popupId ?? NO_POPUP_VALUE}
+          onValueChange={(value) =>
+            setPopupId(value === NO_POPUP_VALUE ? null : value)
+          }
+        >
+          <SelectTrigger id="page-popup" className="w-full">
+            <SelectValue placeholder="Aucune" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={NO_POPUP_VALUE}>Aucune</SelectItem>
+            {hasOrphanPopUp && popupId !== null ? (
+              <SelectItem value={popupId}>
+                Pop-up introuvable (supprimée ?)
+              </SelectItem>
+            ) : null}
+            {pageScopedPopUps.map((popup) => (
+              <SelectItem key={popup.id} value={popup.id}>
+                {popup.name.trim() !== "" ? popup.name : "Pop-up sans nom"}
+                {popup.enabled ? "" : " (désactivée)"}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          Pop-up prioritaire sur celles du site. Créez-les dans « Interaction &
+          Conversion › Pop-ups ».
+        </p>
       </div>
 
       {/* ---- Actions ---- */}

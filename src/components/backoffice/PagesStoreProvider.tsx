@@ -234,7 +234,8 @@ export function PagesStoreProvider({
         old.menuTitle !== page.menuTitle ||
         old.slug !== page.slug ||
         old.status !== page.status ||
-        old.inMenu !== page.inMenu
+        old.inMenu !== page.inMenu ||
+        old.popupId !== page.popupId
       ) {
         const pageId = page.id;
         const draft: PageMetadataDraft = {
@@ -243,6 +244,7 @@ export function PagesStoreProvider({
           slug: page.slug,
           status: page.status,
           inMenu: page.inMenu,
+          popupId: page.popupId,
         };
         ops.push(() => persistUpdatePage(pageId, draft));
       }

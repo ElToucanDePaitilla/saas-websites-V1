@@ -48,6 +48,8 @@ function toSitePage(row: typeof pages.$inferSelect): SitePage {
     status: row.status,
     inMenu: row.isInMenu,
     isHome: row.isHome,
+    // Lot Pop-up : la page peut porter une pop-up dédiée (FK `SET NULL`).
+    popupId: row.popupId ?? null,
     updatedAt: row.updatedAt.toISOString(),
   };
 }
@@ -121,6 +123,7 @@ export async function createPage(
     slug: string;
     status: SitePage["status"];
     inMenu: boolean;
+    popupId: string | null;
   }
 ): Promise<void> {
   // Étape 10.1 : la ligne `profiles` (ancre FK) n'est plus garantie par
@@ -135,6 +138,7 @@ export async function createPage(
     menuTitle: page.menuTitle,
     status: page.status,
     isInMenu: page.inMenu,
+    popupId: page.popupId,
   });
 }
 
@@ -147,6 +151,7 @@ export async function updatePage(
     slug: string;
     status: SitePage["status"];
     inMenu: boolean;
+    popupId: string | null;
   }
 ): Promise<void> {
   const database = getDatabase();
@@ -158,6 +163,7 @@ export async function updatePage(
       menuTitle: page.menuTitle,
       status: page.status,
       isInMenu: page.inMenu,
+      popupId: page.popupId,
       updatedAt: new Date(),
     })
     .where(eq(pages.id, pageId));

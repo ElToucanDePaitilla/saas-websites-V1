@@ -24,7 +24,7 @@
   * **Seuils.** Texte ≥ 4,5:1 (WCAG 2.1 AA, 1.4.3) ; éléments non textuels et anneau de focus ≥ 3:1 (1.4.11).
   * **Frontière anti-hex.** Les valeurs hex/rgba vivent uniquement dans les jetons de `globals.css` ; un composant consomme un utilitaire (`bg-primary`, `text-primary-foreground`, `border-border`…) ou `var(--…)`. Seule exception : le texte posé sur photo (Héro, bandeaux), qui doit rester lisible quelle que soit l'image.
   * **Garde automatique.** `npm run check:contrast` (script `scripts/check-contrast.ts`) vérifie les paires de jetons des trois thèmes et sort en code 1 si une paire obligatoire passe sous son seuil.
-  * **Presets opt-in (dormants).** Six palettes alternatives vivent en CSS sous `.theme-<id>` dans `globals.css` : `corporate`, `tech-minimaliste`, `terre-atelier`, `sauge-cabinet` (clairs), `galerie-luxe` (sombre, à coupler avec `.dark` pour que les variantes `dark:` se déclenchent) et `girly-baby` (clair). Aucun mécanisme de sélection n'existe encore : ces classes ne s'appliquent pas tant qu'un lot ultérieur ne les pose pas, le thème par défaut restant `:root`. Contrat d'application : **le même élément que `:root`, soit `<html>`** (`src/app/layout.tsx`) — appliquées à un wrapper, les alias shadcn résolus dans `:root` (`--primary`, `--ring`, `--background`…) resteraient par défaut. `npm run check:contrast` mesure aussi leurs paires.
+  * **Palettes sélectionnables.** Six palettes alternatives vivent en CSS sous `.theme-<id>` dans `globals.css` : `corporate`, `tech-minimaliste`, `terre-atelier`, `sauge-cabinet` (clairs), `galerie-luxe` (sombre, couplé à `.dark` pour que les variantes `dark:` se déclenchent) et `girly-baby` (clair). Elles sont **auto-suffisantes** (une règle partagée re-déclare les alias shadcn) et s'appliquent à tout le chrome du **site public** via un wrapper `display: contents` de `(front-office)/layout.tsx`, pas à `<html>` (le layout racine n'est pas async et ignore le photographe). Le choix est persisté dans `visualIdentity.theme` (`site_visual_identity`, JSONB) et réglé depuis **Paramètres › Apparence** (`/admin/apparence`) ; le défaut `nacre` (Nacre & Éditorial, `:root`) ne pose aucune classe. Rendu SSR : un changement n'est visible côté public qu'après rechargement. La sidebar `/admin` est organisée en sections `Contenu` / `Paramètres` (URLs inchangées). `npm run check:contrast` mesure aussi leurs paires.
 * **Typographies :**
   * **Titres (`--font-heading`) :** Serif à haut contraste, type Cormorant Garamond ou Playfair Display (graisse Light ou Regular).
   * **Corps (`--font-body`) :** Sans-Serif géométrique ultra-lisible, type Plus Jakarta Sans ou Inter (avec `letter-spacing: 0.02em`).
@@ -48,6 +48,11 @@
   * Gestion du menu principal (Niveau 1) et sous-menus (Niveau 2) en Drag & Drop.
   * Masquage de page via Toggle Eye sans suppression de données.
   * Presets Onboarding (Profil Artiste/Auteur, Profil Photographe Commercial, Profil Passionné).
+* **Pop-ups (Interaction & Conversion) :**
+  * Entité **dédiée** (`site_popups`, écran `/admin/popups`), **jamais** une famille `PageModuleType` : une pop-up n'appartient pas au flux vertical d'une page, et une pop-up globale ne peut pas vivre dans `pages`. La page la **référence** (`pages.popup_id`, `ON DELETE SET NULL`) et rien d'autre — elle n'entre donc ni dans l'ordre DnD, ni dans le `h1`, ni dans la meta description / l'image OG / l'EXIF.
+  * Portée **globale** (ciblage toutes pages / accueil / pages choisies) ou **par page** ; au plus **une pop-up par chargement**, la pop-up de page l'emportant sur la globale ciblée (aucun empilement).
+  * Déclencheurs minuterie, intention de sortie, profondeur de défilement et clic manuel (`popup:<id>` via le sélecteur de lien) ; fréquence (`every` / `session` / `days` / `once`) en stockage navigateur, désactivable sur mobile, avec bouton « réinitialiser l'affichage » dans l'éditeur. Formats modale / panneau latéral / plein écran, animations réutilisant `ModuleAnimation`.
+  * Rendu **sans portail Radix**, dans le wrapper de thème `display: contents` du layout public : la pop-up hérite des jetons `.theme-<id>` et de la palette du site.
 
 ---
 

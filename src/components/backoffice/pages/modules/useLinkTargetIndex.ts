@@ -3,9 +3,11 @@
 import * as React from "react";
 
 import { usePagesStore } from "@/components/backoffice/PagesStoreProvider";
+import { usePopUps } from "@/components/backoffice/popups/PopUpProvider";
 import {
   collectAnchorTargets,
   collectPageTargets,
+  collectPopUpTargets,
   type LinkTargetIndex,
 } from "@/lib/link-targets";
 import type { PageModule } from "@/lib/pages";
@@ -48,6 +50,7 @@ export function useLinkTargetIndex(
   provided?: LinkTargetIndex
 ): LinkTargetIndex {
   const { pages, getModules } = usePagesStore();
+  const { popups } = usePopUps();
   const { pageId: currentPageId } = useCurrentPage();
 
   return React.useMemo<LinkTargetIndex>(() => {
@@ -62,6 +65,7 @@ export function useLinkTargetIndex(
     return {
       pages: collectPageTargets(pages),
       anchors: collectAnchorTargets(pages, modulesByPage, currentPageId),
+      popups: collectPopUpTargets(popups),
     };
-  }, [provided, pages, getModules, currentPageId]);
+  }, [provided, pages, getModules, currentPageId, popups]);
 }

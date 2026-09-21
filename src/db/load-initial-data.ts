@@ -31,6 +31,7 @@ import {
   type SitePage,
 } from "../lib/pages";
 import type { VisualIdentity } from "../lib/visual-identity";
+import type { PopUp } from "../lib/popup";
 import type { TopBanner } from "../lib/top-banner";
 import { DEMO_PROFILE_ID } from "./constants";
 import {
@@ -39,6 +40,7 @@ import {
 } from "./repositories/navigation.repository";
 import { getOwnerProfile } from "./repositories/owner-profile.repository";
 import { getHomePage, getPagesWithModules } from "./repositories/pages.repository";
+import { listPopUps } from "./repositories/popup.repository";
 import { getTopBanner } from "./repositories/top-banner.repository";
 import { getVisualIdentity } from "./repositories/visual-identity.repository";
 
@@ -66,6 +68,11 @@ export interface SiteInitialData {
   visualIdentity?: VisualIdentity;
   /** Mini-bandeau global (réglage au-dessus du Header) — absent sans ligne. */
   topBanner?: TopBanner;
+  /**
+   * Pop-ups du photographe (lot Pop-up) — liste vide si aucune. Le rendu public
+   * la reçoit côté serveur : sans elle, le host afficherait `undefined`.
+   */
+  popups?: PopUp[];
   /** true si une page d'accueil (`is_home`) existe — pilote l'onboarding. */
   hasHomepage?: boolean;
   /** true si la BDD est joignable (persistance CRUD activée — Étape 5.3). */
@@ -110,12 +117,16 @@ export async function loadInitialData(
     const profile = await getOwnerProfile(photographerId);
     const visualIdentity = await getVisualIdentity(photographerId);
     const topBanner = await getTopBanner(photographerId);
+    const popups = await listPopUps(photographerId);
 
     const initial: Omit<SiteInitialData, "dbAvailable"> = {
       // Étape 10.1 : toujours fournis (même vides) → plus de seed implicite.
       pages,
       navigation: { navigation, appliedPresetId: null },
       hasHomepage: home !== null,
+      // Toujours fourni (même vide) : le host public reçoit un tableau, jamais
+      // `undefined`, y compris en mode démo.
+      popups,
     };
     if (profile) {
       initial.profile = profile;
@@ -132,6 +143,9 @@ export async function loadInitialData(
     return {
       pages: seedPagesData(),
       navigation: seedNavigationData(),
+      // Aucune pop-up de démonstration : le site de repli reste strictement le
+      // même qu'avant le lot, mais la clé existe (le host lit un tableau).
+      popups: [],
       hasHomepage: true,
       dbAvailable: false,
     };

@@ -4,6 +4,9 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import * as React from "react";
 
+import { POPUP_OPEN_EVENT, popUpIdFromHref } from "@/lib/popup";
+import { cn } from "@/lib/utils";
+
 /**
  * ============================================================================
  * NAVLINK — Cible unifiée des liens publics (Étape 4.5)
@@ -21,6 +24,14 @@ import * as React from "react";
  *   |                              |               | défilement lisse ; sinon
  *   |                              |               | navigation puis défilement
  *   |                              |               | après changement de route
+ *   | `popup:<id>` (lot B)         | `<button>`    | émet `popup:open` — le
+ *   |                              |               | host public ouvre la pop-up
+ *
+ * `popup:<id>` est intercepté **ici**, dans le rendu partagé de tous les liens
+ * publics : `CTAButton`, `HeroTextBlock` et `MarqueeModule` s'appuient tous sur
+ * `NavLink` pour les destinations internes, donc un `href` de pop-up fonctionne
+ * partout sans dupliquer la discrimination de destination. Sans ce cas,
+ * `NavLink` prendrait `popup:<id>` pour une route interne (`/popup:<id>`).
  *
  * - `onNavigate` : rappel optionnel fermant le menu mobile / dropdown après un
  *   clic (évite le voile bloquant après activation d'un lien).
@@ -200,6 +211,43 @@ export function NavLink({
 
     // Route simple : navigation native du `<Link>` (préchargement App Router).
     closeMenu();
+  }
+
+  // Déclencheur manuel de pop-up (lot B) : un élément à `role="button"` qui
+  // émet un événement — `popup:<id>` n'est pas une route. On reste sur une
+  // balise `<a>` **sans href** (plutôt qu'un vrai `<button>`) pour hériter
+  // exactement du style de l'appelant : `CTAButton` et `HeroTextBlock`
+  // l'enveloppent dans `Button asChild`, et `MarqueeModule` lui pose
+  // `marquee__viewport` — un `<button>` natif y apporterait bordure, fond et
+  // padding par défaut, qu'aucune de ces classes ne neutralise.
+  const popUpId = popUpIdFromHref(href);
+  if (popUpId !== null) {
+    const openPopUp = (): void => {
+      window.dispatchEvent(
+        new CustomEvent<string>(POPUP_OPEN_EVENT, { detail: popUpId })
+      );
+      closeMenu();
+    };
+    return (
+      <a
+        role="button"
+        tabIndex={0}
+        className={cn(className, "cursor-pointer")}
+        aria-label={ariaLabel}
+        onClick={(event) => {
+          event.preventDefault();
+          openPopUp();
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            openPopUp();
+          }
+        }}
+      >
+        {children}
+      </a>
+    );
   }
 
   if (target.external) {

@@ -1,4 +1,5 @@
 import { pageHrefFor, type PageModule, type SitePage } from "@/lib/pages";
+import { popUpHref, type PopUp } from "@/lib/popup";
 
 /**
  * ============================================================================
@@ -25,7 +26,7 @@ import { pageHrefFor, type PageModule, type SitePage } from "@/lib/pages";
  */
 
 /** Mode de destination déduit d'un `href`. */
-export type CtaTargetMode = "none" | "page" | "anchor" | "custom";
+export type CtaTargetMode = "none" | "page" | "anchor" | "popup" | "custom";
 
 /** Cible « page du site » proposée par le premier menu. */
 export type PageTarget = {
@@ -59,10 +60,23 @@ export type AnchorTarget = {
   draft: boolean;
 };
 
+/** Cible « pop-up » proposée par le menu unique (lot B). */
+export type PopUpTarget = {
+  /** Identifiant de la pop-up (émis dans l'événement `popup:open`). */
+  id: string;
+  /** Valeur stockée dans `href` (ex. `popup:<id>`). */
+  href: string;
+  /** Libellé affiché (nom d'administration, jamais un identifiant). */
+  label: string;
+  /** Pop-up désactivée : signalée, jamais filtrée (D-8). */
+  disabled: boolean;
+};
+
 /** Index des cibles connues, utilisé pour dériver le mode d'un `href`. */
 export type LinkTargetIndex = {
   pages: PageTarget[];
   anchors: AnchorTarget[];
+  popups: PopUpTarget[];
 };
 
 /** Aperçu lisible de la destination choisie (D-11). */
@@ -176,6 +190,27 @@ export function collectAnchorTargets(
 }
 
 /**
+ * Cibles « pop-up » : les pop-ups du store admin, triées par nom. Une pop-up
+ * désactivée est **signalée** (« (désactivée) ») mais jamais filtrée : un lien
+ * existant vers elle doit rester lisible et éditable (même principe que D-8).
+ *
+ * Le `href` est `popup:<id>` — un **mode dérivé**, jamais un réglage stocké :
+ * supprimer la pop-up laisse le lien tel quel, qui retombe alors en `custom`.
+ */
+export function collectPopUpTargets(
+  popups: readonly PopUp[]
+): PopUpTarget[] {
+  return popups
+    .map<PopUpTarget>((popup) => ({
+      id: popup.id,
+      href: popUpHref(popup.id),
+      label: popup.name.trim() !== "" ? popup.name : "Pop-up sans nom",
+      disabled: !popup.enabled,
+    }))
+    .sort((left, right) => compareLabelFr(left.label, right.label));
+}
+
+/**
  * Un groupe du menu des sections = **une page hôte** (Étape 11.21).
  * L'ordre de `collectAnchorTargets` est conservé (page puis libellé).
  */
@@ -227,6 +262,7 @@ export function groupAnchorTargets(
  * | `https://…`, `mailto:…`, `tel:…`                 | `custom` |
  * | présent dans les ancres connues                  | `anchor` |
  * | présent dans les pages connues                   | `page`   |
+ * | présent dans les pop-ups connues                 | `popup`  |
  * | toute autre valeur (cible orpheline)             | `custom` |
  *
  * Le repli en `custom` est volontaire : le champ libre affiche alors la valeur
@@ -248,6 +284,9 @@ export function detectCtaTargetMode(
   }
   if (index.pages.some((target) => target.href === value)) {
     return "page";
+  }
+  if (index.popups.some((target) => target.href === value)) {
+    return "popup";
   }
   return "custom";
 }
@@ -301,6 +340,16 @@ export function describeLinkTarget(
     };
   }
 
+  const popup = index.popups.find((target) => target.href === value);
+  if (popup) {
+    return {
+      text: `Au clic, la pop-up « ${popup.label} » s'ouvrira.`,
+      warning: popup.disabled
+        ? "Attention : cette pop-up est désactivée, le bouton n'ouvrira rien sur le site public."
+        : null,
+    };
+  }
+
   return {
     text: `Lien personnalisé : ${value}`,
     warning:
@@ -313,7 +362,7 @@ export function describeLinkTarget(
    -------------------------------------------------------------------------- */
 
 /** Nature d'une option du menu unique (rendu et tests). */
-export type LinkTargetOptionKind = "none" | "page" | "anchor" | "custom";
+export type LinkTargetOptionKind = "none" | "page" | "anchor" | "popup" | "custom";
 
 /** Une entrée choisissable du menu unique. */
 export type LinkTargetOption = {
@@ -345,9 +394,10 @@ function anchorOptionLabel(target: AnchorTarget): string {
  *
  *   1. « — Aucune — » (destination vide) ;
  *   2. **Pages** du site, mentionnées « (brouillon) » le cas échéant ;
- *   3. **Sections de cette page** (le cas le plus fréquent, remonté en tête) ;
- *   4. **Autres sections**, préfixées du titre de leur page (« Prestations › Tarifs ») ;
- *   5. **« Autre lien (externe)… »** — sentinelle qui révèle le champ libre.
+ *   3. **Pop-ups** du site (lot B), mentionnées « (désactivée) » le cas échéant ;
+ *   4. **Sections de cette page** (le cas le plus fréquent, remonté en tête) ;
+ *   5. **Autres sections**, préfixées du titre de leur page (« Prestations › Tarifs ») ;
+ *   6. **« Autre lien (externe)… »** — sentinelle qui révèle le champ libre.
  *
  * Fonction **pure** : aucune dépendance React, testable isolément, zéro `any`.
  */
@@ -378,7 +428,20 @@ export function buildLinkTargetOptions(
     });
   }
 
-  // 3. Sections de la page en cours d'édition (les plus probables).
+  // 3. Pop-ups du site — ouvrir une pop-up au clic (lot B).
+  if (index.popups.length > 0) {
+    sections.push({
+      id: "popups",
+      label: "Pop-ups",
+      options: index.popups.map((popup) => ({
+        value: popup.href,
+        label: popup.disabled ? `${popup.label} (désactivée)` : popup.label,
+        kind: "popup",
+      })),
+    });
+  }
+
+  // 4. Sections de la page en cours d'édition (les plus probables).
   const currentAnchors = index.anchors.filter((target) => target.isCurrentPage);
   if (currentAnchors.length > 0) {
     sections.push({
@@ -392,7 +455,7 @@ export function buildLinkTargetOptions(
     });
   }
 
-  // 4. Sections des autres pages — le titre de la page lève l'ambiguïté.
+  // 5. Sections des autres pages — le titre de la page lève l'ambiguïté.
   const otherAnchors = index.anchors.filter((target) => !target.isCurrentPage);
   if (otherAnchors.length > 0) {
     sections.push({
@@ -406,7 +469,7 @@ export function buildLinkTargetOptions(
     });
   }
 
-  // 5. Porte de sortie : lien externe / protocole / cible orpheline.
+  // 6. Porte de sortie : lien externe / protocole / cible orpheline.
   sections.push({
     id: "custom",
     label: null,

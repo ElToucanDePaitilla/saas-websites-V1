@@ -436,6 +436,7 @@ export function NavigationManager() {
           slug: page.slug,
           status: page.status,
           inMenu: next,
+          popupId: page.popupId,
         });
       }
     }

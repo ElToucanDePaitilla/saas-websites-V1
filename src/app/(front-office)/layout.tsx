@@ -7,8 +7,14 @@ import { VisualIdentityProvider } from "@/components/backoffice/visual-identity/
 import Footer from "@/components/layout/Footer";
 import Header from "@/components/layout/Header";
 import { TopBannerChrome } from "@/components/layout/TopBannerChrome";
+import { PublicPopUpHost } from "@/components/popups/PublicPopUpHost";
 import { loadInitialData } from "@/db/load-initial-data";
+import {
+  DEFAULT_SITE_THEME,
+  siteThemeWrapperClasses,
+} from "@/lib/site-theme";
 import { resolvePublicPhotographerId } from "@/lib/supabase/session";
+import { cn } from "@/lib/utils";
 
 /**
  * ============================================================================
@@ -40,8 +46,14 @@ import { resolvePublicPhotographerId } from "@/lib/supabase/session";
  * Réglage global « Mini-bandeau Alerte / Promo » : `TopBannerChrome` enveloppe
  * Header + `main` d'un wrapper en `display: contents` — il transmet la variable
  * `--top-banner-offset` sans insérer de nœud de mise en page (un `<div>` réel
- * capterait le `flex-1` de `main` et décollerait le Footer). Le Footer reste
- * donc hors du wrapper, enfant direct du `<body>`.
+ * capterait le `flex-1` de `main` et décollerait le Footer).
+ *
+ * Sélection du thème du site (page `/admin/apparence`) : la même technique de
+ * `display: contents` porte les classes `.theme-<id>` sur un wrapper englobant
+ * `TopBannerChrome` **et** le Footer (les jetons doivent couvrir tout le chrome,
+ * Footer compris). Le thème est rendu côté serveur depuis la ligne
+ * `site_visual_identity` : pas de FOUC, mais un changement dans l'admin n'est
+ * visible sur le site public qu'après rechargement.
  *
  * Références : plans/ROADMAP-5.2-ssr-db-hydration.md §2.B —
  *              plans/ROADMAP-4.5-front-navigation.md §4 —
@@ -56,6 +68,11 @@ export default async function FrontOfficeLayout({
   // Site public affiché = photographe connecté (session), sinon tenant démo.
   const photographerId = await resolvePublicPhotographerId();
   const initial = await loadInitialData(photographerId);
+
+  // Classes `.theme-<id>` (vide pour Nacre) rendues côté serveur sur le chrome.
+  const themeClasses = siteThemeWrapperClasses(
+    initial.visualIdentity?.theme ?? DEFAULT_SITE_THEME
+  );
 
   // Étape 10.1.a — site **totalement vide** (BDD OK, aucune page, aucun
   // accueil) : l'écran d'onboarding est autonome → **sans chrome** (une barre
@@ -98,22 +115,35 @@ export default async function FrontOfficeLayout({
             initialTopBanner={initial.topBanner}
             persistenceEnabled={initial.dbAvailable}
           >
-            <TopBannerChrome
-              photographerId={photographerId}
-              initialTopBanner={initial.topBanner}
-            >
-              <Header />
-              <main
-                className="flex-1"
-                style={{
-                  paddingTop: "calc(5rem + var(--top-banner-offset, 0px))",
-                }}
+            <div className={cn(themeClasses, "contents")}>
+              <TopBannerChrome
+                photographerId={photographerId}
+                initialTopBanner={initial.topBanner}
               >
-                {children}
-              </main>
-            </TopBannerChrome>
+                <Header />
+                <main
+                  className="flex-1"
+                  style={{
+                    paddingTop: "calc(5rem + var(--top-banner-offset, 0px))",
+                  }}
+                >
+                  {children}
+                </main>
+              </TopBannerChrome>
+              <Footer />
+              {/*
+                Pop-ups : montées **dans** le wrapper de thème (pas de portail
+                Radix) pour hériter des jetons `.theme-<id>`. Le host rend
+                `null` jusqu'au montage — les déclencheurs et la fréquence sont
+                client-only, la cible est résolue via `usePathname()`.
+              */}
+              <PublicPopUpHost
+                popups={initial.popups ?? []}
+                pages={initial.pages?.pages ?? []}
+                photographerId={photographerId}
+              />
+            </div>
           </TopBannerProvider>
-          <Footer />
         </NavigationStoreProvider>
       </VisualIdentityProvider>
     </OwnerProfileProvider>

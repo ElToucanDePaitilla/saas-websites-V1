@@ -31,6 +31,12 @@ export type PageMetadataDraft = {
   status: PageStatus;
   /** Vrai si la page doit apparaître automatiquement dans le menu principal (4.2). */
   inMenu: boolean;
+  /**
+   * Pop-up rattachée à cette page (lot Pop-up) — `null` = aucune. La page est
+   * une **référence** (`pages.popup_id`), jamais un porteur : la pop-up reste
+   * une entité (`site_popups`) et survit à la page (`ON DELETE SET NULL`).
+   */
+  popupId: string | null;
 };
 
 /**
@@ -47,6 +53,11 @@ export interface SitePage {
   inMenu: boolean; // présence auto dans le menu principal (future colonne show_in_menu)
   /** Page d'accueil du site (Étape 10.1) — servie sur `/`. */
   isHome: boolean;
+  /**
+   * Pop-up affichée sur cette page (lot Pop-up) — `null` = aucune. Prioritaire
+   * sur toute pop-up globale ciblée (voir `resolveActivePopUp`).
+   */
+  popupId: string | null;
   updatedAt: string; // horodatage ISO de dernière modification
 }
 
@@ -134,6 +145,7 @@ export const seedPages: SitePage[] = [
     status: "published",
     inMenu: true,
     isHome: true,
+    popupId: null,
     updatedAt: "2026-09-05T12:00:00.000Z",
   },
   {
@@ -144,6 +156,7 @@ export const seedPages: SitePage[] = [
     status: "published",
     inMenu: true,
     isHome: false,
+    popupId: null,
     updatedAt: "2026-09-05T12:00:00.000Z",
   },
   {
@@ -154,6 +167,7 @@ export const seedPages: SitePage[] = [
     status: "published",
     inMenu: true,
     isHome: false,
+    popupId: null,
     updatedAt: "2026-09-05T12:00:00.000Z",
   },
   {
@@ -164,6 +178,7 @@ export const seedPages: SitePage[] = [
     status: "published",
     inMenu: true,
     isHome: false,
+    popupId: null,
     updatedAt: "2026-09-05T12:00:00.000Z",
   },
   {
@@ -176,6 +191,7 @@ export const seedPages: SitePage[] = [
     status: "published",
     inMenu: true,
     isHome: false,
+    popupId: null,
     updatedAt: "2026-09-05T12:00:00.000Z",
   },
 ];

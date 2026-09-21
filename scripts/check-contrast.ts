@@ -10,9 +10,10 @@
  *
  * Pourquoi un script et non un test : le projet n'a aucun runner de tests, et
  * `tsx` est déjà une devDependency — aucune dépendance ajoutée. Pourquoi les
- * calculs WCAG restent ici au lieu de `src/lib/` : tant qu'aucun thème
- * dynamique n'existe, les y promouvoir créerait du code mort (convention du
- * projet). À déplacer le jour où un vrai système de thèmes arrive.
+ * calculs WCAG restent ici au lieu de `src/lib/` : la sélection de thème
+ * (`/admin/apparence`) applique des classes CSS et ne recalcule aucun contraste
+ * à l'exécution ; promouvoir ces fonctions créerait du code mort (convention du
+ * projet). À déplacer le jour où le contraste sera calculé dynamiquement.
  *
  * La table ci-dessous est un **instantané** de `globals.css` : toute retouche
  * d'un jeton doit être répercutée ici, sinon la garde mesure une valeur qui
@@ -405,10 +406,12 @@ const ADMIN: Theme = {
 };
 
 /* --------------------------------------------------------------------------
-   Presets opt-in `.theme-<id>` — miroir de la section « PRESETS DE THÈME »
-   de globals.css. Le bloc CSS ne déclare que les jetons produit ; les alias
-   shadcn (`--primary`, `--accent`, `--ring`) restent résolus par `:root`, d'où
-   la fabrique ci-dessous qui recompose leur valeur comme le navigateur le fait.
+   Presets `.theme-<id>` — miroir de la section « PRESETS DE THÈME » de
+   globals.css. Le bloc CSS ne déclare que les jetons produit ; les alias shadcn
+   (`--primary`, `--accent`, `--ring`) sont fournis par la **règle d'alias
+   partagée** des six presets. La fabrique ci-dessous recompose ces alias avec
+   les mêmes règles (`--primary`/`--accent` = `--accent-color`, `--ring` =
+   `--accent-color-strong`), comme le navigateur les résout.
    -------------------------------------------------------------------------- */
 
 /** Paires contrôlées, identiques pour les six presets. */
@@ -479,7 +482,7 @@ const PRESET_CTA: CtaExpectation[] = [
   },
 ];
 
-/** Compose un preset clair/sombre : produit + alias résolus comme `:root`. */
+/** Compose un preset clair/sombre : produit + alias résolus par la règle partagée. */
 function preset(name: string, product: Record<string, string>): Theme {
   return {
     name,

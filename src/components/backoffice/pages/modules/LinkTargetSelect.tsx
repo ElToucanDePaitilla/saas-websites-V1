@@ -109,9 +109,11 @@ export function LinkTargetSelect({
   const showFreeField = customChosen || mode === "custom";
 
   // Radix refuse `value=""` : l'absence de destination et la saisie libre ont
-  // chacune une valeur sentinelle, jamais stockée (11.21-D2).
+  // chacune une valeur sentinelle, jamais stockée (11.21-D2). Une pop-up est une
+  // destination **structurelle** (comme une page ou une section) : sa valeur est
+  // le `href` `popup:<id>`, pas une sentinelle.
   const selectValue =
-    mode === "page" || mode === "anchor"
+    mode === "page" || mode === "anchor" || mode === "popup"
       ? value
       : showFreeField
         ? LINK_TARGET_CUSTOM_VALUE
@@ -179,8 +181,9 @@ export function LinkTargetSelect({
         />
       ) : null}
 
-      {/* Aperçu : masqué tant que le champ libre n'est pas révélé (D4). */}
-      {showFreeField && value.trim() !== "" ? (
+      {/* Aperçu : masqué tant que le champ libre n'est pas révélé (D4), sauf
+          pour une pop-up — le photographe doit lire ce que le clic ouvrira. */}
+      {(showFreeField || mode === "popup") && value.trim() !== "" ? (
         <div className="grid gap-1">
           <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
             <ArrowRight

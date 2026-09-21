@@ -6,6 +6,7 @@ import { PagesStoreProvider } from "@/components/backoffice/PagesStoreProvider";
 import { SidebarNav } from "@/components/backoffice/SidebarNav";
 import { PagesNavigationSync } from "@/components/backoffice/navigation/PagesNavigationSync";
 import { NavigationStoreProvider } from "@/components/backoffice/navigation/NavigationStoreProvider";
+import { PopUpProvider } from "@/components/backoffice/popups/PopUpProvider";
 import { OwnerProfileProvider } from "@/components/backoffice/profile/OwnerProfileProvider";
 import { TopBannerProvider } from "@/components/backoffice/top-banner/TopBannerProvider";
 import { VisualIdentityProvider } from "@/components/backoffice/visual-identity/VisualIdentityProvider";
@@ -142,18 +143,23 @@ export default async function AdminLayout({
                 initialTopBanner={initial.topBanner}
                 persistenceEnabled={initial.dbAvailable}
               >
-                <PagesStoreProvider
-                  initialData={initial.pages}
+                <PopUpProvider
+                  initialPopUps={initial.popups}
                   persistenceEnabled={initial.dbAvailable}
                 >
-                  <NavigationStoreProvider
-                    initialData={initial.navigation}
+                  <PagesStoreProvider
+                    initialData={initial.pages}
                     persistenceEnabled={initial.dbAvailable}
                   >
-                    <PagesNavigationSync />
-                    {children}
-                  </NavigationStoreProvider>
-                </PagesStoreProvider>
+                    <NavigationStoreProvider
+                      initialData={initial.navigation}
+                      persistenceEnabled={initial.dbAvailable}
+                    >
+                      <PagesNavigationSync />
+                      {children}
+                    </NavigationStoreProvider>
+                  </PagesStoreProvider>
+                </PopUpProvider>
               </TopBannerProvider>
             </VisualIdentityProvider>
           </OwnerProfileProvider>

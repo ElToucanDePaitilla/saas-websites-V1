@@ -11,6 +11,63 @@ NOTICE D'UTILISATION DU FICHIER CHANGELOG.MD
 
 ---
 
+## 2026-09-21 – 18:10 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Module Pop-up — entité dédiée, globale ou par page (Lot A + Lot B).**
+- **Décision structurante** : une pop-up est une **entité** (`site_popups`, écran `/admin/popups`), **pas** une famille `PageModuleType`. Vérifié : `publicDescription` / `publicOgImage` / `collectImageUrls` (`src/lib/public-page.ts`) itèrent `page.modules` — une pop-up y aurait fuité dans la meta description, l'image OG et l'EXIF, et il aurait fallu l'exclure dans 3+ fonctions. Une pop-up **globale** ne peut par ailleurs pas vivre dans `pages` (FK `page_id`) sans duplication. Le patrimoine de `site_top_banner` (table + RLS + repository + API + store + écrans) a été copié.
+- **Domaine pur** `src/lib/popup.ts` : types (`scope`, `targeting`, `triggers`, `frequency`, `layout`, `contentKind`), `DEFAULT_POPUP` / `createDefaultPopUp()`, `normalizePopUp` tolérant, ordres + libellés FR, `popUpHref` / `popUpIdFromHref`, `resolveActivePopUp` (page > globale, une seule par chargement), `clearPopUpFrequencyStorage`. Réutilise `ModuleAnimation`, `MediaField` et `HeroCtaStyle` de `pages.ts` (aucune énumération dupliquée).
+- **BDD** : table `site_popups` (JSONB `PopUp`, index photographe, RLS owner-only ajoutée **à la main** comme en 0012), colonne `pages.popup_id` (`ON DELETE SET NULL`). Migration `0014` générée dans le bon ordre (table avant FK) ; `pages.popup_id` mappé dans `pages.repository.ts` et `SitePage` / `PageMetadataDraft`.
+- **API** : `GET/PUT /api/popups`, `DELETE /api/popups/[id]` (upsert **scopé** au propriétaire : `update WHERE id AND photographer_id` puis insert), `persistPopUp` / `persistDeletePopUp`. `loadInitialData` fournit `popups` (tableau, jamais `undefined`) et le seed de repli renvoie `[]`.
+- **Store admin** : `PopUpProvider` calqué sur `PagesStoreProvider` (diff create/update/delete, debounce 200 ms, reprise à délai doublant 2 s → 30 s, références avancées **seulement après succès**). Monté dans le layout `/admin`, consommé par `PopUpsManager`, `PopUpEditor` et le champ « Pop-up de cette page » (`PageMetadataForm`).
+- **Rendu public** : `PublicPopUpHost` monté **dans** le wrapper de thème `display: contents` du layout front-office. `PopUpDialog` utilise les primitives `@radix-ui/react-dialog` **sans `Portal`** (un portail irait sur `document.body`, hors des jetons `.theme-<id>`), `z-[70]`. Déclencheurs minuterie / intention de sortie (jamais au tactile) / profondeur de défilement / clic manuel ; fréquence `session` (sessionStorage), `days` / `once` (localStorage) et `every`, tout accès encapsulé en `try/catch` ; `mobileAutoOpen` désactive l'auto sur mobile. Le host rend `null` avant montage (aucune lecture de stockage au rendu serveur).
+- **Lot B** : mode `popup` dans `link-targets.ts` (`collectPopUpTargets`, groupe « Pop-ups » du menu, cases `detectCtaTargetMode` / `describeLinkTarget`), `useLinkTargetIndex` alimenté par `usePopUps()`, et `NavLink` intercepte `popup:<id>` (élément `role="button"`, événement `popup:open`) — donc `CTAButton`, `HeroTextBlock` et `MarqueeModule` en héritent sans duplication.
+- **Mode `lead` (Lot C)** : volontairement **inerte** — l'option est filtrée de l'éditeur tant que la destination des e-mails n'est pas tranchée ; le mode `promo` (bouton « Copier le code ») est livré.
+- **Aperçu admin** : `PopUpPreview` réutilise le composant public et l'enveloppe du thème choisi **plus** un scope `.site-preview` (ajout `globals.css`) — la page vit sous `.admin`, qui surcharge les alias shadcn ; sans lui, l'aperçu de Nacre afficherait le zinc de l'administration.
+- **Sidebar** : nouvelle section `Interaction & Conversion` → `Pop-ups` (`/admin/popups`, icône `AppWindow`).
+
+### Mesures et vérifications
+- `npx tsc --noEmit` → **0** ; `npm run lint` → **0 erreur, 0 avertissement**.
+- `npm run check:contrast` → **exit 0**, mêmes 4 avertissements (aucun jeton de couleur modifié ; seuls des alias `.site-preview` ont été ajoutés).
+- `git diff src/app/globals.css` → ajout du seul bloc `.site-preview` ; les suppressions affichées appartiennent au lot « Thèmes » **non commité** (réécriture de commentaires), pas à ce lot ; aucune déclaration de `:root` / `.dark` / `.admin` touchée.
+- Migration : `npm run db:generate` → `drizzle/0014_easy_felicia_hardy.sql` (CREATE `site_popups` → ADD `pages.popup_id` → FK → index) puis RLS owner-only ajoutée à la main. `npm run db:migrate` à exécuter sur une base joignable.
+- Recette manuelle restante (navigateur) : minuterie / exit-intent / scroll, `frequency = session` (disparaît au rechargement de la session), `days` + bouton « réinitialiser l'affichage », `mobileAutoOpen = false`, formats modale / panneau / plein écran, thème `galerie-luxe` (couleurs sombres), priorité pop-up de page > globale, Nacre inchangé.
+
+### Fichiers modifiés
+- Nouveaux : `src/lib/popup.ts`, `src/db/repositories/popup.repository.ts`, `drizzle/0014_easy_felicia_hardy.sql`, `src/app/api/popups/route.ts`, `src/app/api/popups/[id]/route.ts`, `src/app/(back-office)/admin/popups/{page.tsx,[id]/page.tsx}`, `src/components/backoffice/popups/{PopUpProvider,PopUpsManager,PopUpEditor,PopUpPreview}.tsx`, `src/components/popups/{PublicPopUpHost,PopUpDialog,PopUpContent}.tsx`.
+- Modifiés : `src/db/schema.ts`, `src/db/repositories/pages.repository.ts`, `src/db/load-initial-data.ts`, `src/lib/pages.ts`, `src/lib/schemas/persistence.ts`, `src/lib/persistence-client.ts`, `src/lib/link-targets.ts`, `src/components/backoffice/PagesStoreProvider.tsx`, `src/components/backoffice/navigation/NavigationManager.tsx`, `src/components/backoffice/pages/PageMetadataForm.tsx`, `src/components/backoffice/pages/modules/{LinkTargetSelect.tsx,useLinkTargetIndex.ts}`, `src/components/common/NavLink.tsx`, `src/components/backoffice/SidebarNav.tsx`, `src/app/(back-office)/admin/layout.tsx`, `src/app/(front-office)/layout.tsx`, `src/app/globals.css` (ajouts), `PROJECT_CONTEXT.md`, `CHANGELOG.md`.
+
+### Prochaine étape prévue
+Décision produit sur la destination des e-mails (Lot C : table interne `popup_submissions` recommandée) puis livraison du formulaire de capture d'e-mail et de sa notification.
+
+---
+
+## 2026-09-19 – 16:52 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Sélection du thème du site — nouvelle page « Paramètres › Apparence » (`/admin/apparence`).**
+- **7 palettes** : « Nacre & Éditorial » (défaut, `:root`, aucune classe) + les 6 presets `.theme-<id>` déjà présents dans `globals.css`.
+- **Persistance sans migration** : champ `theme` ajouté à `VisualIdentity` (JSONB `site_visual_identity.data`), validé par `VisualIdentitySchema` avec `.default("nacre")` (rétrocompat des lignes existantes) et lu par `normalizeVisualIdentity` via `readSiteTheme`. Repository, API `PUT /api/visual-identity`, `persistVisualIdentity`, provider et store réutilisés **tels quels**.
+- **Application SSR, contrat révisé** : les presets deviennent **auto-suffisants** grâce à une **règle d'alias partagée** (une seule règle pour les 6, précédent `.admin`) et s'appliquent sur un wrapper `display: contents` de `(front-office)/layout.tsx` englobant `TopBannerChrome` **et** le Footer — et non plus sur `<html>` (le layout racine n'est pas async et ignore le photographe ; un layout racine async/script client aurait introduit FOUC + désaccord d'hydratation). `galerie-luxe` couple `.dark` sur le même wrapper.
+- **Écran `AppearanceScreen`** : sélecteur `role="radiogroup"` de 7 cartes (pastilles produit + badge clair/sombre), aperçu en direct, bouton Enregistrer (l'auto-persistance débouncée du provider reste active) et Réinitialiser → `nacre`. L'aperçu utilise les jetons produit (`var(--bg-color)`…) car la page vit sous `.admin`, qui surcharge `--primary` en anthracite : `bg-primary` afficherait un CTA anthracite pour Nacre au lieu du rose nacré.
+- **Sidebar `/admin`** réorganisée en sections `Contenu` / `Paramètres` (présentation seule, URLs inchangées) ; entrée « Paramètres » désactivée supprimée, « Identité visuelle / Logo » passe à l'icône `Image`, « Apparence » prend `Palette`.
+- **Docs** : `PROJECT_CONTEXT.md` et l'en-tête de la section presets de `globals.css` décrivent le nouveau contrat ; commentaire du bloc presets de `check-contrast.ts` corrigé (aucune valeur ni paire modifiée).
+
+### Mesures et vérifications
+- `npm run check:contrast` → **exit 0**, mêmes 4 avertissements (Nacre `--text-muted`/surface ≈ 4,48, `--ring`/bg ≈ 1,68, `--primary`/bg ≈ 1,38 ; admin `--ring`/bg ≈ 2,56) ; les 6 presets restent conformes.
+- `npx tsc --noEmit` → **0** ; `npm run lint` → **0 erreur, 0 avertissement**.
+- `git diff src/app/globals.css` → uniquement des **ajouts** (règle d'alias partagée + commentaires) ; aucune déclaration de `:root`/`.dark`/`.admin` modifiée.
+- Recette manuelle restante (navigateur) : `/admin/apparence` (7 cartes + aperçu), recharger `/` après choix de « Corporate » puis « Galerie luxe » (site sombre, admin inchangé), et vérifier que Nacre laisse `/` strictement identique.
+
+### Fichiers modifiés
+- Nouveaux : `src/lib/site-theme.ts`, `src/app/(back-office)/admin/apparence/page.tsx`, `src/components/backoffice/appearance/AppearanceScreen.tsx`.
+- Modifiés : `src/app/globals.css` (ajouts), `src/lib/visual-identity.ts`, `src/lib/schemas/persistence.ts`, `src/app/(front-office)/layout.tsx`, `src/components/backoffice/SidebarNav.tsx`, `scripts/check-contrast.ts` (commentaires), `PROJECT_CONTEXT.md`, `CHANGELOG.md`.
+
+### Prochaine étape prévue
+Recette visuelle navigateur des 7 palettes (site public + admin) et validation de l'absence de FOUC au rechargement.
+
+---
+
 ## 2026-09-18 – 18:20 (heure locale America/Bogota)
 
 ### Tâche exécutée
