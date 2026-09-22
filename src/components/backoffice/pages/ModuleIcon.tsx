@@ -9,6 +9,7 @@ import {
   MapPin,
   Megaphone,
   MessageSquareQuote,
+  Newspaper,
   Sparkles,
   User,
   type LucideIcon,
@@ -37,6 +38,7 @@ const moduleIcons: Record<PageModuleType, LucideIcon> = {
   "contact-map": MapPin,
   marquee: GalleryHorizontal,
   reviews: MessageSquareQuote,
+  news: Newspaper,
 };
 
 export function ModuleIcon({

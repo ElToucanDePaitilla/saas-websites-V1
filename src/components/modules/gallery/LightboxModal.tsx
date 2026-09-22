@@ -507,7 +507,11 @@ export function LightboxModal({
             onPointerDown={handlePointerDown}
           >
             <div
-              className={cn("relative h-full w-full", !dragging && "transition-transform duration-200 ease-out")}
+              className={cn(
+                "relative h-full w-full",
+                !dragging &&
+                  "transition-transform duration-200 ease-out motion-reduce:transition-none"
+              )}
               style={{
                 transform: `translate3d(${offset.x}px, ${offset.y}px, 0) scale(${zoomFactor})`,
                 transformOrigin: "center center",

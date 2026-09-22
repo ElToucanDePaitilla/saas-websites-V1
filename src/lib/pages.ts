@@ -224,7 +224,12 @@ export type PageModuleType =
   // Étape 14.4 — « Avis clients ». Cinquième `ALTER TYPE … ADD VALUE` : une
   // section de réassurance n'est ni une FAQ ni des cartes — elle porte un
   // carrousel, une note de synthèse et un logo de fournisseur d'avis.
-  | "reviews";
+  | "reviews"
+  // Étape 14.5 — « Actualités & expositions ». Sixième `ALTER TYPE … ADD
+  // VALUE` : une colonne d'affiches au format 2:3, dont les cartes sont
+  // empilées et bornées par la hauteur de la fenêtre — ni une grille
+  // (`cards`), ni un carrousel (`reviews`), donc une famille à part.
+  | "news";
 
 /** Animation d'entrée d'un module (spec §7.2-B ; sélecteur en 3.4). */
 export type ModuleAnimation =
@@ -3194,7 +3199,8 @@ export type ModuleContent =
   | ContactContent
   | ContactMapContent
   | MarqueeContent
-  | ReviewsContent;
+  | ReviewsContent
+  | NewsContent;
 
 /* ==========================================================================
    BANDEAU MESSAGE OU D'APPEL À L'ACTION — « cta-banner » (Étape 11.27)
@@ -6359,6 +6365,359 @@ export function resolveReviewsContent(raw: unknown): ReviewsContent {
   };
 }
 
+/* ==========================================================================
+   ACTUALITÉS & EXPOSITIONS — famille « news » (Étape 14.5)
+   --------------------------------------------------------------------------
+   Une section éditoriale **simple**, pensée pour vieillir sans dette :
+
+   1. **Une seule famille, deux natures d'item.** Le champ `kind` ne choisit
+      qu'une pastille (« Actualité » / « Exposition ») : deux familles
+      dupliqueraient le rendu et l'éditeur pour une différence de libellé.
+   2. **Un ratio fixe 2:3, non réglable.** C'est la contrainte qui simplifie le
+      module face à `cards` : aucune variante, aucun cadrage à choisir. La
+      largeur de la carte est **dérivée** de la hauteur de fenêtre (`min(…,
+      fenêtre × 2/3)`), pour que l'affiche tienne entière à l'écran ; c'est donc
+      le CSS qui porte la géométrie, le contenu ne transporte que des réglages.
+   3. **Aucun tri dans le résolveur.** L'ordre du tableau `items` EST l'ordre
+      d'affichage (D6). Un tri ajouté « pour faire propre » rendrait les boutons
+      ↑/↓ de l'éditeur mensongers — la « plus récente en haut » est une
+      convention d'édition, tenue par l'insertion en tête et par le bouton de tri.
+   4. **Aucune couleur libre stockée.** Le fond du cadre suit un **jeton** du
+      thème (`frameTone`), appliqué par `data-tone` : la règle D3 des avis vaut
+      ici aussi, rien ne doit casser le mode sombre.
+
+   Le composant public est props-only : `resolveNewsContent` est le seul
+   garde-fou entre un JSONB ancien ou tronqué et le rendu.
+   ========================================================================== */
+
+/** Nature d'un item : une pastille, rien de plus. */
+export type NewsKind = "news" | "exhibition";
+
+/** Fond du cadre — toujours un jeton du thème, jamais une couleur stockée. */
+export type NewsFrameTone = "surface" | "soft" | "accent";
+
+/** Comportement de l'affiche dans son cadre 2:3 (recadrage ou lettrage). */
+export type NewsPosterFit = "cover" | "contain";
+
+/** Un item d'actualité ou d'exposition tel que saisi dans l'éditeur. */
+export interface NewsItem {
+  /** Identifiant stable (crypto.randomUUID() côté éditeur). */
+  id: string;
+  kind: NewsKind;
+  /** Affiche au format 2:3 (ratio imposé par la feuille de styles). */
+  media: MediaField;
+  /** Rendu en `<h3>` — vide : non rendu. */
+  title: string;
+  /** Texte libre, sauts de ligne préservés. */
+  text: string;
+  /**
+   * Date indicative au format ISO `YYYY-MM-DD` (ou ""). **Affichage seul** :
+   * elle n'ordonne jamais les items (D6).
+   */
+  publishedAt: string;
+  /** Bouton de l'item (défaut « En savoir plus », masqué tant que `href` est vide). */
+  cta: GalleryCtaSettings;
+}
+
+/** Apparence de la section — mêmes réglages que les autres familles. */
+export interface NewsStyleSettings {
+  /** Arrondi du cadre, en px. */
+  radius: number;
+  /** Ombre portée (échelle de la galerie). */
+  shadow: GalleryShadowLevel;
+  /** Filet optionnel du cadre (épaisseur + couleur). */
+  border: GalleryBorderSettings;
+  /** Fond du cadre, par jeton du thème. */
+  frameTone: NewsFrameTone;
+  /** Affiche recadrée (`cover`) ou entière, avec lettrage (`contain`). */
+  posterFit: NewsPosterFit;
+  /** Style des boutons de toute la section (mêmes valeurs que le Héro). */
+  ctaStyle: HeroCtaStyle;
+  /**
+   * Affichage des boutons de la section (défaut : affichés). Comme pour les
+   * cartes, masquer ne **supprime pas** libellés et destinations : c'est un
+   * réglage d'affichage, pas un effacement de données.
+   */
+  ctaShow: boolean;
+}
+
+/** Contenu du module `news`. */
+export interface NewsContent {
+  type: "news";
+  /** Titre de section (`module-h2`) — vide : non rendu. */
+  heading: string;
+  subtitle: string;
+  /** Paragraphe d'introduction (sauts de ligne préservés). */
+  intro: string;
+  /** Les items, **dans l'ordre d'affichage** : le résolveur ne trie jamais. */
+  items: NewsItem[];
+  style: NewsStyleSettings;
+}
+
+/** Ordre des natures dans le sélecteur de l'éditeur. */
+export const newsKindOrder: NewsKind[] = ["news", "exhibition"];
+
+/** Libellés français des natures. */
+export const newsKindLabels: Record<NewsKind, string> = {
+  news: "Actualité",
+  exhibition: "Exposition",
+};
+
+/** Ordre des fonds de cadre (éditeur). */
+export const newsFrameToneOrder: NewsFrameTone[] = [
+  "surface",
+  "soft",
+  "accent",
+];
+
+/** Libellés français des fonds de cadre. */
+export const newsFrameToneLabels: Record<NewsFrameTone, string> = {
+  surface: "Surface",
+  soft: "Surface douce",
+  accent: "Accent",
+};
+
+/** Ordre des comportements d'affiche (éditeur). */
+export const newsPosterFitOrder: NewsPosterFit[] = ["cover", "contain"];
+
+/** Libellés français des comportements d'affiche. */
+export const newsPosterFitLabels: Record<NewsPosterFit, string> = {
+  cover: "Recadré (couverture)",
+  contain: "Entier (lettrage)",
+};
+
+/** Garde : nature connue (pour le résolveur JSONB). */
+export function isNewsKind(value: unknown): value is NewsKind {
+  return value === "news" || value === "exhibition";
+}
+
+/** Garde : fond de cadre connu. */
+export function isNewsFrameTone(value: unknown): value is NewsFrameTone {
+  return value === "surface" || value === "soft" || value === "accent";
+}
+
+/** Garde : comportement d'affiche connu. */
+export function isNewsPosterFit(value: unknown): value is NewsPosterFit {
+  return value === "cover" || value === "contain";
+}
+
+/**
+ * Ratio de l'affiche — **documentaire**. La valeur réellement appliquée vit
+ * dans `globals.css` (`aspect-ratio: 2 / 3`) : la dupliquer ici ne servirait
+ * qu'à l'éditeur, qui n'a pas de contrôle de ratio à proposer (D2).
+ */
+export const NEWS_POSTER_RATIO = "2 / 3";
+
+/**
+ * Plafond de lecture de la carte, en rem — **miroir** de `--news-card-max-w`
+ * (globals.css). Au-delà, la colonne n'est plus lisible sur un grand écran.
+ */
+export const NEWS_CARD_MAX_WIDTH_REM = 42;
+
+/** Apparence par défaut : mêmes valeurs de départ que les autres familles. */
+export const DEFAULT_NEWS_STYLE: NewsStyleSettings = {
+  radius: 12,
+  shadow: "normal",
+  border: { enabled: false, width: 1, color: "#EAE5E5" },
+  frameTone: "surface",
+  posterFit: "cover",
+  ctaStyle: "primary",
+  ctaShow: true,
+};
+
+/**
+ * Textes des items d'exemple (seeds picsum stables, aucun document partagé).
+ * Un `news` et un `exhibition` : la fabrique doit montrer la pastille des deux
+ * natures, sans quoi la démonstration ne prouverait rien.
+ */
+const NEWS_DEMO: readonly {
+  seed: string;
+  kind: NewsKind;
+  title: string;
+  text: string;
+  publishedAt: string;
+}[] = [
+  {
+    seed: "news-expo-lumiere",
+    kind: "exhibition",
+    title: "Exposition « Lumière minérale »",
+    text: "Trente tirages argentiques autour du calcaire et de l’eau, présentés à la galerie du Port jusqu’au 12 octobre.",
+    publishedAt: "",
+  },
+  {
+    seed: "news-atelier-portrait",
+    kind: "news",
+    title: "Atelier portrait en studio",
+    text: "Une journée pour apprendre à diriger la lumière naturelle et à guider un modèle, en petit comité.",
+    publishedAt: "",
+  },
+];
+
+/** Fabrique un item d'exemple (affiche 2:3, seed stable). */
+export function createNewsItem(demoIndex = 0): NewsItem {
+  const demo = NEWS_DEMO[demoIndex] ?? NEWS_DEMO[0];
+  return {
+    id: crypto.randomUUID(),
+    kind: demo.kind,
+    // 900 × 1350 = le ratio 2:3 servi par la vignette d'aperçu de l'éditeur.
+    media: {
+      url: `https://picsum.photos/seed/${demo.seed}/900/1350`,
+      alt: `${demo.title} — affiche`,
+    },
+    title: demo.title,
+    text: demo.text,
+    publishedAt: demo.publishedAt,
+    // La destination est **vide** : le bouton reste masqué jusqu'à ce que le
+    // photographe choisisse une cible (règle de `CTAButton`).
+    cta: { show: true, label: "En savoir plus", href: "", style: "primary" },
+  };
+}
+
+/**
+ * Contenu « news » par défaut (mode démonstration). Chaque appel retourne une
+ * instance **neuve** : aucun tableau ni objet partagé entre deux modules, sans
+ * quoi éditer l'un modifierait l'autre.
+ */
+export function createNewsContent(): NewsContent {
+  return {
+    type: "news",
+    heading: "Actualités & expositions",
+    subtitle: "Les prochains rendez-vous",
+    intro:
+      "Expositions, ateliers et coulisses : les temps forts du studio, au fil des mois.",
+    items: [createNewsItem(0), createNewsItem(1)],
+    style: {
+      ...DEFAULT_NEWS_STYLE,
+      border: { ...DEFAULT_NEWS_STYLE.border },
+    },
+  };
+}
+
+/**
+ * Lit un item stocké (JSONB).
+ *
+ * **Aucun texte n'est ressuscité** : une chaîne vidée reste vide, seule une clé
+ * absente retombe sur la valeur neutre. L'`id` manquant reçoit un repli
+ * **déterministe** (`news-1`, `news-2`…) — un identifiant aléatoire côté serveur
+ * produirait un mismatch d'hydratation (même choix que les avis).
+ */
+function resolveNewsItem(raw: unknown, index: number): NewsItem {
+  const record = isRecord(raw) ? raw : {};
+  return {
+    id: readString(record.id, `news-${index + 1}`),
+    kind: isNewsKind(record.kind) ? record.kind : "news",
+    media: readArtSource(record, "media", { url: "", alt: "" }),
+    title: readString(record.title, ""),
+    text: readString(record.text, ""),
+    publishedAt: readString(record.publishedAt, ""),
+    cta: resolveGalleryCta(record.cta),
+  };
+}
+
+/**
+ * Lit la liste d'items stockée, **dans l'ordre du tableau**.
+ *
+ * Les entrées non-objet sont ignorées ; aucun tri, aucun filtrage sur le
+ * contenu — la disparition d'un item sans affiche est décidée au rendu, pas
+ * ici, pour que la recette puisse distinguer « absent » de « masqué ».
+ */
+function readNewsItems(value: unknown): NewsItem[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const items: NewsItem[] = [];
+  value.forEach((raw, index) => {
+    if (!isRecord(raw)) {
+      return;
+    }
+    items.push(resolveNewsItem(raw, index));
+  });
+  return items;
+}
+
+/**
+ * Résout un contenu `news` stocké (JSONB) vers un contenu **complet**.
+ *
+ * Tolérant par construction : `null`, un objet tronqué ou un JSONB ancien
+ * produisent une forme lisible. Les nombres sont bornés **ici** et pas
+ * seulement dans l'éditeur, et `items` conserve l'ordre enregistré — c'est
+ * l'ordre d'affichage (D6).
+ */
+export function resolveNewsContent(raw: unknown): NewsContent {
+  if (!isRecord(raw)) {
+    return createNewsContent();
+  }
+  const styleRaw = isRecord(raw.style) ? raw.style : {};
+  const defaults = DEFAULT_NEWS_STYLE;
+  return {
+    type: "news",
+    heading: readString(raw.heading, ""),
+    subtitle: readString(raw.subtitle, ""),
+    intro: readString(raw.intro, ""),
+    items: readNewsItems(raw.items),
+    style: {
+      radius: readBoundedNumber(styleRaw.radius, defaults.radius, 0, 40),
+      shadow: isGalleryShadowLevel(styleRaw.shadow)
+        ? styleRaw.shadow
+        : defaults.shadow,
+      border: resolveGalleryBorder(styleRaw.border),
+      frameTone: isNewsFrameTone(styleRaw.frameTone)
+        ? styleRaw.frameTone
+        : defaults.frameTone,
+      posterFit: isNewsPosterFit(styleRaw.posterFit)
+        ? styleRaw.posterFit
+        : defaults.posterFit,
+      ctaStyle: isHeroCtaStyle(styleRaw.ctaStyle)
+        ? styleRaw.ctaStyle
+        : defaults.ctaStyle,
+      ctaShow:
+        typeof styleRaw.ctaShow === "boolean"
+          ? styleRaw.ctaShow
+          : defaults.ctaShow,
+    },
+  };
+}
+
+/**
+ * Images non vides portées par la section — sert à la collecte des métadonnées
+ * EXIF et à l'image de partage OpenGraph : une page peut n'être faite que
+ * d'actualités, leurs affiches comptent donc autant que les autres.
+ */
+export function newsImageSources(content: NewsContent): ArtSource[] {
+  return content.items
+    .map((item) => item.media)
+    .filter((source) => source.url !== "");
+}
+
+/** Libellé affiché dans la pastille d'un item. */
+export function newsKindLabel(kind: NewsKind): string {
+  return newsKindLabels[kind];
+}
+
+/**
+ * Formatte une date `YYYY-MM-DD` en français (« 12 octobre 2026 »).
+ *
+ * Retourne `""` pour une date vide **ou invalide** : contrairement aux autres
+ * champs, une date mal saisie ne doit jamais produire « Invalid Date » à
+ * l'écran. Une date purement calendaire est construite en **heure locale** :
+ * `new Date("2026-10-12")` serait interprétée en UTC et pourrait reculer d'un
+ * jour dans les fuseaux négatifs.
+ */
+export function newsDateLabel(iso: string): string {
+  const value = iso.trim();
+  if (value === "") {
+    return "";
+  }
+  const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  const date = parts
+    ? new Date(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]))
+    : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  return new Intl.DateTimeFormat("fr-FR", { dateStyle: "long" }).format(date);
+}
+
 /**
  * Module de page — mappe 1:1 vers la future table `page_modules`
  * (la position dans le tableau = ordre vertical = colonne `position` ;
@@ -6581,6 +6940,14 @@ export const moduleCatalog: ModuleCatalogEntry[] = [
     description:
       "Un logo de fournisseur d’avis, un carrousel d’avis clients et une note globale — pour rassurer avant le premier contact.",
   },
+  {
+    id: "news",
+    type: "news",
+    label: "Actualités & expositions",
+    category: "Présentation",
+    description:
+      "Une colonne d’actualités et d’expositions : affiche au format 2:3, titre, texte et lien « En savoir plus ».",
+  },
 ];
 
 /**
@@ -6709,6 +7076,10 @@ export function createModuleContent(
       // Étape 14.4 — aucune variante : fournisseur, note et avis sont des
       // réglages de contenu, pas des dispositions concurrentes.
       return createReviewsContent();
+    case "news":
+      // Étape 14.5 — aucune variante non plus : nature d'item, fond de cadre et
+      // cadrage d'affiche sont des réglages de contenu (D1/D2).
+      return createNewsContent();
     case "content":
       return createContentColumnsContent();
   }

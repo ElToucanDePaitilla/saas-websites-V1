@@ -30,6 +30,7 @@ import {
   heroSliderImageSources,
   heroStaticArtSources,
   heroVideoImageSources,
+  newsImageSources,
   resolveCardsContent,
   resolveContactContent,
   resolveContactMapContent,
@@ -42,6 +43,7 @@ import {
   resolveHeroSliderContent,
   resolveHeroVideoContent,
   resolveMarqueeContent,
+  resolveNewsContent,
   resolveReviewsContent,
   richTextDocToPlainText,
   seedPages,
@@ -177,6 +179,13 @@ function collectImageUrls(modules: PageModule[]): string[] {
         }
       }
     }
+    if (mod.content.type === "news") {
+      // Actualités & expositions (14.5) : leurs affiches comptent comme les
+      // autres — une page peut n'être faite que de cette section.
+      for (const source of newsImageSources(resolveNewsContent(mod.content))) {
+        urls.push(source.url);
+      }
+    }
   }
   return urls;
 }
@@ -271,6 +280,17 @@ export function publicDescription(modules: PageModule[]): string {
         }
       }
     }
+    if (content.type === "news") {
+      // Une section d'actualités peut être le seul texte de la page : son
+      // introduction, à défaut son sous-titre, à défaut son titre, alimente
+      // alors le partage. Jamais le texte d'un item : il appartient à sa fiche.
+      const news = resolveNewsContent(content);
+      const text =
+        news.intro.trim() || news.subtitle.trim() || news.heading.trim();
+      if (text) {
+        return text;
+      }
+    }
   }
   return "Portfolio photographe professionnel.";
 }
@@ -308,6 +328,12 @@ export function publicOgImage(modules: PageModule[]): string | null {
       const first = resolveMarqueeContent(content).images.find(
         (image) => image.url !== "" && image.hidden !== true
       );
+      if (first) return first.url;
+    }
+    if (content.type === "news") {
+      // Les actualités peuvent être le seul visuel de la page : la première
+      // affiche non vide devient alors l'image de partage.
+      const first = newsImageSources(resolveNewsContent(content))[0];
       if (first) return first.url;
     }
   }

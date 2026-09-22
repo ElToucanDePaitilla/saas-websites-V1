@@ -13,6 +13,7 @@ import {
   createHeroStaticContent,
   createMarqueeContent,
   createModule,
+  createNewsContent,
   createReviewsContent,
   type CardsColumns,
   type CardsLayoutSettings,
@@ -22,6 +23,7 @@ import {
   type ContactSocialAlignment,
   type ContactSocialShape,
   type GalleryImage,
+  type NewsItem,
   type PageModule,
 } from "@/lib/pages";
 
@@ -455,6 +457,91 @@ function buildDemoModules(): PageModule[] {
     ],
   };
 
+  // ---- Actualités & expositions (Étape 14.5) : une instance ----
+  // Quatre annonces aux dates **volontairement non triées** (l'ordre manuel est
+  // respecté tel quel, D6) : deux `news`, deux `exhibition`, dont une **sans
+  // date** (le repli vide ne doit rien afficher plutôt qu'« Invalid Date »).
+  // Les destinations éprouvent les trois chemins de `CTAButton` : ancre interne,
+  // URL absolue (nouvel onglet) et page interne. Une affiche **non 2:3** est
+  // glissée dans le lot : avec `posterFit: "contain"`, elle montre le lettrage
+  // (les trois affiches 2:3, elles, remplissent exactement leur cadre) — passer
+  // le réglage sur « Recadré » dans l'éditeur montre le rognage de la même image.
+  const newsBase = createNewsContent();
+  const newsItems: NewsItem[] = [
+    {
+      id: crypto.randomUUID(),
+      kind: "news",
+      media: {
+        url: "https://picsum.photos/seed/demo-news-atelier/900/1350",
+        alt: "Affiche de l’atelier portrait",
+      },
+      title: "Atelier portrait en studio",
+      text: "Une journée pour apprendre à diriger la lumière naturelle et à guider un modèle, en petit comité.",
+      publishedAt: "2026-06-18",
+      cta: { show: true, label: "En savoir plus", href: "#contact", style: "primary" },
+    },
+    {
+      id: crypto.randomUUID(),
+      kind: "exhibition",
+      media: {
+        url: "https://picsum.photos/seed/demo-news-lumiere/900/1350",
+        alt: "Affiche de l’exposition Lumière minérale",
+      },
+      title: "Exposition « Lumière minérale »",
+      text: "Trente tirages argentiques autour du calcaire et de l’eau, présentés à la galerie du Port jusqu’au 12 novembre.",
+      publishedAt: "2026-11-02",
+      cta: {
+        show: true,
+        label: "Voir l’exposition",
+        // URL absolue : ouvre dans un nouvel onglet (cible externe).
+        href: "https://exemple.fr/exposition-lumiere-minerale",
+        style: "primary",
+      },
+    },
+    {
+      id: crypto.randomUUID(),
+      kind: "exhibition",
+      media: {
+        // Affiche volontairement **non 2:3** : avec `posterFit: "contain"`, le
+        // fond du cadre apparaît en haut et en bas (démonstration du lettrage).
+        url: "https://picsum.photos/seed/demo-news-coulisses/1400/900",
+        alt: "Affiche au format paysage — démonstration du lettrage",
+      },
+      title: "Coulisses : tirage d’une série",
+      text: "Un aperçu du laboratoire, entre essais de papier et calibrage des tirages.",
+      // Sans date : l'item doit rester lisible sans qu'aucune date ne s'affiche.
+      publishedAt: "",
+      cta: {
+        show: true,
+        label: "Voir le portfolio",
+        href: "/portfolio",
+        style: "primary",
+      },
+    },
+    {
+      id: crypto.randomUUID(),
+      kind: "news",
+      media: {
+        url: "https://picsum.photos/seed/demo-news-seance/900/1350",
+        alt: "Affiche des séances découverte",
+      },
+      title: "Séances découverte en extérieur",
+      text: "Trois créneaux ouverts au printemps pour un premier portrait en lumière naturelle.",
+      publishedAt: "2026-03-14",
+      cta: { show: true, label: "Réserver", href: "mailto:contact@exemple.fr", style: "primary" },
+    },
+  ];
+  const news = createModule("news", 18);
+  news.content = {
+    ...newsBase,
+    heading: "Actualités & expositions",
+    subtitle: "Les prochains rendez-vous du studio",
+    intro:
+      "Expositions, ateliers et coulisses : les temps forts, au fil des mois.",
+    items: newsItems,
+    style: { ...newsBase.style, posterFit: "contain" },
+  };
+
   // ---- Cards (Étapes 13.1 → 13.3) : un module par variante ----
   // Seul le bouton est cliquable : la démo le montre avec une bordure de cadre
   // activée et des effets de survol poussés (brillance + saturation), c'est-à-
@@ -524,6 +611,7 @@ function buildDemoModules(): PageModule[] {
     marqueeDefault,
     marqueeCompact,
     reviews,
+    news,
   ];
 }
 

@@ -75,6 +75,8 @@ export const moduleTypeEnum = pgEnum("module_type", [
   "marquee",
   // Étape 14.4 — « Avis clients » : cinquième `ALTER TYPE … ADD VALUE`.
   "reviews",
+  // Étape 14.5 — « Actualités & expositions » : sixième `ALTER TYPE … ADD VALUE`.
+  "news",
 ]);
 
 /** Animations d'entrée d'un module (ModuleAnimation). */

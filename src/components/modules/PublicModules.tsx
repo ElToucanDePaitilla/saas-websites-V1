@@ -6,6 +6,7 @@ import { ContactMapModule } from "@/components/modules/contact-map/ContactMapMod
 import { ContentColumnsModule } from "@/components/modules/content/ContentColumnsModule";
 import { GalleryManager } from "@/components/modules/gallery/GalleryManager";
 import { MarqueeModule } from "@/components/modules/marquee/MarqueeModule";
+import { NewsModule } from "@/components/modules/news/NewsModule";
 import { ReviewsModule } from "@/components/modules/reviews/ReviewsModule";
 import { BaseHero } from "@/components/modules/hero/BaseHero";
 import { HeroModule } from "@/components/modules/hero/HeroModule";
@@ -264,6 +265,8 @@ export function PageModuleRenderer({
       return <MarqueeModule module={module} />;
     case "reviews":
       return <ReviewsModule module={module} />;
+    case "news":
+      return <NewsModule module={module} />;
     case "content":
       return <ContentColumnsModule module={module} />;
     case "cards":

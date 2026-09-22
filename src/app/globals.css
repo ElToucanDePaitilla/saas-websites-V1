@@ -1453,6 +1453,211 @@
 }
 
 /* ==========================================================================
+   MODULE « NEWS » — actualités & expositions (Étape 14.5)
+   --------------------------------------------------------------------------
+   Une **colonne unique** de cartes empilées. Chaque carte est un cadre au fond
+   du thème (jeton choisi par `frameTone`) contenant une affiche au format fixe
+   2:3, puis son pied (titre, date, texte, bouton).
+
+   Toute la géométrie vit ici, et non dans le composant, pour trois raisons :
+
+     1. **La contrainte D3 : l'affiche doit tenir entière dans la fenêtre.**
+        On ne pilote donc PAS la hauteur (« hauteur = fenêtre − header ») mais
+        la **largeur** : `min(plafond de lecture, 100 %, fenêtre × 2/3)`. Le
+        `aspect-ratio` en déduit la hauteur, qui est alors ≤ fenêtre utile **par
+        construction**. Piloter la hauteur ne marcherait pas : sur un bloc non
+        remplacé, `width: auto` ne dérive pas d'une hauteur — il remplirait la
+        colonne.
+
+     2. **`min(…, 100%)` est indispensable.** Sans lui, sur mobile portrait, la
+        hauteur dérivée (largeur × 3/2) déborderait la colonne. Le pourcentage
+        se résout contre le bloc conteneur de la carte (le `.news-list`), qui
+        n'a aucune largeur intrinsèque — la mesure est donc stable.
+
+     3. **`svh`, jamais `vh`.** `svh` (petit viewport) est la seule unité qui ne
+        « saute » pas quand les barres d'outils mobiles apparaissent (même choix
+        que le bandeau message/CTA, voir plus haut). Le repli `100vh` couvre les
+        navigateurs anciens via `@supports`.
+
+     Le cadre n'a **pas** d'`overflow: hidden` : il rognerait le pied. L'arrondi
+     de l'affiche est porté par la boîte photo (`--news-frame-radius`), le
+     recadrage de l'aperçu par `.news-card__media`.
+
+     Aucune couleur libre : `data-tone` sélectionne un jeton du thème, donc le
+     mode sombre suit sans réglage (D9).
+   ========================================================================== */
+
+.news-list {
+  margin-top: 3rem;
+  display: flex;
+  flex-direction: column;
+  /* La carte est centrée : sa largeur est dérivée, jamais étirée. */
+  align-items: center;
+  gap: 4rem;
+}
+
+.news-card__frame {
+  /* Fenêtre utile : hors header fixe, hors bandeau haut, hors padding de
+     section (py-20 = 5rem × 2) et 2 rem de respiration. */
+  --news-avail-h: calc(
+    100vh - var(--header-height) - var(--top-banner-offset, 0px) - 12rem
+  );
+  /* Largeur = la plus petite de : plafond de lecture, conteneur, fenêtre × 2/3. */
+  --news-card-w: min(42rem, 100%, calc(var(--news-avail-h) * 2 / 3));
+
+  position: relative;
+  width: var(--news-card-w);
+  margin-inline: auto;
+  background-color: var(--surface-color);
+}
+
+@supports (height: 100svh) {
+  .news-card__frame {
+    --news-avail-h: calc(
+      100svh - var(--header-height) - var(--top-banner-offset, 0px) - 12rem
+    );
+  }
+}
+
+/* Fond du cadre = jeton du thème, jamais une couleur stockée. */
+.news-card__frame[data-tone="surface"] {
+  background-color: var(--surface-color);
+}
+
+.news-card__frame[data-tone="soft"] {
+  background-color: var(--surface-color-soft);
+}
+
+.news-card__frame[data-tone="accent"] {
+  background-color: color-mix(
+    in srgb,
+    var(--accent-color) 10%,
+    var(--surface-color)
+  );
+}
+
+/* Boîte photo : le RATIO fait que hauteur = largeur × 3/2 ≤ fenêtre utile (D3).
+   `background-color: inherit` propage le fond du cadre : en mode « entier »
+   (`contain`), les bandes du lettrage prennent donc le ton du cadre. */
+.news-card__media {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 2 / 3;
+  background-color: inherit;
+  border-radius: var(--news-frame-radius, 0) var(--news-frame-radius, 0) 0 0;
+   /* Neutralise le double-tap de zoom du navigateur : sans cela, le double-tap
+      ouvrirait la visionneuse **et** zoomerait la page sur mobile. */
+  touch-action: manipulation;
+}
+
+.news-card__img {
+  width: 100%;
+  height: 100%;
+  object-fit: var(--news-poster-fit, cover);
+}
+
+
+/* Pastille de nature (Actualité / Exposition) — chip de surface posée sur
+   l'affiche : lisible sur n'importe quelle photo, sans couleur libre. */
+.news-card__badge {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 2;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid color-mix(in srgb, var(--accent-color) 45%, transparent);
+  border-radius: 9999px;
+  background-color: color-mix(in srgb, var(--surface-color) 88%, transparent);
+  color: var(--text-color);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+}
+
+/* Bouton d'agrandissement — le chemin **accessible** de la visionneuse (le
+   double-clic n'est ni focalisable ni atteignable au lecteur d'écran). Discret,
+   coin bas-droit. L'ouverture est déléguée à `NewsLightbox` via `data-news-open`. */
+.news-card__zoom {
+  position: absolute;
+  right: 0.5rem;
+  bottom: 0.5rem;
+  z-index: 2;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid color-mix(in srgb, var(--border-color) 80%, transparent);
+  border-radius: 9999px;
+  background-color: color-mix(in srgb, var(--surface-color) 90%, transparent);
+  color: var(--text-color);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.news-card__zoom:hover {
+  background-color: var(--accent-color);
+}
+
+.news-card__zoom:focus-visible {
+  outline: 2px solid var(--accent-color-strong);
+  outline-offset: 2px;
+}
+
+.news-card__body {
+  padding: 1.25rem 1.25rem 1.5rem;
+  text-align: center;
+}
+
+.news-card__title {
+  font-family: var(--font-heading);
+  font-size: clamp(1.125rem, 0.95rem + 0.7vw, var(--h3-size));
+  line-height: 1.35;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+/* N5 de l'échelle : une date est une annotation, pas un titre. */
+.news-card__date {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.news-card__text {
+  margin-top: 0.5rem;
+  /* `pre-line` : les retours à la ligne saisis dans l'éditeur sont respectés. */
+  white-space: pre-line;
+  font-size: clamp(0.8125rem, 0.78rem + 0.15vw, 0.9375rem);
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.news-card__cta {
+  margin-top: 1rem;
+}
+
+/* En-tête de la section — même chapeau que la section « Cards ». */
+.news-section__subtitle {
+  margin-top: 0.75rem;
+  font-family: var(--font-heading);
+  font-size: clamp(0.95rem, 0.9rem + 0.3vw, 1.125rem);
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.news-section__intro {
+  margin-top: 0.75rem;
+  white-space: pre-line;
+  font-size: clamp(0.9rem, 0.86rem + 0.25vw, 1.0625rem);
+  line-height: 1.7;
+  color: var(--text-muted);
+}
+
+/* ==========================================================================
    MODULE « CONTACT » — coordonnées, formulaire, réseaux (Étape 14.1)
    --------------------------------------------------------------------------
    Quatre containers : chapeau, coordonnées, formulaire, réseaux sociaux.

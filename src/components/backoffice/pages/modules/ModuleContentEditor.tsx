@@ -19,6 +19,7 @@ import { ModuleHeroParallaxEditor } from "./ModuleHeroParallaxEditor";
 import { ModuleHeroCurtainEditor } from "./ModuleHeroCurtainEditor";
 import { ModuleHeroVideoEditor } from "./ModuleHeroVideoEditor";
 import { ModuleMarqueeEditor } from "./ModuleMarqueeEditor";
+import { ModuleNewsEditor } from "./ModuleNewsEditor";
 import { ModuleReviewsEditor } from "./ModuleReviewsEditor";
 import { ModuleContentColumnsEditor } from "./ModuleContentColumnsEditor";
 import { ModuleServicesEditor } from "./ModuleServicesEditor";
@@ -127,6 +128,12 @@ export function ModuleContentEditor({
       // Étape 14.4 — famille sans variante : un seul écran d'édition.
       return (
         <ModuleReviewsEditor content={content} onChangeContent={onChangeContent} />
+      );
+    case "news":
+      // Étape 14.5 — famille sans variante non plus : la nature d'item est un
+      // réglage de contenu, pas une disposition concurrente.
+      return (
+        <ModuleNewsEditor content={content} onChangeContent={onChangeContent} />
       );
     case "content":
       return (

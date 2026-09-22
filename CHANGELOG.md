@@ -11,6 +11,74 @@ NOTICE D'UTILISATION DU FICHIER CHANGELOG.MD
 
 ---
 
+## 2026-09-21 – 21:08 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Module « Actualités & expositions » — le zoom sur place devient une visionneuse en modale (révision de D5).**
+- **Décision M1/M2 : réutiliser `LightboxModal`, une seule modale par section.** `LightboxModal` (`gallery/`) fournit déjà plein écran, `object-contain`, cycle de zoom `fit → 1,5× → 2,5×`, **déplacement à la souris borné (curseur main)**, `role="dialog"` + `aria-modal` + focus trap + Échap + verrouillage du scroll + restitution du focus + préchargement. Le module lui passe **toutes** les affiches rendues : on obtient gratuitement le compteur ‹ n / total ›, les flèches ←/→ et le préchargement. Une seule modale, montée à l'ouverture.
+- **Décision M3 : deux déclencheurs distincts.** Double-clic sur l'affiche et bouton `.news-card__zoom` (« Agrandir »), désormais simple ouvreur (perte de `aria-pressed`). Le bouton reste obligatoire : le double-clic n'est ni focalisable ni atteignable au lecteur d'écran (WCAG 2.1).
+- **Décision M4 : le zoom sur place est supprimé.** `--news-zoom`, son `transform: scale()`, sa `transition` et le `@media (prefers-reduced-motion)` associé disparaissent de `globals.css` ; `aspect-ratio: 2 / 3`, `object-fit: var(--news-poster-fit)` et `touch-action: manipulation` sont **conservés** (l'aperçu de carte ne change pas). Il n'y a plus qu'un seul zoom, celui de la modale.
+- **Décision M5 : aucun réglage persisté.** Les paramètres de la visionneuse sont une constante figée `NEWS_LIGHTBOX_SETTINGS = { zoomEnabled: true, zoomLevel1: 1.5, zoomLevel2: 2.5, showExif: false, showCaption: true }`. `showExif` est fixé **explicitement à `false`** (le défaut de `DEFAULT_GALLERY_LIGHTBOX` est `true`). Ni `NewsStyleSettings`, ni `resolveNewsContent`, ni l'éditeur, ni la démo ne changent.
+- **Décision M6 : chrome sombre conservé** (`bg-black/95`, contrôles blancs) — choix assumé, identique aux galeries ; D9 (jetons du thème) ne s'applique qu'au cadre de la carte.
+- **Décision M7 : ouverture en « fit ».** La main n'apparaît qu'une fois zoomé (comportement réel de `LightboxModal` : `handlePointerDown` sort si `zoom === 0`, curseur `zoom > 0 ? grab/grabbing : zoom-in`) : on ne promène pas une image qui tient déjà à l'écran.
+- **Décision M8 : `LightboxModal` reste dans `gallery/`** (extraction vers un emplacement neutre notée en suivi, pas faite).
+- **Architecture — une seule frontière client.** `NewsModule` et `NewsCard` restent des **Server Components**. Nouveau `NewsLightbox.tsx` (Client) qui rend `div.news-list` (porteur de la classe CSS de mise en colonne), délègue les événements (`closest("[data-news-open]")` en `click`, `closest("[data-news-media]")` en `dblclick`, garde `event.target instanceof Element` pour ne pas exploser sur un nœud texte) et monte/démonte `LightboxModal` (patron `GalleryManager` : nécessaire car `LightboxModal` capture `initialIndex` via `useState` au montage). `data-news-open` (bouton) et `data-news-media` (boîte photo) restent **deux attributs distincts** : les fusionner ferait qu'un simple clic ouvrirait la modale alors que la carte n'est jamais cliquable.
+- **Index alignés.** La liste `GalleryImage[]` est construite **après** le filtre `media.url !== ""` et avec le même `map` que les cartes : `NewsCard` reçoit un `index` **positionnel** (jamais l'`id`), donc `data-news-open` désigne toujours la bonne affiche.
+- **Micro-correctif galeries (§6).** Ajout de `motion-reduce:transition-none` au bloc transformé de `LightboxModal` (`!dragging && "transition-transform duration-200 ease-out motion-reduce:transition-none"`) : purement additif, comble un manque (`prefers-reduced-motion` neutralisait le zoom de galerie mais pas la transition). Chrome et sémantique inchangés.
+- **`NewsPosterZoom.tsx` supprimé** (son rôle est absorbé par `NewsCard` + `NewsLightbox`).
+
+### Mesures et vérifications
+- `npx tsc --noEmit` → **0** ; `npm run lint` → **0 erreur, 0 avertissement**.
+- Recette `/demo` (tranche `id="news-18"`, extraction équilibrée du `<section>`) : **toutes les assertions existantes restent vertes** — **4** `.news-card__frame`, 4 `h3`, 4 `.news-card__text`, 4 CTA, **3** `<time>`, 2 pastilles `>Actualité<` / 2 `>Exposition<`, 1 `module-h2`, **0 `h1`**, `data-fit="contain"`.
+- Nouveaux points vérifiés : **4** `[data-news-media]` et **4** `[data-news-open]` avec les index **0,1,2,3** alignés dans les deux jeux (ordre du contenu, non trié) ; **0** `role="dialog"` dans le HTML initial (la modale n'est montée qu'à l'ouverture) ; **0** occurrence de `--news-zoom` dans le HTML servi.
+- CSS servi (`/_next/static/chunks/[root-of-the-server]__*.css`) : `--news-zoom` → **0**, `scale(var(--news-zoom` → **0**, `.news-card__img` **présent** (bloc réduit à `width`/`height`/`object-fit`), `.news-card__media` **présent**, `aspect-ratio: 2 / 3` → **2**, `var(--news-poster-fit` → **1**, `touch-action: manipulation` → **1**, `.news-card__zoom` → **7** (règles de survol/focus intactes).
+- `npm run check:contrast` → **non lancé** (aucun jeton de couleur ajouté ou modifié), conformément au plan.
+- `npm run build` **non lancé** (un serveur `next dev` occupait le port 3000 et `.next` partagé, piège déjà documenté).
+- Recette manuelle restante (navigateur) : ouverture par clic « Agrandir » et par double-clic, compteur ‹ n / 4 ›, Échap + retour du focus sur le bouton, zoom 1,5×/2,5× au double-clic avec curseur main et déplacement borné, flèches ←/→ qui réinitialisent zoom/déplacement, pied sans puce EXIF, scroll verrouillé puis restauré, double-tap mobile sans zoom navigateur, `prefers-reduced-motion` sans transition d'image, non-régression d'une Lightbox de Gallery Dynamic.
+
+### Fichiers modifiés
+- Nouveau : `src/components/modules/news/NewsLightbox.tsx`.
+- Modifiés : `src/components/modules/news/NewsCard.tsx` (poster absorbé, `index`, `data-news-media` / `data-news-open`), `src/components/modules/news/NewsModule.tsx` (liste d'images, `NewsLightbox`, `index` positionnel), `src/components/modules/gallery/LightboxModal.tsx` (micro-correctif `motion-reduce`), `src/app/globals.css` (§ MODULE NEWS : retire `--news-zoom`/`transform`/`transition`/`prefers-reduced-motion`, ajuste les commentaires), `.kilo/plans/1790040385470-news-expositions-plan.md` (D5 révisé, §10 amendé), `CHANGELOG.md`.
+- Supprimé : `src/components/modules/news/NewsPosterZoom.tsx`.
+
+### Prochaine étape prévue
+Recette navigateur décrite ci-dessus (jeu de gestes complet dans la modale), puis ajustement à l'œil du libellé/emplacement du bouton « Agrandir » et du niveau de zoom maximal 2,5× sur une affiche dense. En suivi : extraction éventuelle de `LightboxModal` hors de `gallery/` si un troisième consommateur apparaît.
+
+---
+
+## 2026-09-21 – 20:52 (heure locale America/Bogota)
+
+### Tâche exécutée
+**Module « Actualités & expositions » — sixième famille Page Builder `news` (Étape 14.5).**
+- **Une seule famille, deux natures d'item (D1)** : `kind: "news" | "exhibition"` ne change qu'une pastille (« Actualité » / « Exposition »). Deux familles auraient dupliqué rendu et éditeur pour un libellé — donc un seul `ALTER TYPE`.
+- **Format fixe 2:3 (D2/D3)** : la **largeur** de la carte est dérivée par `min(plafond de lecture 42 rem, 100 %, fenêtre utile × 2/3)` et l'`aspect-ratio` en déduit la hauteur. La photo tient donc entière dans la fenêtre **par construction** ; piloter la hauteur aurait échoué (`width: auto` ne dérive pas d'une hauteur sur un bloc non remplacé). Unité `svh` (D4), moins `--header-height` **et** `--top-banner-offset` (idiome déjà présent au layout front-office), avec repli `100vh` sous `@supports`.
+- **Zoom sur place (D5)** : cycle `1 → 1,5 → 2 → 1` posé en variable CSS `--news-zoom` (client `NewsPosterZoom`), double-clic **et** bouton `.news-card__zoom` (chemin clavier/lecteur d'écran obligatoire : le double-clic n'est pas focalisable). `touch-action: manipulation` + `select-none` ; transition neutralisée sous `prefers-reduced-motion` (le zoom lui-même reste une action explicite).
+- **Ordre manuel (D6)** : `resolveNewsContent` **ne trie jamais** ; l'ordre du tableau `items` est l'ordre d'affichage. Contreparties livrées : ajout **en tête**, boutons ↑/↓ + dupliquer + supprimer (D7, sans DnD d'items), et bouton « Trier par date décroissante » (tri **ponctuel**, stable, items sans date laissés en fin).
+- **Domaine `src/lib/pages.ts`** : types `NewsItem` / `NewsStyleSettings` / `NewsContent`, catalogues + gardes (`newsKind*`, `newsFrameTone*`, `newsPosterFit*`), `DEFAULT_NEWS_STYLE`, `createNewsItem` / `createNewsContent`, résolveur tolérant `resolveNewsContent` (jamais de texte ressuscité, `id` de repli **déterministe** `news-N`), `newsImageSources`, `newsKindLabel` / `newsDateLabel` (date calendaire construite en heure locale → aucun « Invalid Date », aucun décalage de fuseau). Entrée `moduleCatalog` + `case "news"` de `createModuleContent`.
+- **Intégration famille (checklist §5)** : `moduleTypeEnum` (Postgres) et `moduleTypeSchema` (Zod, piège silencieux) étendus ; icône `Newspaper` (export vérifié dans `lucide-react@1.41.0`) ; `case` des deux `switch` exhaustifs (`ModuleContentEditor`, `PageModuleRenderer`) ; `publicDescription` (intro → sous-titre → titre) et `publicOgImage` / `collectImageUrls` via `newsImageSources`.
+- **Éditeur `ModuleNewsEditor`** : trois `EditorZone` (chapeau / annonces / apparence), accordéon à un seul item ouvert, actions ↑/↓ + dupliquer + supprimer avec `Dialog` de confirmation quand plusieurs items, tri par date explicite, sélecteurs de nature, fond de cadre, affichage de l'affiche, ombre, filet (+ couleur) et boutons. Le champ date le dit explicitement : **affichage seul, jamais tri**.
+- **CSS** : nouveau bloc autonome § MODULE « NEWS » inséré après le corps riche des cartes (à spécificité égale, l'ordre du fichier tranche). Le cadre n'a **pas** d'`overflow: hidden` (il rognerait le pied) : l'arrondi de l'affiche est porté par la boîte photo via `--news-frame-radius`, et le zoom est recadré par `.news-card__media`. Aucune couleur libre : `data-tone` sélectionne un jeton du thème (D9).
+
+### Mesures et vérifications
+- `npx tsc --noEmit` → **0** ; `npm run lint` → **0 erreur, 0 avertissement**.
+- `npm run db:generate` → `drizzle/0015_wild_thaddeus_ross.sql` = `ALTER TYPE "public"."module_type" ADD VALUE 'news';` (exactement l'attendu). `npm run db:migrate` → **appliqué avec succès** sur la base joignable.
+- Enum en base : `select enum_range(null::module_type)` → `{hero,about,services,cta-banner,gallery,faq,contact,content,cards,contact-map,marquee,reviews,news}`.
+- Aller-retour de persistance : `updateModulesPayloadSchema.safeParse` sur un module `news` → **accepté** (prouve que `moduleTypeSchema` n'a pas été oublié).
+- `/demo` → **200** ; 18 assertions sur la tranche `id="news-18"` toutes **vertes** : 1 `h2.module-h2` + sous-titre + intro, **4** `.news-card__frame`, **4** titres `h3`, **4** textes, **4** CTA, **3** dates affichées (l'item sans date n'émet aucun nœud), 2 pastilles « Actualité » / 2 « Exposition », lien externe en `target="_blank" rel="noopener noreferrer"`, liens interne `/portfolio` et `mailto:` présents, `data-fit="contain"`, **0 `h1`** dans la tranche, et **ordre du contenu respecté (non trié par date)**.
+- CSS servi vérifié : `aspect-ratio: 2 / 3`, `--news-avail-h` (`100vh` **et** `100svh` sous `@supports`), `--news-card-w: min(42rem, 100%, calc(var(--news-avail-h) * 2 / 3))`, `--news-zoom`, `--news-frame-radius`, `.news-card__zoom`, `prefers-reduced-motion`.
+- `npm run check:contrast` → **non lancé** : aucune couleur nouvelle n'est introduite (D9 réutilise les jetons existants), conformément au plan.
+- Recette manuelle restante (navigateur) : double-clic → ×1,5 → ×2 → ×1 et **même** cycle via le bouton (`aria-pressed` suit) ; double-tap mobile sans zoom navigateur ; mesure de la hauteur rendue ≤ `100svh − header − top-banner` à deux hauteurs de fenêtre ; lettrage `contain` de l'affiche non 2:3 et rognage en basculant sur « Recadré ».
+- `npm run build` **non lancé** (un serveur `next dev` occupait le port 3000 et `.next` partagé, piège déjà documenté).
+
+### Fichiers modifiés
+- Nouveaux : `src/components/modules/news/{NewsModule,NewsCard,NewsPosterZoom}.tsx`, `src/components/backoffice/pages/modules/ModuleNewsEditor.tsx`, `drizzle/0015_wild_thaddeus_ross.sql` (+ snapshot/journal dans `drizzle/meta/`).
+- Modifiés : `src/lib/pages.ts`, `src/db/schema.ts`, `src/lib/schemas/persistence.ts`, `src/lib/public-page.ts`, `src/components/modules/PublicModules.tsx`, `src/components/backoffice/pages/ModuleIcon.tsx`, `src/components/backoffice/pages/modules/ModuleContentEditor.tsx`, `src/components/backoffice/pages/modules/ArtSourceField.tsx` (aperçu du ratio 2:3), `src/app/globals.css` (ajouts), `src/app/(front-office)/demo/page.tsx` (instance `news-18`), `CHANGELOG.md`.
+
+### Prochaine étape prévue
+Recette navigateur du zoom et de la hauteur d'affiche (jeu de mesures décrit ci-dessus) puis ajustement à l'œil, si besoin, du plafond de lecture `42rem`, de la respiration `12rem` de `--news-avail-h`, de `gap: 4rem` et de la teinte du fond `accent`.
+
+---
+
 ## 2026-09-21 – 18:10 (heure locale America/Bogota)
 
 ### Tâche exécutée

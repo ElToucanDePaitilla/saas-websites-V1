@@ -46,6 +46,8 @@ const moduleTypeSchema = z.enum([
   "marquee",
   // Étape 14.4 — « Avis clients ».
   "reviews",
+  // Étape 14.5 — « Actualités & expositions ».
+  "news",
 ]);
 
 /** Animations d'entrée (ModuleAnimation). */

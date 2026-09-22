@@ -41,6 +41,9 @@ function aspectClassFor(ratio: string): string {
     case "3:2":
       // Cartes paysage (Étape 13.2) — le format d'appareil photo par défaut.
       return "aspect-[3/2]";
+    case "2:3":
+      // Affiches d'actualité (Étape 14.5) — portrait haut, le ratio du module.
+      return "aspect-[2/3]";
     default:
       return "aspect-video";
   }
